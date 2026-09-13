@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sterngate Vehicle Profile",
+  "type": "object",
+  "required": ["profile_name", "oem", "chassis", "modules", "parameters"],
+  "properties": {
+    "profile_name": { "type": "string" },
+    "oem": { "type": "string" },
+    "chassis": { "type": "string" },
+    "gateway_type": { "type": "string" },
+    "default_bitrate": { "type": "integer", "default": 500000 },
+    "modules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name", "tx_id", "rx_id", "protocol"],
+        "properties": {
+          "name": { "type": "string" },
+          "tx_id": { "type": "string" },
+          "rx_id": { "type": "string" },
+          "protocol": { "type": "string", "enum": ["UDS", "KWP2000", "OBD2"] },
+          "seed_key_algo": { "type": "string" }
+        }
+      }
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "module", "service", "did", "byte_offset", "length", "scaling", "unit"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "module": { "type": "string" },
+          "service": { "type": "integer" },
+          "did": { "type": "string" },
+          "byte_offset": { "type": "integer" },
+          "length": { "type": "integer" },
+          "scaling": {
+            "type": "object",
+            "required": ["slope", "offset"],
+            "properties": {
+              "slope": { "type": "number" },
+              "offset": { "type": "number" }
+            }
+          },
+          "unit": { "type": "string" },
+          "min": { "type": "number" },
+          "max": { "type": "number" }
+        }
+      }
+    }
+  }
+}
+

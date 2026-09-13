@@ -1,0 +1,18 @@
+[package]
+name = "sterngate-protocol"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sterngate-core = { workspace = true }
+sterngate-hal = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+crc32fast = { workspace = true }
+sha2 = { workspace = true }
+anyhow = { workspace = true }
+

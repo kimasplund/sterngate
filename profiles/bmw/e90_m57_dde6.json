@@ -1,0 +1,52 @@
+{
+  "profile_name": "bmw_e90_m57_dde6",
+  "oem": "BMW",
+  "chassis": "E90/E91/E92",
+  "gateway_type": "JBE_K_CAN",
+  "default_bitrate": 500000,
+  "modules": {
+    "DDE6": {
+      "name": "Digital Diesel Electronics (DDE6 / M57 3.0d)",
+      "tx_id": "0x6F1",
+      "rx_id": "0x612",
+      "protocol": "KWP2000",
+      "seed_key_algo": "BMW_KWP_Level1"
+    },
+    "EGS_6HP": {
+      "name": "ZF 6HP19/26 Transmission Control",
+      "tx_id": "0x6F1",
+      "rx_id": "0x618",
+      "protocol": "UDS",
+      "seed_key_algo": "BMW_UDS_Level1"
+    }
+  },
+  "parameters": [
+    {
+      "id": "engine_rpm",
+      "name": "Engine Speed",
+      "module": "DDE6",
+      "service": 34,
+      "did": "0x1000",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": { "slope": 1.0, "offset": 0.0 },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 5000.0
+    },
+    {
+      "id": "zf_oil_temp",
+      "name": "ZF Transmission Sump Temperature",
+      "module": "EGS_6HP",
+      "service": 34,
+      "did": "0x2001",
+      "byte_offset": 3,
+      "length": 1,
+      "scaling": { "slope": 1.0, "offset": -50.0 },
+      "unit": "°C",
+      "min": -50.0,
+      "max": 150.0
+    }
+  ]
+}
+

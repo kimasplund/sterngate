@@ -1,0 +1,16 @@
+[package]
+name = "sterngate-hal"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sterngate-core = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+socketcan = { workspace = true }
+anyhow = { workspace = true }
+

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "mcpServers": {
+    "sterngate": {
+      "command": "cargo",
+      "args": ["run", "--quiet", "--package", "sterngate-cli", "--", "mcp"],
+      "env": {
+        "RUST_LOG": "error",
+        "STERNGATE_DEFAULT_PROFILE": "profiles/mercedes/w211_om646_edc16.json"
+      },
+      "description": "Sterngate Automotive Diagnostic, Live Telemetry & Safe Flashing MCP Server"
+    }
+  }
+}
+

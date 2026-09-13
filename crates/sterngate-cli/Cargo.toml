@@ -1,0 +1,25 @@
+[package]
+name = "sterngate-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "sterngate"
+path = "src/main.rs"
+
+[dependencies]
+sterngate-core = { workspace = true }
+sterngate-hal = { workspace = true }
+sterngate-protocol = { workspace = true }
+sterngate-p2p = { workspace = true }
+sterngate-server = { workspace = true }
+sterngate-mcp = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+

@@ -1,0 +1,65 @@
+{
+  "profile_name": "mercedes_w211_om648_edc16",
+  "oem": "Mercedes-Benz",
+  "chassis": "W211/S211",
+  "gateway_type": "CGW_N93",
+  "default_bitrate": 500000,
+  "modules": {
+    "EDC16": {
+      "name": "Engine Control Unit (Bosch EDC16C31 / OM648 I6 CDI)",
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "Daimler_Level1"
+    },
+    "EGS52": {
+      "name": "Electronic Transmission Control (722.6 5-Speed)",
+      "tx_id": "0x7E1",
+      "rx_id": "0x7E9",
+      "protocol": "KWP2000",
+      "seed_key_algo": "Daimler_Level1"
+    }
+  },
+  "parameters": [
+    {
+      "id": "engine_rpm",
+      "name": "Engine Speed",
+      "module": "EDC16",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": { "slope": 0.25, "offset": 0.0 },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 5000.0
+    },
+    {
+      "id": "coolant_temp",
+      "name": "Engine Coolant Temperature",
+      "module": "EDC16",
+      "service": 34,
+      "did": "0x0105",
+      "byte_offset": 3,
+      "length": 1,
+      "scaling": { "slope": 1.0, "offset": -40.0 },
+      "unit": "°C",
+      "min": -40.0,
+      "max": 140.0
+    },
+    {
+      "id": "rail_pressure",
+      "name": "Common Rail Fuel Pressure",
+      "module": "EDC16",
+      "service": 34,
+      "did": "0x200B",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": { "slope": 0.1, "offset": 0.0 },
+      "unit": "bar",
+      "min": 0.0,
+      "max": 1800.0
+    }
+  ]
+}
+

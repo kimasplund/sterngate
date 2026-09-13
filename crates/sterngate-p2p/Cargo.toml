@@ -1,0 +1,19 @@
+[package]
+name = "sterngate-p2p"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sterngate-core = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+iroh = { workspace = true }
+sha2 = { workspace = true }
+crc32fast = { workspace = true }
+bytes = { workspace = true }
+anyhow = { workspace = true }
