@@ -207,6 +207,18 @@ enum AnalyzeCommands {
         #[arg(long)]
         input: Option<PathBuf>,
     },
+    /// Active ABC (Active Body Control) hydraulic surge protection routines
+    Abc {
+        /// Actuate pressure fallback dump to 120 bar safe mode (Routine 0x0220)
+        #[arg(long)]
+        dump: bool,
+        /// Lock strut isolation valves to contain hydraulic bursts (Routine 0x0221)
+        #[arg(long)]
+        lock: bool,
+        /// Restore normal active dynamic body control (Routine 0x0222)
+        #[arg(long)]
+        restore: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -648,6 +660,17 @@ async fn main() -> Result<()> {
                             compressor_continuous_run_sec: Some(0.0),
                             compressor_duty_cycle_pct: Some(0.0),
                             suspension_height_drop_rate_mm_h: Some(0.6),
+                            abc_pressure_ripple_bar: Some(3.5),
+                            abc_system_pressure_bar: Some(195.0),
+                            esl_unlock_duration_ms: Some(185.0),
+                            esl_retry_count: Some(0),
+                            cam_phase_deviation_deg: Some(0.4),
+                            tcc_slip_oscillation_hz: Some(0.0),
+                            tcc_slip_oscillation_rpm: Some(1.5),
+                            can_sleep_delay_seconds: Some(15.0),
+                            quiescent_current_amps: Some(0.02),
+                            dynamic_oil_loss_rate_mm_100km: Some(0.02),
+                            engine_oil_temperature_c: Some(90.0),
                             active_dtcs: vec![],
                         }
                     };
@@ -669,16 +692,20 @@ async fn main() -> Result<()> {
                     println!();
 
                     if report.alerts.is_empty() {
-                        println!("  ✅ ALL SYSTEMS HEALTHY");
+                        println!("  ✅ ALL SYSTEMS HEALTHY (13 CASCADES MONITORED)");
                         println!(
                             "     SBC Accumulator, Injector Copper Washers, 722.6 Pilot Bushing,"
                         );
                         println!(
-                            "     TCC Lockup Clutch, DPF/M55 Swirl Flaps, Camshaft Magnets, and"
+                            "     TCC Lockup Clutch, DPF/M55 Swirl Flaps, Camshaft Magnets, ENR Compressor,"
                         );
                         println!(
-                            "     Air Suspension Compressor are within factory operating limits."
+                            "     ABC Pulsation Damper, ESL Steering Lock, M272/M273 Balance Shaft,"
                         );
+                        println!(
+                            "     Valeo Glycol Intrusion, SAM Water Ingress, and OM642 Oil Cooler"
+                        );
+                        println!("     are within nominal factory tolerances.");
                     } else {
                         for alert in &report.alerts {
                             let icon = match alert.severity {
@@ -697,6 +724,45 @@ async fn main() -> Result<()> {
                             println!();
                         }
                     }
+                    return Ok(());
+                }
+                AnalyzeCommands::Abc {
+                    dump,
+                    lock,
+                    restore,
+                } => {
+                    let mut iface = VirtualCanInterface::new();
+                    iface.open().await?;
+                    if dump {
+                        let res =
+                            VehicleScanner::control_abc_safety_limiter(&mut iface, "dump").await?;
+                        println!("🛡️ ABC PRESSURE FALLBACK DUMP ACTIVATED (120 bar Safe Mode):");
+                        println!("   {}", res);
+                        return Ok(());
+                    }
+                    if lock {
+                        let res =
+                            VehicleScanner::control_abc_safety_limiter(&mut iface, "lock").await?;
+                        println!("🔒 ABC STRUT ISOLATION VALVES LOCKED:");
+                        println!("   {}", res);
+                        return Ok(());
+                    }
+                    if restore {
+                        let res = VehicleScanner::control_abc_safety_limiter(&mut iface, "restore")
+                            .await?;
+                        println!("🔄 ABC NORMAL DYNAMIC CONTROL RESTORED:");
+                        println!("   {}", res);
+                        return Ok(());
+                    }
+                    println!("============================================================");
+                    println!("  ABC (Active Body Control) Hydraulic Surge Limiter");
+                    println!("============================================================");
+                    println!("  Usage: sterngate analyze abc [--dump | --lock | --restore]");
+                    println!("  • --dump:    Actuate Routine 0x0220 (reduce 200 bar to 120 bar safe mode)");
+                    println!("  • --lock:    Actuate Routine 0x0221 (lock strut isolation valves)");
+                    println!(
+                        "  • --restore: Actuate Routine 0x0222 (restore active dynamic damping)"
+                    );
                     return Ok(());
                 }
             },

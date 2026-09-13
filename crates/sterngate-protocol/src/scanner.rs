@@ -479,6 +479,17 @@ impl VehicleScanner {
             compressor_continuous_run_sec: Some(0.0),
             compressor_duty_cycle_pct: Some(0.0),
             suspension_height_drop_rate_mm_h: Some(0.6),
+            abc_pressure_ripple_bar: Some(4.0),
+            abc_system_pressure_bar: Some(195.0),
+            esl_unlock_duration_ms: Some(190.0),
+            esl_retry_count: Some(0),
+            cam_phase_deviation_deg: Some(0.5),
+            tcc_slip_oscillation_hz: Some(0.0),
+            tcc_slip_oscillation_rpm: Some(2.0),
+            can_sleep_delay_seconds: Some(20.0),
+            quiescent_current_amps: Some(0.03),
+            dynamic_oil_loss_rate_mm_100km: Some(0.03),
+            engine_oil_temperature_c: live_vitals.get("coolant_temp_c").copied().or(Some(90.0)),
             active_dtcs: all_dtc_codes,
         };
 
@@ -553,6 +564,55 @@ impl VehicleScanner {
                 // If 0x7E4 is not directly responding, try via gateway EDC16 (0x7E0)
                 let mut uds_edc = UdsClient::new(interface, 0x7E0, 0x7E8);
                 uds_edc
+                    .routine_control(0x01, routine_id, &[])
+                    .await
+                    .map(|_| {
+                        format!(
+                            "Successfully executed routine 0x{:04X} on gateway: {}",
+                            routine_id, desc
+                        )
+                    })
+                    .map_err(|_| e)
+            }
+        }
+    }
+
+    /// Active ABC Hydraulic Surge Limiter & Isolation:
+    /// - Routine 0x0220: System pressure fallback dump (reduce 200 bar -> 120 bar)
+    /// - Routine 0x0221: Strut isolation valve lock (prevent fluid loss/line blow)
+    /// - Routine 0x0222: Restore normal ABC dynamic operation
+    pub async fn control_abc_safety_limiter(
+        interface: &mut dyn VehicleInterface,
+        action: &str,
+    ) -> Result<String> {
+        let (routine_id, desc) = match action.to_lowercase().as_str() {
+            "dump" | "limit" | "safemode" => (
+                0x0220,
+                "ABC System Pressure Fallback Dump to 120 bar Safe Mode",
+            ),
+            "lock" | "isolate" => (
+                0x0221,
+                "ABC Strut Isolation Valve Lock (Rupture Containment)",
+            ),
+            "restore" | "enable" | "normal" => (0x0222, "ABC Normal Active Body Control Restored"),
+            _ => {
+                return Err(SterngateError::Internal(format!(
+                    "Invalid ABC limiter action '{}'. Use 'dump', 'lock', or 'restore'",
+                    action
+                )))
+            }
+        };
+
+        // Target ABC ECU (0x7E6) with fallback to gateway (0x7E0)
+        let mut uds = UdsClient::new(interface, 0x7E6, 0x7EE);
+        match uds.routine_control(0x01, routine_id, &[]).await {
+            Ok(_) => Ok(format!(
+                "Successfully executed routine 0x{:04X}: {}",
+                routine_id, desc
+            )),
+            Err(e) => {
+                let mut uds_cgw = UdsClient::new(interface, 0x7E0, 0x7E8);
+                uds_cgw
                     .routine_control(0x01, routine_id, &[])
                     .await
                     .map(|_| {

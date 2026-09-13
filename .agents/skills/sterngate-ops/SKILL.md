@@ -283,8 +283,27 @@ curl -s -X POST http://localhost:8080/api/v1/analyze/compare \
   }' | jq .
 ```
 
+### Active ABC (Active Body Control) Hydraulic Surge Limiter
+Protects tandem pumps and hydraulic lines against undamped 300+ bar pressure shockwaves when the nitrogen pulsation damper sphere (`A 220 327 02 15`) fails:
+
+```bash
+# Actuate pressure fallback dump to 120 bar safe mode (Routine 0x0220)
+sterngate analyze abc --dump
+
+# Lock strut level isolation valves to contain fluid loss and line rupture (Routine 0x0221)
+sterngate analyze abc --lock
+
+# Restore normal active dynamic body control (Routine 0x0222)
+sterngate analyze abc --restore
+
+# REST API call - ABC Limiter Control
+curl -s -X POST http://localhost:8080/api/v1/abc/control \
+  -H "Content-Type: application/json" \
+  -d '{"action": "dump"}' | jq .
+```
+
 ### Mercedes-Benz 'Cascade of Death' Early Warning System
-Detects inexpensive $2–$15 failing wear items before they snowball into $2,500+ destroyed ECUs, welded relays, or transmission lockouts:
+Detects inexpensive $2–$160 failing wear items before they snowball into $2,500–$10,000+ destroyed ECUs, welded relays, line fires, or engine replacements:
 1. **SBC Hydraulic Accumulator Exhaustion**: Accumulator pre-charge pressure ($<70\text{ bar}$ warning / $<55\text{ bar}$ critical) and pump duty cycle per brake application.
 2. **Common Rail Injector 'Black Death'**: Cylinder smooth-running balance ($>+3.5\text{ mm}^3/\text{hub}$) to prevent carbon cementing and harness melting.
 3. **722.6 Pilot Bushing ATF Wicking**: ATF temperature spikes ($>20^\circ\text{C}$ jump) and speed sensor jitter to prevent EGS52 TCU flooding.
@@ -292,9 +311,15 @@ Detects inexpensive $2–$15 failing wear items before they snowball into $2,500
 5. **DPF Differential Drift -> M55 Swirl Motor Short**: Flat pressure curve under boost to prevent turbo oil blow-by and blown Fuse 54.
 6. **Camshaft Magnet Oil Wicking**: 5V sensor reference dip + O2 heater faults to prevent engine ECU oiling.
 7. **Air Suspension Compressor Burnout**: Continuous runtime ($>40\text{s}$) to prevent piston seal melting and relay welding.
+8. **ABC Pulsation Damper Surge**: Hydraulic line ripple ($>15\text{ bar}$ warning / $>25\text{ bar}$ critical) to prevent tandem pump shaft shear and exhaust line fires.
+9. **Electronic Steering Lock (ESL / ELV) Brush Seizure**: Unlock duration ($>250\text{ms}$ warning / $>500\text{ms}$ critical) instructing owner NOT to remove key before emulator install.
+10. **M272/M273 Balance Shaft & Idler Sprocket Wear**: Camshaft phase angle deviation ($>1.5^\circ$ warning / $>3.2^\circ$ critical) before chain skips teeth.
+11. **Valeo Radiator Glycol Intrusion**: Harmonic TCC slip micro-oscillation ($4–12\text{ Hz}$, $>15\text{ RPM}$) before clutch paper delamination.
+12. **Cowl/Sunroof Drain Clog -> SAM Water Ingress**: CAN-B bus sleep failure ($>45\text{s}$ warning / $>120\text{s}$ critical) and quiescent drain ($>0.25\text{A}$) before PCB bridge corrosion.
+13. **OM642 V-Valley Oil Cooler Seal Starvation**: Dynamic highway oil loss ($>0.10\text{ mm/100km}$ warning / $>0.25\text{ mm/100km}$ critical) before rod bearing starvation.
 
 ```bash
-# Evaluate vehicle vitals against all 7 cascades
+# Evaluate vehicle vitals against all 13 cascades
 sterngate analyze cascades
 
 # REST API call - Live telemetry evaluation
@@ -303,7 +328,7 @@ curl -s http://localhost:8080/api/v1/analyze/cascades | jq .
 # REST API call - Custom telemetry evaluation
 curl -s -X POST http://localhost:8080/api/v1/analyze/cascades \
   -H "Content-Type: application/json" \
-  -d '{"sbc_accumulator_pressure_bar": 52.0, "max_cylinder_balance_trim_mm3": 3.8}' | jq .
+  -d '{"sbc_accumulator_pressure_bar": 52.0, "abc_pressure_ripple_bar": 28.0}' | jq .
 ```
 
 ---

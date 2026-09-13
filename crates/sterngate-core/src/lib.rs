@@ -448,15 +448,26 @@ mod tests {
             compressor_continuous_run_sec: Some(12.0),
             compressor_duty_cycle_pct: Some(5.0),
             suspension_height_drop_rate_mm_h: Some(0.5),
+            abc_pressure_ripple_bar: Some(3.0),
+            abc_system_pressure_bar: Some(195.0),
+            esl_unlock_duration_ms: Some(180.0),
+            esl_retry_count: Some(0),
+            cam_phase_deviation_deg: Some(0.4),
+            tcc_slip_oscillation_hz: Some(0.0),
+            tcc_slip_oscillation_rpm: Some(2.0),
+            can_sleep_delay_seconds: Some(18.0),
+            quiescent_current_amps: Some(0.02),
+            dynamic_oil_loss_rate_mm_100km: Some(0.02),
+            engine_oil_temperature_c: Some(92.0),
             active_dtcs: vec![],
         };
 
         let report = CascadeWatchdog::evaluate(&healthy_input);
         assert_eq!(report.overall_severity, CascadeSeverity::Normal);
         assert!(report.alerts.is_empty());
-        assert_eq!(report.total_cascades_checked, 7);
+        assert_eq!(report.total_cascades_checked, 13);
 
-        // 2. Imminent Danger - SBC Accumulator Exhaustion + Black Death blow-by + Leaking air suspension
+        // 2. Imminent Danger - All 13 Cascades of Death simultaneously triggered
         let danger_input = CascadeTelemetryInput {
             sbc_accumulator_pressure_bar: Some(49.0), // Critically low!
             sbc_pump_per_brake_ratio: Some(0.85),     // Runs on 85% of brake taps!
@@ -478,7 +489,23 @@ mod tests {
             compressor_continuous_run_sec: Some(48.0), // Continuous run > 40s!
             compressor_duty_cycle_pct: Some(38.0),
             suspension_height_drop_rate_mm_h: Some(14.0),
-            active_dtcs: vec!["C249F".to_string(), "P220A".to_string()],
+            abc_pressure_ripple_bar: Some(32.0), // ABC pulsation damper ruptured!
+            abc_system_pressure_bar: Some(225.0),
+            esl_unlock_duration_ms: Some(620.0), // ESL motor brush worn, imminent lockout!
+            esl_retry_count: Some(2),
+            cam_phase_deviation_deg: Some(-4.2), // M272 balance shaft teeth stripped!
+            tcc_slip_oscillation_hz: Some(7.5),  // Valeo glycol contamination shudder!
+            tcc_slip_oscillation_rpm: Some(48.0),
+            can_sleep_delay_seconds: Some(150.0), // Front/Rear SAM water ingress!
+            quiescent_current_amps: Some(3.2),
+            dynamic_oil_loss_rate_mm_100km: Some(0.42), // OM642 oil cooler leak!
+            engine_oil_temperature_c: Some(110.0),
+            active_dtcs: vec![
+                "C249F".to_string(),
+                "P220A".to_string(),
+                "A25464".to_string(),
+                "1200".to_string(),
+            ],
         };
 
         let danger_report = CascadeWatchdog::evaluate(&danger_input);
@@ -486,7 +513,7 @@ mod tests {
             danger_report.overall_severity,
             CascadeSeverity::ImminentDanger
         );
-        assert_eq!(danger_report.alerts.len(), 7); // All 7 cascades triggered!
+        assert_eq!(danger_report.alerts.len(), 13); // All 13 cascades triggered!
 
         // Verify Markdown output contains critical warning banners
         let md = danger_report.to_markdown();
@@ -494,7 +521,17 @@ mod tests {
         assert!(md.contains("SBC Hydraulic Accumulator Exhaustion"));
         assert!(md.contains("Common Rail Injector 'Black Death'"));
         assert!(md.contains("722.6 Transmission Pilot Bushing"));
+        assert!(md.contains("ABC Pulsation Damper Rupture"));
+        assert!(md.contains("Electronic Steering Lock (ESL / ELV)"));
+        assert!(md.contains("DO NOT REMOVE KEY"));
+        assert!(md.contains("M272/M273 Balance Shaft"));
+        assert!(md.contains("Valeo Radiator Glycol Intrusion"));
+        assert!(md.contains("SAM Water Ingress"));
+        assert!(md.contains("OM642 V-Valley Oil Cooler"));
         assert!(md.contains("A 611 017 00 60"));
         assert!(md.contains("A 000 430 26 94"));
+        assert!(md.contains("A 220 327 02 15"));
+        assert!(md.contains("A 272 050 15 04"));
+        assert!(md.contains("A 642 188 05 80"));
     }
 }

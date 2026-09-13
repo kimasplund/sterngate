@@ -691,6 +691,46 @@ async function pollCompressorStatus() {
   } catch (e) {}
 }
 
+async function toggleAbcLimiter(action) {
+  const badge = document.getElementById('abc-state-badge');
+  if (badge) {
+    badge.textContent = 'EXECUTING ABC ROUTINE...';
+    badge.className = 'badge badge-voltage';
+  }
+
+  try {
+    const res = await fetch('/api/v1/abc/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to dispatch ABC routine');
+
+    if (badge) {
+      if (action === 'dump') {
+        badge.textContent = 'ABC: SAFE PRESSURE (120 BAR)';
+        badge.className = 'badge badge-recording';
+        alert('✓ ABC System Pressure Fallback Dump executed (Routine 0x0220). Pressure limited to 120 bar to protect tandem pump & lines from catastrophic surge rupture.');
+      } else if (action === 'lock') {
+        badge.textContent = 'ABC: STRUTS ISOLATED (LOCKED)';
+        badge.className = 'badge badge-recording';
+        alert('✓ ABC Strut Isolation Valves Locked (Routine 0x0221). Active suspension flow isolated to prevent line burst over hot exhaust.');
+      } else {
+        badge.textContent = 'ABC: NOMINAL (200 BAR)';
+        badge.className = 'badge badge-ready';
+        alert('✓ ABC Normal Active Dynamic Control restored (Routine 0x0222).');
+      }
+    }
+  } catch (err) {
+    alert(`Error dispatching ABC routine: ${err.message}`);
+    if (badge) {
+      badge.textContent = 'ABC: ERROR';
+      badge.className = 'badge badge-danger';
+    }
+  }
+}
+
 async function checkCascadesLive() {
   const badge = document.getElementById('cascade-status-badge');
   const container = document.getElementById('cascade-alerts-container');
@@ -712,14 +752,14 @@ async function checkCascadesLive() {
       badge.textContent = '⚠️ PREVENTIVE WATCHLIST ITEMS DETECTED';
       badge.className = 'badge badge-voltage';
     } else {
-      badge.textContent = '✅ ALL SYSTEMS HEALTHY (7 CASCADES MONITORED)';
+      badge.textContent = '✅ ALL SYSTEMS HEALTHY (13 CASCADES MONITORED)';
       badge.className = 'badge badge-ready';
     }
 
     if (!report.alerts || report.alerts.length === 0) {
       container.innerHTML = `
         <div style="background: rgba(46, 160, 67, 0.15); border: 1px solid rgba(46, 160, 67, 0.4); border-radius: 4px; padding: 0.75rem; color: #3fb950;">
-          <b>✓ Zero Active Cascade Failures:</b> SBC accumulator pressure, common rail injector balance, 722.6 pilot bushing wicking, TCC lockup slip, DPF differential pressure, camshaft magnets, and air suspension compressor are all within nominal operating tolerances.
+          <b>✓ Zero Active Cascade Failures:</b> SBC accumulator, common rail washers, 722.6 pilot bushing, TCC lockup, DPF/M55 flaps, cam magnets, ENR compressor, ABC pulsation damper, ESL steering lock, M272 balance shaft, Valeo radiator glycol, SAM water ingress, and OM642 oil cooler are all within nominal operating tolerances.
         </div>
       `;
     } else {

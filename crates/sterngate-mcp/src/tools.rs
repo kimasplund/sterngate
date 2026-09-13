@@ -279,8 +279,23 @@ pub fn get_tools_list() -> Value {
             }
         },
         {
+            "name": "sterngate_control_abc_limiter",
+            "description": "Control ABC (Active Body Control) hydraulic surge limiter and isolation routines (Routine 0x0220: pressure fallback dump to 120 bar safe mode; Routine 0x0221: strut isolation valve lock; Routine 0x0222: restore normal active dynamic damping).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "ABC containment action: 'dump' (120 bar safe fallback), 'lock' (strut isolation valves locked), 'restore' (normal active damping)",
+                        "enum": ["dump", "lock", "restore"]
+                    }
+                },
+                "required": ["action"]
+            }
+        },
+        {
             "name": "sterngate_check_cascade_warnings",
-            "description": "Inspect and evaluate vehicle vitals and diagnostics against known Mercedes-Benz 'Cascade of Death' failure modes (SBC accumulator loss, injector copper seal Black Death, 722.6 pilot bushing wicking, TCC lockup slip, DPF differential drift/M55 short, cam magnet oil wicking, air suspension compressor burnout).",
+            "description": "Inspect and evaluate vehicle vitals and diagnostics against 13 known Mercedes-Benz 'Cascade of Death' failure modes (SBC accumulator loss, injector copper seal Black Death, 722.6 pilot bushing wicking, TCC lockup slip, DPF differential drift/M55 short, cam magnet oil wicking, air suspension compressor burnout, ABC pulsation damper surge, ESL steering lock DC motor seizure, M272/M273 balance shaft wear, Valeo radiator glycol contamination, SAM water ingress & parasitic drain, OM642 oil cooler V-valley leak).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -303,6 +318,30 @@ pub fn get_tools_list() -> Value {
                     "suspension_height_drop_rate_mm_h": {
                         "type": "number",
                         "description": "Stationary rear suspension height drop rate in mm/hour (nominal <2 mm/h, critical >10 mm/h)"
+                    },
+                    "abc_pressure_ripple_bar": {
+                        "type": "number",
+                        "description": "ABC hydraulic line pressure ripple amplitude in bar (nominal <5 bar, critical >25 bar)"
+                    },
+                    "esl_unlock_duration_ms": {
+                        "type": "number",
+                        "description": "Electronic steering lock (ESL/ELV) motor unlock duration in ms (nominal 120-220ms, critical >500ms)"
+                    },
+                    "cam_phase_deviation_deg": {
+                        "type": "number",
+                        "description": "Camshaft phase angle deviation in crank degrees (nominal <1.0°, critical >3.2°)"
+                    },
+                    "tcc_slip_oscillation_hz": {
+                        "type": "number",
+                        "description": "Harmonic TCC slip oscillation frequency in Hz (glycol contamination shudder 4-12 Hz)"
+                    },
+                    "can_sleep_delay_seconds": {
+                        "type": "number",
+                        "description": "Interior CAN-B bus sleep delay in seconds (nominal <30s, critical >120s)"
+                    },
+                    "dynamic_oil_loss_rate_mm_100km": {
+                        "type": "number",
+                        "description": "Highway dynamic oil level consumption rate in mm/100km (nominal <0.05, critical >0.25)"
                     }
                 }
             }
@@ -889,6 +928,23 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 "burnout_prevention_active": action == "inhibit" || action == "workshop",
             }))
         }
+        "sterngate_control_abc_limiter" => {
+            let action = arguments
+                .get("action")
+                .and_then(|v| v.as_str())
+                .unwrap_or("dump");
+
+            let res = VehicleScanner::control_abc_safety_limiter(&mut mock_iface, action)
+                .await
+                .map_err(|e| format!("Failed to execute ABC limiter routine: {}", e))?;
+
+            Ok(json!({
+                "success": true,
+                "action": action,
+                "message": res,
+                "abc_system_status": if action == "dump" { "PRESSURE_LIMITED_120BAR" } else if action == "lock" { "STRUT_VALVES_ISOLATED" } else { "ACTIVE_DYNAMIC_CONTROL" },
+            }))
+        }
         "sterngate_check_cascade_warnings" => {
             let mut input = CascadeTelemetryInput {
                 sbc_accumulator_pressure_bar: Some(78.0),
@@ -911,6 +967,17 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 compressor_continuous_run_sec: Some(0.0),
                 compressor_duty_cycle_pct: Some(0.0),
                 suspension_height_drop_rate_mm_h: Some(0.6),
+                abc_pressure_ripple_bar: Some(3.5),
+                abc_system_pressure_bar: Some(195.0),
+                esl_unlock_duration_ms: Some(185.0),
+                esl_retry_count: Some(0),
+                cam_phase_deviation_deg: Some(0.4),
+                tcc_slip_oscillation_hz: Some(0.0),
+                tcc_slip_oscillation_rpm: Some(1.5),
+                can_sleep_delay_seconds: Some(15.0),
+                quiescent_current_amps: Some(0.02),
+                dynamic_oil_loss_rate_mm_100km: Some(0.02),
+                engine_oil_temperature_c: Some(90.0),
                 active_dtcs: vec![],
             };
 
@@ -940,6 +1007,42 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 .and_then(|v| v.as_f64())
             {
                 input.suspension_height_drop_rate_mm_h = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("abc_pressure_ripple_bar")
+                .and_then(|v| v.as_f64())
+            {
+                input.abc_pressure_ripple_bar = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("esl_unlock_duration_ms")
+                .and_then(|v| v.as_f64())
+            {
+                input.esl_unlock_duration_ms = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("cam_phase_deviation_deg")
+                .and_then(|v| v.as_f64())
+            {
+                input.cam_phase_deviation_deg = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("tcc_slip_oscillation_hz")
+                .and_then(|v| v.as_f64())
+            {
+                input.tcc_slip_oscillation_hz = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("can_sleep_delay_seconds")
+                .and_then(|v| v.as_f64())
+            {
+                input.can_sleep_delay_seconds = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("dynamic_oil_loss_rate_mm_100km")
+                .and_then(|v| v.as_f64())
+            {
+                input.dynamic_oil_loss_rate_mm_100km = Some(v);
             }
 
             let report = CascadeWatchdog::evaluate(&input);

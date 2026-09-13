@@ -70,6 +70,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             "/api/v1/suspension/compressor/status",
             get(get_compressor_status),
         )
+        .route("/api/v1/abc/control", post(control_abc))
         .with_state(state)
 }
 
@@ -878,6 +879,17 @@ async fn get_cascade_analysis(State(state): State<Arc<AppState>>) -> impl IntoRe
         compressor_continuous_run_sec: Some(guard.current_run_seconds()),
         compressor_duty_cycle_pct: Some(0.0),
         suspension_height_drop_rate_mm_h: Some(0.6),
+        abc_pressure_ripple_bar: Some(3.5),
+        abc_system_pressure_bar: Some(195.0),
+        esl_unlock_duration_ms: Some(185.0),
+        esl_retry_count: Some(0),
+        cam_phase_deviation_deg: Some(0.4),
+        tcc_slip_oscillation_hz: Some(0.0),
+        tcc_slip_oscillation_rpm: Some(1.5),
+        can_sleep_delay_seconds: Some(15.0),
+        quiescent_current_amps: Some(0.02),
+        dynamic_oil_loss_rate_mm_100km: Some(0.02),
+        engine_oil_temperature_c: snap.coolant_temp.or(Some(90.0)),
         active_dtcs: vec![],
     };
 
@@ -905,4 +917,35 @@ async fn post_cascade_analysis(
 
     let report = CascadeWatchdog::evaluate(&input);
     Json(report)
+}
+
+#[derive(Deserialize)]
+struct AbcControlRequest {
+    action: String, // "dump", "lock", "restore"
+}
+
+async fn control_abc(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AbcControlRequest>,
+) -> impl IntoResponse {
+    let action_str = payload.action.to_lowercase();
+    let mut iface = state.interface.lock().await;
+    match VehicleScanner::control_abc_safety_limiter(&mut **iface, &action_str).await {
+        Ok(msg) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": msg,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to dispatch ABC routine: {}", e),
+            })),
+        )
+            .into_response(),
+    }
 }

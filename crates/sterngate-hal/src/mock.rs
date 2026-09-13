@@ -35,6 +35,7 @@ impl VirtualCanInterface {
             0x7DF | 0x7E0 => 0x7E8,
             0x7E1 => 0x7E9,
             0x7E4 => 0x7EC,
+            0x7E6 => 0x7EE,
             _ => 0x7E8,
         };
 
@@ -225,9 +226,12 @@ impl VirtualCanInterface {
                         // 0x0210: Compressor Relay Force Inhibit (Burnout Safe Mode)
                         // 0x0211: Suspension Workshop / Transport Mode (Leveling Inhibit)
                         // 0x0212: Suspension Normal Operation Restore
+                        // 0x0220: ABC System Pressure Fallback Dump (120 bar)
+                        // 0x0221: ABC Strut Isolation Valve Lock
+                        // 0x0222: ABC Normal Active Suspension Restore
                         // 0xFF00: Erase Flash Routine
                         0xFF01 | 0x0201 | 0x0202 | 0x0203 | 0x0205 | 0x0210 | 0x0211 | 0x0212
-                        | 0xFF00 => Some(CanFrame::new_standard(
+                        | 0x0220 | 0x0221 | 0x0222 | 0xFF00 => Some(CanFrame::new_standard(
                             resp_id as u16,
                             &[0x05, 0x71, sub_fn, r_hi, r_lo, 0x00],
                         )),

@@ -122,12 +122,15 @@
     "btn_inhibit_compressor": "🛑 Spärra kompressor (Säkert läge - Av)",
     "btn_workshop_mode": "📐 Verkstads- / Transportläge",
     "btn_restore_compressor": "🔄 Återställ normal drift",
+    "btn_abc_dump": "🛡️ ABC Säkerhetstrycksänkning (120 bar felläge)",
+    "btn_abc_lock": "🔒 Lås ABC fjäderbensventiler",
+    "btn_abc_restore": "🔄 Återställ normal ABC-drift",
     "btn_cascades": "⚠️ Kontrollera haverikaskader (Cascade of Death)"
   },
   "cascades": {
     "title": "🚨 Mercedes 'Cascade of Death' Tidigt Varningscenter",
-    "subtitle": "7 ökända haverikaskader övervakade",
-    "desc": "Upptäcker billiga slitagedelar för 20–150 kr (O-ringar, kopparbrickor, kväveackumulatorer) innan de eskalerar till styrenhetshaverier på 25 000+ kr."
+    "subtitle": "13 ökända haverikaskader övervakade",
+    "desc": "Upptäcker billiga slitagedelar för 20–150 kr (O-ringar, kopparbrickor, kväveackumulatorer, mikromotorer) innan de eskalerar till styrenhetshaverier på 25 000+ kr."
   }
 }
 

@@ -122,12 +122,15 @@
     "btn_inhibit_compressor": "🛑 Kompressor abschalten (Schutzmodus - Aus)",
     "btn_workshop_mode": "📐 Werkstatt- / Transportmodus",
     "btn_restore_compressor": "🔄 Normalbetrieb wiederherstellen",
+    "btn_abc_dump": "🛡️ ABC-Sicherheitsdruckentlastung (120 bar Notbetrieb)",
+    "btn_abc_lock": "🔒 ABC-Federbein-Sperrventile schließen",
+    "btn_abc_restore": "🔄 Normalen ABC-Betrieb wiederherstellen",
     "btn_cascades": "⚠️ Kaskadenschäden (Cascade of Death) prüfen"
   },
   "cascades": {
     "title": "🚨 Mercedes 'Cascade of Death' Frühwarnzentrum",
-    "subtitle": "7 berüchtigte Kettenreaktionsschäden überwacht",
-    "desc": "Erkennt günstige 2–15 € Verschleißteile (O-Ringe, Kupferdichtringe, Druckspeicher), bevor sie zu 2.500 €+ zerstörten Steuergeräten oder Getriebeschäden führen."
+    "subtitle": "13 berüchtigte Kettenreaktionsschäden überwacht",
+    "desc": "Erkennt günstige 2–15 € Verschleißteile (O-Ringe, Kupferdichtringe, Druckspeicher, Kleinmotoren), bevor sie zu 2.500 €+ zerstörten Steuergeräten oder Getriebeschäden führen."
   }
 }
 

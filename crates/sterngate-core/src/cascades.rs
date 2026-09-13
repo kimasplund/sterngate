@@ -11,6 +11,12 @@ pub enum CascadeId {
     DpfDifferentialDriftM55,
     CamshaftMagnetOilWicking,
     SuspensionCompressorBurnout,
+    AbcPulsationDamperSurge,
+    EslMotorLockout,
+    M272BalanceShaftChainWear,
+    ValeoRadiatorGlycolContamination,
+    SamWaterIngressParasiticDrain,
+    Om642OilCoolerValleyLeak,
 }
 
 impl CascadeId {
@@ -23,6 +29,12 @@ impl CascadeId {
             Self::DpfDifferentialDriftM55 => "dpf_differential_drift_m55",
             Self::CamshaftMagnetOilWicking => "camshaft_magnet_oil_wicking",
             Self::SuspensionCompressorBurnout => "suspension_compressor_burnout",
+            Self::AbcPulsationDamperSurge => "abc_pulsation_damper_surge",
+            Self::EslMotorLockout => "esl_motor_lockout",
+            Self::M272BalanceShaftChainWear => "m272_balance_shaft_chain_wear",
+            Self::ValeoRadiatorGlycolContamination => "valeo_radiator_glycol_contamination",
+            Self::SamWaterIngressParasiticDrain => "sam_water_ingress_parasitic_drain",
+            Self::Om642OilCoolerValleyLeak => "om642_oil_cooler_valley_leak",
         }
     }
 }
@@ -176,6 +188,29 @@ pub struct CascadeTelemetryInput {
     pub compressor_duty_cycle_pct: Option<f64>,
     pub suspension_height_drop_rate_mm_h: Option<f64>,
 
+    // 8. ABC (Active Body Control) Hydraulic System
+    pub abc_pressure_ripple_bar: Option<f64>,
+    pub abc_system_pressure_bar: Option<f64>,
+
+    // 9. Electronic Steering Lock (ESL / ELV)
+    pub esl_unlock_duration_ms: Option<f64>,
+    pub esl_retry_count: Option<u32>,
+
+    // 10. M272 / M273 Balance Shaft & Timing Chain
+    pub cam_phase_deviation_deg: Option<f64>,
+
+    // 11. Valeo Radiator Glycol Contamination
+    pub tcc_slip_oscillation_hz: Option<f64>,
+    pub tcc_slip_oscillation_rpm: Option<f64>,
+
+    // 12. SAM Water Ingress & CAN-B Parasitic Drain
+    pub can_sleep_delay_seconds: Option<f64>,
+    pub quiescent_current_amps: Option<f64>,
+
+    // 13. OM642 V-Valley Oil Cooler Leak
+    pub dynamic_oil_loss_rate_mm_100km: Option<f64>,
+    pub engine_oil_temperature_c: Option<f64>,
+
     // General diagnostic codes
     #[serde(default)]
     pub active_dtcs: Vec<String>,
@@ -210,6 +245,24 @@ impl CascadeWatchdog {
         if let Some(alert) = Self::check_air_suspension(input) {
             alerts.push(alert);
         }
+        if let Some(alert) = Self::check_abc(input) {
+            alerts.push(alert);
+        }
+        if let Some(alert) = Self::check_esl(input) {
+            alerts.push(alert);
+        }
+        if let Some(alert) = Self::check_m272_timing(input) {
+            alerts.push(alert);
+        }
+        if let Some(alert) = Self::check_valeo_glycol(input) {
+            alerts.push(alert);
+        }
+        if let Some(alert) = Self::check_sam_water(input) {
+            alerts.push(alert);
+        }
+        if let Some(alert) = Self::check_om642_oil_cooler(input) {
+            alerts.push(alert);
+        }
 
         let overall_severity = alerts
             .iter()
@@ -221,7 +274,7 @@ impl CascadeWatchdog {
             timestamp: Utc::now().to_rfc3339(),
             overall_severity,
             alerts,
-            total_cascades_checked: 7,
+            total_cascades_checked: 13,
         }
     }
 
@@ -635,6 +688,367 @@ impl CascadeWatchdog {
                 }.to_string(),
                 oem_part_numbers: vec!["A 211 320 09 25".to_string(), "A 002 542 72 19 (Relay)".to_string(), "A 211 320 03 04 (Compressor)".to_string()],
                 affected_chassis: vec!["S211 Estate (ENR rear self-leveling)".to_string(), "W211 / W219 (All 4-corner AIRMATIC)".to_string()],
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_abc(input: &CascadeTelemetryInput) -> Option<CascadeAlert> {
+        let mut severity = CascadeSeverity::Normal;
+        let mut evidence = Vec::new();
+
+        if let Some(ripple) = input.abc_pressure_ripple_bar {
+            if ripple >= 25.0 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "ABC line pressure ripple critical ({:.1} bar >= 25.0 bar; pulsation damper diaphragm ruptured)",
+                    ripple
+                ));
+            } else if ripple >= 15.0 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push(format!(
+                    "ABC line pressure ripple elevated ({:.1} bar >= 15.0 bar; loss of nitrogen pre-charge)",
+                    ripple
+                ));
+            }
+        }
+
+        if let Some(pressure) = input.abc_system_pressure_bar {
+            if pressure < 130.0 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push(format!(
+                    "ABC operating pressure low ({:.1} bar < 130.0 bar nominal)",
+                    pressure
+                ));
+            } else if pressure > 215.0 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "ABC operating pressure surging dangerously ({:.1} bar > 215.0 bar)",
+                    pressure
+                ));
+            }
+        }
+
+        if input
+            .active_dtcs
+            .iter()
+            .any(|d| d.contains("C1525") || d.contains("C1129") || d.contains("C1128"))
+        {
+            severity = severity.max(CascadeSeverity::Watchlist);
+            evidence.push("ABC suspension hydraulic pressure circuit DTC stored".to_string());
+        }
+
+        if severity > CascadeSeverity::Normal {
+            Some(CascadeAlert {
+                id: CascadeId::AbcPulsationDamperSurge,
+                name: "ABC Pulsation Damper Rupture & Hydraulic Shockwaves".to_string(),
+                severity,
+                root_cause_part: "Nitrogen pulsation damper sphere A 220 327 02 15 (~$160)".to_string(),
+                catastrophic_outcome: "Undamped 200 bar radial pump pulses fatigue hydraulic line crimps and fracture tandem pump drive shaft, spraying Pentosin CHF 11S over hot exhaust manifold ($8,000–$10,000)".to_string(),
+                telemetry_evidence: evidence.join("; "),
+                recommendation: if severity == CascadeSeverity::ImminentDanger {
+                    "EMERGENCY: Actuate Routine `0x0220` (system pressure dump to 120 bar fallback) and Routine `0x0221` (lock strut isolation valves) to prevent catastrophic line rupture. Tow to workshop or replace pulsation damper immediately."
+                } else {
+                    "Inspect ABC pulsation damper A 220 327 02 15 on front tandem pump outlet; replace accumulator sphere before hydraulic surge fractures pump shaft."
+                }.to_string(),
+                oem_part_numbers: vec!["A 220 327 02 15 (Pulsation Damper)".to_string(), "A 000 989 91 03 (Pentosin CHF 11S)".to_string(), "A 003 466 27 01 (Tandem Pump)".to_string()],
+                affected_chassis: vec!["W220 S-Class (ABC 487)".to_string(), "W215 CL-Class".to_string(), "R230 SL-Class".to_string(), "W221 S-Class (V8/V12 ABC)".to_string()],
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_esl(input: &CascadeTelemetryInput) -> Option<CascadeAlert> {
+        let mut severity = CascadeSeverity::Normal;
+        let mut evidence = Vec::new();
+
+        if let Some(duration) = input.esl_unlock_duration_ms {
+            if duration >= 500.0 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "ESL unlock latency critical ({:.0} ms >= 500 ms; motor brush carbon depletion, lock seizure imminent)",
+                    duration
+                ));
+            } else if duration >= 250.0 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push(format!(
+                    "ESL unlock latency elevated ({:.0} ms >= 250 ms; DC motor brush resistance rising)",
+                    duration
+                ));
+            }
+        }
+
+        if let Some(retries) = input.esl_retry_count {
+            if retries >= 2 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "ESL unlock retries exceeded threshold ({} retries)",
+                    retries
+                ));
+            } else if retries == 1 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push("ESL bolt retraction required retry".to_string());
+            }
+        }
+
+        if input.active_dtcs.iter().any(|d| {
+            d.contains("A25464")
+                || d.contains("A25407")
+                || d.contains("A25408")
+                || d.contains("A25409")
+        }) {
+            severity = severity.max(CascadeSeverity::ImminentDanger);
+            evidence.push(
+                "ESL/ELV electronic steering lock motor or microswitch DTC stored".to_string(),
+            );
+        }
+
+        if severity > CascadeSeverity::Normal {
+            Some(CascadeAlert {
+                id: CascadeId::EslMotorLockout,
+                name: "Electronic Steering Lock (ESL / ELV) Brush Seizure & Permanent Lockout".to_string(),
+                severity,
+                root_cause_part: "12V DC Johnson/Nichibo FC-280SC micro-motor internal commutator brush carbon wear ($5)".to_string(),
+                catastrophic_outcome: "Bolt motor stalls mid-stroke; internal NEC microcontroller permanently blows security fuse bit. Terminal 15/50 permanently inhibited, steering column locked, requiring complete column removal and drilling ($2,000+)".to_string(),
+                telemetry_evidence: evidence.join("; "),
+                recommendation: if severity == CascadeSeverity::ImminentDanger {
+                    "DO NOT REMOVE KEY FROM IGNITION! Removing the key allows the locking bolt to cycle and seize permanently locked. Drive immediately to workshop with key inserted, or install an ESL emulator (A 204 545 57 32 bypass) while column is unlocked."
+                } else {
+                    "Pre-emptively install an electronic steering lock (ESL/ELV) emulator or replace the internal DC motor (Nichibo FC-280SC) while the steering column is still unlocked."
+                }.to_string(),
+                oem_part_numbers: vec!["A 204 545 57 32 (ESL/ELV Unit)".to_string(), "Nichibo FC-280SC (DC Motor)".to_string(), "ESL Plug & Play Emulator".to_string()],
+                affected_chassis: vec!["W204 C-Class".to_string(), "X204 GLK-Class".to_string(), "W212 E-Class (Early pre-facelift)".to_string(), "W207 E-Coupe".to_string()],
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_m272_timing(input: &CascadeTelemetryInput) -> Option<CascadeAlert> {
+        let mut severity = CascadeSeverity::Normal;
+        let mut evidence = Vec::new();
+
+        if let Some(dev) = input.cam_phase_deviation_deg {
+            if dev.abs() >= 3.2 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "Camshaft phase deviation critical ({:+.2}° >= 3.2°; balance shaft / idler sprocket teeth stripped)",
+                    dev
+                ));
+            } else if dev.abs() >= 1.5 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push(format!(
+                    "Camshaft phase angle drift detected ({:+.2}° >= 1.5°; initial tooth wear on balance shaft drive gear)",
+                    dev
+                ));
+            }
+        }
+
+        if input.active_dtcs.iter().any(|d| {
+            d.contains("1200")
+                || d.contains("1208")
+                || d.contains("P0016")
+                || d.contains("P0017")
+                || d.contains("1203")
+                || d.contains("1205")
+        }) {
+            severity = severity.max(CascadeSeverity::ImminentDanger);
+            evidence.push("DTC 1200/1208/P0016/P0017 stored: Constant adjustment of exhaust/intake camshaft of right cylinder bank towards retarded direction".to_string());
+        }
+
+        if severity > CascadeSeverity::Normal {
+            Some(CascadeAlert {
+                id: CascadeId::M272BalanceShaftChainWear,
+                name: "M272/M273 Balance Shaft & Idler Sprocket Tooth Wear".to_string(),
+                severity,
+                root_cause_part: "Soft sintered metal on balance shaft sprocket (M272) or timing chain idler gear (M273) A 272 050 08 04 ($60)".to_string(),
+                catastrophic_outcome: "Sprocket teeth grind down to nubs, chain jumps multiple teeth, causing intake/exhaust valve-to-piston collision and catastrophic engine destruction ($6,000+)".to_string(),
+                telemetry_evidence: evidence.join("; "),
+                recommendation: if severity == CascadeSeverity::ImminentDanger {
+                    "CRITICAL: Stop driving immediately. Sintered drive teeth are failing. Do not run engine under load to prevent chain jumping and piston-valve collision. Inspect camshaft sensor stampings and plan balance shaft / idler gear replacement."
+                } else {
+                    "Inspect timing mark alignment through camshaft Hall sensor ports (stamping 301-304). Plan replacement of balance shaft (M272) or intermediate gear (M273) with updated hardened part (A 272 050 15 04)."
+                }.to_string(),
+                oem_part_numbers: vec!["A 272 050 15 04 (Hardened Balance Shaft)".to_string(), "A 272 050 08 04 (Superseded Gear)".to_string(), "A 000 993 06 76 (Timing Chain)".to_string()],
+                affected_chassis: vec!["W211 E350 / E500 (M272/M273 2004-2008)".to_string(), "W203/W204 C280 / C350".to_string(), "W164 ML350 / ML500".to_string(), "W221 S350 / S500".to_string()],
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_valeo_glycol(input: &CascadeTelemetryInput) -> Option<CascadeAlert> {
+        let mut severity = CascadeSeverity::Normal;
+        let mut evidence = Vec::new();
+
+        if let (Some(hz), Some(rpm)) = (
+            input.tcc_slip_oscillation_hz,
+            input.tcc_slip_oscillation_rpm,
+        ) {
+            if (4.0..=12.0).contains(&hz) {
+                if rpm >= 35.0 {
+                    severity = severity.max(CascadeSeverity::ImminentDanger);
+                    evidence.push(format!(
+                        "Harmonic TCC slip RPM oscillation detected ({:.1} RPM at {:.1} Hz; characteristic glycol contamination clutch delamination)",
+                        rpm, hz
+                    ));
+                } else if rpm >= 15.0 {
+                    severity = severity.max(CascadeSeverity::Watchlist);
+                    evidence.push(format!(
+                        "Micro-oscillation in torque converter clutch slip ({:.1} RPM at {:.1} Hz in 1500-2000 RPM band)",
+                        rpm, hz
+                    ));
+                }
+            }
+        }
+
+        if input
+            .active_dtcs
+            .iter()
+            .any(|d| d.contains("2783") || d.contains("P0741") || d.contains("P0744"))
+        {
+            severity = severity.max(CascadeSeverity::Watchlist);
+            evidence.push(
+                "Torque converter lockup clutch friction power or slippage DTC stored".to_string(),
+            );
+        }
+
+        if severity > CascadeSeverity::Normal {
+            Some(CascadeAlert {
+                id: CascadeId::ValeoRadiatorGlycolContamination,
+                name: "Valeo Radiator Glycol Intrusion into 722.6 Transmission".to_string(),
+                severity,
+                root_cause_part: "Crimp joint defect in Valeo transmission fluid heat exchanger integrated into radiator core ($0 part of radiator)".to_string(),
+                catastrophic_outcome: "Ethylene glycol dissolves water-based adhesive holding friction linings to clutch plates; clutch material peels off into valve body, causing total 722.6 transmission failure ($3,500)".to_string(),
+                telemetry_evidence: evidence.join("; "),
+                recommendation: if severity == CascadeSeverity::ImminentDanger {
+                    "CRITICAL: Perform immediate cuvette glycol test (A 001 988 84 44). If glycol > 100 mg/l, flush transmission with 14L ATF immediately, replace radiator with Behr unit or fit auxiliary external air-to-oil transmission cooler ($80)."
+                } else {
+                    "Verify radiator brand (Valeo radiator with corrugated crimping produced pre-09/2003 is vulnerable). Fit external transmission oil cooler to permanently isolate coolant from ATF."
+                }.to_string(),
+                oem_part_numbers: vec!["A 211 500 31 02 (Behr Radiator)".to_string(), "A 001 988 84 44 (Glycol Test Kit)".to_string(), "A 001 989 68 03 (MB 236.14 ATF)".to_string()],
+                affected_chassis: vec!["W211 E-Class (2002-09/2003 with Valeo radiator)".to_string(), "W203 C-Class (2000-09/2003)".to_string(), "W209 CLK-Class".to_string(), "R230 SL350".to_string()],
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_sam_water(input: &CascadeTelemetryInput) -> Option<CascadeAlert> {
+        let mut severity = CascadeSeverity::Normal;
+        let mut evidence = Vec::new();
+
+        if let Some(delay) = input.can_sleep_delay_seconds {
+            if delay >= 120.0 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "CAN-B bus refused deep sleep ({:.0}s >= 120s; wake-up loop from SAM water ingress)",
+                    delay
+                ));
+            } else if delay >= 45.0 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push(format!(
+                    "Delayed CAN-B interior bus sleep ({:.0}s >= 45s)",
+                    delay
+                ));
+            }
+        }
+
+        if let Some(current) = input.quiescent_current_amps {
+            if current >= 2.0 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "Excessive standby quiescent battery drain ({:.2}A >= 2.0A; SAM high-side bridge latch)",
+                    current
+                ));
+            } else if current >= 0.25 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push(format!(
+                    "Elevated standby parasitic draw ({:.2}A >= 0.25A; nominal < 0.04A)",
+                    current
+                ));
+            }
+        }
+
+        if input.active_dtcs.iter().any(|d| {
+            d.contains("B1000") || d.contains("9022") || d.contains("9023") || d.contains("9028")
+        }) {
+            severity = severity.max(CascadeSeverity::Watchlist);
+            evidence.push(
+                "SAM control unit internal fault or undervoltage supply DTC stored".to_string(),
+            );
+        }
+
+        if severity > CascadeSeverity::Normal {
+            Some(CascadeAlert {
+                id: CascadeId::SamWaterIngressParasiticDrain,
+                name: "Cowl/Sunroof Drain Clog -> SAM Water Ingress & Parasitic Drain".to_string(),
+                severity,
+                root_cause_part: "Debris-clogged firewall cowl duckbill drains and sunroof drain hoses ($0 cleaning cost)".to_string(),
+                catastrophic_outcome: "Water overflows windshield wiper plenum into Front SAM or taillight seals into Rear SAM, electrolytically corroding multilayer PCB and latching high-side MOSFET drivers on ($1,500 per SAM)".to_string(),
+                telemetry_evidence: evidence.join("; "),
+                recommendation: if severity == CascadeSeverity::ImminentDanger {
+                    "Disconnect battery ground terminal to prevent thermal runaway / battery drain. Remove Front SAM fuse box (under hood driver side) and inspect underside connectors for green copper verdigris corrosion. Unclog cowl drain duckbills."
+                } else {
+                    "Inspect and clean windshield cowl rubber drain flaps and rear taillight foam seals. Ensure CAN-B reaches sleep state (< 40mA quiescent draw after 2 minutes)."
+                }.to_string(),
+                oem_part_numbers: vec!["A 211 545 42 01 (Front SAM)".to_string(), "A 211 545 93 01 (Rear SAM)".to_string(), "A 211 830 00 97 (Cowl Drain Valve)".to_string()],
+                affected_chassis: vec!["W211 E-Class / S211 Estate".to_string(), "W219 CLS-Class".to_string(), "W164 ML-Class (Rear SAM water ingress via taillight gasket)".to_string(), "W204 C-Class".to_string()],
+            })
+        } else {
+            None
+        }
+    }
+
+    fn check_om642_oil_cooler(input: &CascadeTelemetryInput) -> Option<CascadeAlert> {
+        let mut severity = CascadeSeverity::Normal;
+        let mut evidence = Vec::new();
+
+        if let Some(rate) = input.dynamic_oil_loss_rate_mm_100km {
+            if rate >= 0.25 {
+                severity = severity.max(CascadeSeverity::ImminentDanger);
+                evidence.push(format!(
+                    "Dynamic highway oil level drop rate severe ({:.2} mm/100km >= 0.25 mm/100km; V-valley oil cooler seal failure)",
+                    rate
+                ));
+            } else if rate >= 0.10 {
+                severity = severity.max(CascadeSeverity::Watchlist);
+                evidence.push(format!(
+                    "Elevated dynamic oil consumption ({:.2} mm/100km >= 0.10 mm/100km; early valley seal leakage)",
+                    rate
+                ));
+            }
+        }
+
+        if input
+            .active_dtcs
+            .iter()
+            .any(|d| d.contains("P2526") || d.contains("P2527"))
+        {
+            severity = severity.max(CascadeSeverity::Watchlist);
+            evidence.push(
+                "Oil level sensor implausibility or dynamic level monitoring DTC stored"
+                    .to_string(),
+            );
+        }
+
+        if severity > CascadeSeverity::Normal {
+            Some(CascadeAlert {
+                id: CascadeId::Om642OilCoolerValleyLeak,
+                name: "OM642 V-Valley Oil Cooler Seal Degradation & Starvation".to_string(),
+                severity,
+                root_cause_part: "Original orange silicone oil cooler seals A 642 188 01 80 bake rock-hard in deep engine V-valley ($4.50)".to_string(),
+                catastrophic_outcome: "Engine oil drains out through transmission bellhousing weep holes during sustained highway driving; sudden oil starvation spins connecting rod bearings and seizes crank ($7,500+)".to_string(),
+                telemetry_evidence: evidence.join("; "),
+                recommendation: if severity == CascadeSeverity::ImminentDanger {
+                    "STOP DRIVING: Inspect transmission bellhousing drainage hole behind engine oil pan. Check engine oil dipstick immediately. Do not operate under highway loads. Replace cooler seals with updated purple Viton seals (A 642 188 05 80)."
+                } else {
+                    "Check bellhousing inspection plug for oil residue. Replace orange silicone seals with improved purple Viton seals (A 642 188 05 80) and replace turbo inlet gasket (A 642 094 00 80) to prevent oil dripping onto swirl flap motor."
+                }.to_string(),
+                oem_part_numbers: vec!["A 642 188 05 80 (Viton Oil Cooler Seal Kit)".to_string(), "A 642 094 00 80 (Turbo Inlet Seal)".to_string(), "A 642 180 00 09 (Oil Cooler Housing)".to_string()],
+                affected_chassis: vec!["W211 / S211 E280/E300/E320 CDI (OM642 3.0L V6)".to_string(), "W164 ML320 CDI / GL320 CDI".to_string(), "W221 S320 CDI".to_string(), "Sprinter NCV3 (OM642)".to_string()],
             })
         } else {
             None

@@ -478,12 +478,32 @@ mod tests {
             .await
             .unwrap();
         let cascade_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-        assert_eq!(cascade_res["total_cascades_checked"], 7);
+        assert_eq!(cascade_res["total_cascades_checked"], 13);
 
-        // 10. POST /api/v1/analyze/cascades with critical danger input
+        // 10. POST /api/v1/abc/control (ABC Pressure Dump Safe Mode)
+        let abc_payload = json!({
+            "action": "dump"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/abc/control")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&abc_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let abc_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(abc_res["success"].as_bool().unwrap());
+
+        // 11. POST /api/v1/analyze/cascades with critical danger input
         let danger_payload = json!({
             "sbc_accumulator_pressure_bar": 48.0,
-            "max_cylinder_balance_trim_mm3": 4.2
+            "max_cylinder_balance_trim_mm3": 4.2,
+            "abc_pressure_ripple_bar": 30.0,
+            "esl_unlock_duration_ms": 550.0
         });
         let req = Request::builder()
             .method("POST")
@@ -498,6 +518,6 @@ mod tests {
             .unwrap();
         let danger_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(danger_res["overall_severity"], "ImminentDanger");
-        assert!(danger_res["alerts"].as_array().unwrap().len() >= 2);
+        assert!(danger_res["alerts"].as_array().unwrap().len() >= 4);
     }
 }

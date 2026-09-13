@@ -122,12 +122,15 @@
     "btn_inhibit_compressor": "🛑 Inhibit Compressor (Safe Mode - Off)",
     "btn_workshop_mode": "📐 Workshop / Transport Mode",
     "btn_restore_compressor": "🔄 Restore Normal Operation",
+    "btn_abc_dump": "🛡️ ABC Safety Pressure Dump (120 bar Safe Mode)",
+    "btn_abc_lock": "🔒 Lock ABC Strut Isolation Valves",
+    "btn_abc_restore": "🔄 Restore Normal ABC Operation",
     "btn_cascades": "⚠️ Check Cascades of Death"
   },
   "cascades": {
     "title": "🚨 Mercedes 'Cascade of Death' Early Warning Center",
-    "subtitle": "7 Notorious Cascades Monitored",
-    "desc": "Detects inexpensive $2–$15 wear items (O-rings, copper washers, nitrogen spheres) before they snowball into $2,500+ destroyed ECUs or mechanical lockouts."
+    "subtitle": "13 Notorious Cascades Monitored",
+    "desc": "Detects inexpensive $2–$15 wear items (O-rings, copper washers, nitrogen spheres, micro-motors) before they snowball into $2,500+ destroyed ECUs or mechanical lockouts."
   }
 }
 

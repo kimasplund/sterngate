@@ -107,10 +107,25 @@ When a user asks:
   2. The tool calculates height drop rate mm/hour, asymmetry, and compressor duty cycle. If $> 10\text{ mm/h}$, it flags `CriticalLeak` and recommends inspecting rear pneumatic bellows (`A 211 320 09 25`) and relay (`A 002 542 72 19`).
 - *"My rear air suspension is leaking and I need to drive to the shop without burning out the compressor:"*
   1. Call `sterngate_protect_compressor` with `{"action": "inhibit", "reason": "Prevent thermal overload while driving"}` or `{"action": "workshop"}`.
+- *"My ABC suspension is groaning/humming, or I suspect a ruptured pulsation damper:"*
+  1. Call `sterngate_control_abc_limiter` with `{"action": "dump"}` (Routine `0x0220` - safe 120 bar pressure fallback) or `{"action": "lock"}` (Routine `0x0221` - lock strut isolation valves to prevent fluid eruption over hot exhaust).
 - *"Are there any imminent cascade failures or hidden ticking time bombs on my Mercedes?"*
   1. Call `sterngate_check_cascade_warnings`.
-  2. The tool evaluates the vehicle across all 7 notorious Mercedes cascades (SBC accumulator pressure, injector Black Death copper washers, 722.6 pilot bushing wicking, TCC lockup slip, DPF differential pressure, camshaft magnets, and air suspension).
-  3. If an alert is triggered (e.g. `ImminentDanger`), explain the inexpensive $2–$15 wear part that triggers it and provide the exact OEM part numbers and containment instructions before catastrophic $2,500+ failure occurs.
+  2. The tool evaluates the vehicle across all 13 notorious Mercedes cascades:
+     - SBC accumulator pressure exhaustion
+     - Common Rail injector copper washer 'Black Death' blow-by
+     - 722.6 transmission pilot bushing capillary oil wicking
+     - 722.6 TCC torque converter lockup clutch shredding
+     - DPF differential drift -> turbo oil blow-by & M55 swirl motor short
+     - Camshaft adjuster magnet oil wicking into engine ECU
+     - S211 air suspension compressor burnout & welded relay
+     - ABC pulsation damper rupture & 300+ bar hydraulic shockwaves
+     - Electronic Steering Lock (ESL/ELV) motor brush seizure & permanent column lockout
+     - M272/M273 balance shaft & idler sprocket tooth wear
+     - Valeo radiator crimp failure -> glycol intrusion into 722.6 transmission
+     - Windshield cowl & sunroof drain clog -> SAM water ingress & parasitic drain
+     - OM642 V-valley oil cooler orange seal degradation & highway oil starvation
+  3. If an alert is triggered (e.g. `ImminentDanger`), explain the inexpensive $2–$160 wear part that triggers it and provide the exact OEM part numbers and containment instructions before catastrophic $2,500–$10,000+ failure occurs.
 - *"Did my adaptation reset or tune improve fuel consumption?"*
   1. Call `sterngate_compare_drive_runs` with baseline and target drive statistics.
   2. The tool returns the fuel consumption delta $L/100\text{km}$, lockup clutch slip delta, and an overall verdict (`Beneficial`, `Neutral`, or `Detrimental`).

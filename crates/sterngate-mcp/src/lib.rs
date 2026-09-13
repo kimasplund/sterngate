@@ -381,7 +381,7 @@ mod tests {
                 .unwrap()
                 .as_u64()
                 .unwrap(),
-            7
+            13
         );
 
         // 2. Imminent danger check
@@ -390,7 +390,9 @@ mod tests {
             &json!({
                 "sbc_accumulator_pressure_bar": 45.0,
                 "max_cylinder_balance_trim_mm3": 4.5,
-                "compressor_continuous_run_sec": 48.0
+                "compressor_continuous_run_sec": 48.0,
+                "abc_pressure_ripple_bar": 28.0,
+                "esl_unlock_duration_ms": 600.0
             }),
         )
         .await
@@ -405,13 +407,28 @@ mod tests {
             "ImminentDanger"
         );
         let alerts = res_danger.get("alerts").unwrap().as_array().unwrap();
-        assert!(alerts.len() >= 3);
+        assert!(alerts.len() >= 5);
 
         // 3. Resource check
         let catalog_res = resources::read_resource("sterngate://cascades/catalog").unwrap();
         assert_eq!(
             catalog_res.get("total_cascades").unwrap().as_u64().unwrap(),
-            7
+            13
+        );
+
+        // 4. Test sterngate_control_abc_limiter
+        let abc_dump_res =
+            tools::handle_tool_call("sterngate_control_abc_limiter", &json!({"action": "dump"}))
+                .await
+                .unwrap();
+        assert!(abc_dump_res.get("success").unwrap().as_bool().unwrap());
+        assert_eq!(
+            abc_dump_res
+                .get("abc_system_status")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "PRESSURE_LIMITED_120BAR"
         );
     }
 }

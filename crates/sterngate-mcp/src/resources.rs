@@ -89,7 +89,7 @@ pub fn read_resource(uri: &str) -> Result<Value, String> {
             }
         }
         "sterngate://cascades/catalog" => Ok(json!({
-            "total_cascades": 7,
+            "total_cascades": 13,
             "cascades": [
                 {
                     "id": "sbc_accumulator_exhaustion",
@@ -139,6 +139,48 @@ pub fn read_resource(uri: &str) -> Result<Value, String> {
                     "root_part": "Rear air spring bellow A 211 320 09 25 ($140) & relay A 002 542 72 19 ($12)",
                     "catastrophic_outcome": "Continuous running melts PTFE ring; >30A current welds relay contacts closed ($1,200)",
                     "threshold": "Continuous runtime >40s, drop rate >4 mm/h, duty cycle >25%"
+                },
+                {
+                    "id": "abc_pulsation_damper_surge",
+                    "name": "ABC Pulsation Damper Rupture & Hydraulic Shockwaves",
+                    "root_part": "Nitrogen pulsation damper sphere A 220 327 02 15 (~$160)",
+                    "catastrophic_outcome": "Undamped 200 bar shockwaves fracture tandem pump shaft and burst lines over hot exhaust ($8,000–$10,000)",
+                    "threshold": "Line pressure ripple >15 bar (warning), >25 bar (imminent)"
+                },
+                {
+                    "id": "esl_motor_lockout",
+                    "name": "Electronic Steering Lock (ESL / ELV) Brush Seizure & Permanent Lockout",
+                    "root_part": "12V DC Johnson/Nichibo FC-280SC micro-motor commutator brush carbon wear ($5)",
+                    "catastrophic_outcome": "Bolt stalls mid-stroke, NEC microcontroller blows security bit, Terminal 15/50 permanently inhibited ($2,000+)",
+                    "threshold": "Unlock duration >250ms (warning), >500ms (imminent lockout)"
+                },
+                {
+                    "id": "m272_balance_shaft_chain_wear",
+                    "name": "M272/M273 Balance Shaft & Idler Sprocket Tooth Wear",
+                    "root_part": "Soft sintered metal drive sprocket A 272 050 08 04 ($60)",
+                    "catastrophic_outcome": "Sprocket teeth strip smooth, chain jumps timing, valve-to-piston collision ($6,000+)",
+                    "threshold": "Cam phase deviation >1.5° (warning), >3.2° (imminent jump)"
+                },
+                {
+                    "id": "valeo_radiator_glycol_contamination",
+                    "name": "Valeo Radiator Glycol Intrusion into 722.6 Transmission",
+                    "root_part": "Crimp joint defect in Valeo transmission fluid cooler in radiator ($0 part of radiator)",
+                    "catastrophic_outcome": "Ethylene glycol dissolves water-soluble clutch paper adhesive, complete delamination ($3,500)",
+                    "threshold": "Harmonic TCC slip oscillation 4-12 Hz with amplitude >15 RPM (warning), >35 RPM (imminent)"
+                },
+                {
+                    "id": "sam_water_ingress_parasitic_drain",
+                    "name": "Cowl/Sunroof Drain Clog -> SAM Water Ingress & Parasitic Drain",
+                    "root_part": "Debris-clogged firewall cowl duckbill drains and sunroof hoses ($0 cleaning cost)",
+                    "catastrophic_outcome": "Water overflows into Front/Rear SAM, electrolytic PCB corrosion, MOSFET latch-on, battery drain ($1,500/SAM)",
+                    "threshold": "Interior CAN-B sleep delay >45s (warning), >120s or quiescent current >2.0A (imminent)"
+                },
+                {
+                    "id": "om642_oil_cooler_valley_leak",
+                    "name": "OM642 V-Valley Oil Cooler Seal Degradation & Starvation",
+                    "root_part": "Original orange silicone oil cooler seals A 642 188 01 80 bake rock-hard ($4.50)",
+                    "catastrophic_outcome": "Highway high-speed oil depletion out bellhousing weep hole, rod bearing starvation ($7,500+)",
+                    "threshold": "Dynamic oil level loss rate >0.10 mm/100km (warning), >0.25 mm/100km (imminent)"
                 }
             ]
         })),
