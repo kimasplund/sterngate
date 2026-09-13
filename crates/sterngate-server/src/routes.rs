@@ -2,7 +2,7 @@ use crate::dashboard::DASHBOARD_HTML;
 use crate::state::AppState;
 use crate::ws::ws_telemetry_handler;
 use axum::{
-    extract::State,
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse},
     routing::{get, post},
@@ -22,6 +22,7 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/dtc", get(get_dtcs))
         .route("/api/v1/dtc/clear", post(clear_dtcs))
         .route("/api/v1/profile", get(get_profile))
+        .route("/api/v1/profiles", get(get_all_profiles))
         .route("/api/v1/flash/progress", get(get_flash_progress))
         .route("/api/v1/flash/stage", post(stage_flash))
         .route("/api/v1/coding", post(write_coding))
@@ -29,6 +30,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/recorder/start", post(start_recorder))
         .route("/api/v1/recorder/stop", post(stop_recorder))
         .route("/api/v1/recorder/status", get(get_recorder_status))
+        .route("/api/v1/cbf/stats", get(get_cbf_stats))
+        .route("/api/v1/cbf/search", get(search_cbf_catalog))
+        .route("/api/v1/cbf/inspect/{ecu}", get(inspect_cbf_ecu))
         .with_state(state)
 }
 
@@ -454,4 +458,109 @@ async fn get_recorder_status(
 ) -> Json<crate::recorder::FlightRecorderStatus> {
     let status = state.recorder.status().await;
     Json(status)
+}
+
+#[derive(Deserialize)]
+struct CbfSearchQuery {
+    q: Option<String>,
+    limit: Option<usize>,
+}
+
+async fn get_cbf_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    if let Some(catalog) = state.catalog.as_ref() {
+        (
+            StatusCode::OK,
+            Json(serde_json::to_value(catalog.stats()).unwrap()),
+        )
+            .into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "CBF catalog not loaded"
+            })),
+        )
+            .into_response()
+    }
+}
+
+async fn search_cbf_catalog(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<CbfSearchQuery>,
+) -> impl IntoResponse {
+    if let Some(catalog) = state.catalog.as_ref() {
+        let q = query.q.unwrap_or_default();
+        let limit = query.limit.unwrap_or(25);
+        let results = catalog.search(&q, limit);
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "query": q,
+                "count": results.len(),
+                "results": results,
+            })),
+        )
+            .into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "CBF catalog not loaded"
+            })),
+        )
+            .into_response()
+    }
+}
+
+async fn inspect_cbf_ecu(
+    State(state): State<Arc<AppState>>,
+    Path(ecu): Path<String>,
+) -> impl IntoResponse {
+    if let Some(catalog) = state.catalog.as_ref() {
+        if let Some(entry) = catalog.get_ecu(&ecu) {
+            (StatusCode::OK, Json(serde_json::to_value(entry).unwrap())).into_response()
+        } else {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "error": format!("ECU '{}' not found in CBF catalog", ecu)
+                })),
+            )
+                .into_response()
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "CBF catalog not loaded"
+            })),
+        )
+            .into_response()
+    }
+}
+
+async fn get_all_profiles() -> impl IntoResponse {
+    let candidates = ["profiles", "../../profiles", "../profiles"];
+    for dir in candidates {
+        let p = std::path::Path::new(dir);
+        if p.exists() {
+            let profiles = VehicleProfile::discover(p);
+            let summaries: Vec<serde_json::Value> = profiles
+                .into_iter()
+                .map(|prof| {
+                    serde_json::json!({
+                        "profile_name": prof.profile_name,
+                        "oem": prof.oem,
+                        "chassis": prof.chassis,
+                        "gateway_type": prof.gateway_type,
+                        "default_bitrate": prof.default_bitrate,
+                        "modules_count": prof.modules.len(),
+                        "parameters_count": prof.parameters.len(),
+                    })
+                })
+                .collect();
+            return Json(summaries).into_response();
+        }
+    }
+    Json(Vec::<serde_json::Value>::new()).into_response()
 }

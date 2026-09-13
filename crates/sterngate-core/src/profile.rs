@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScalingDef {
@@ -166,5 +166,36 @@ impl VehicleProfile {
         self.parameters
             .iter()
             .find(|p| p.id.eq_ignore_ascii_case(id) || p.did.eq_ignore_ascii_case(id))
+    }
+
+    /// Recursively find all JSON vehicle profile paths in a directory (ignoring schema files)
+    pub fn discover_paths<P: AsRef<Path>>(dir: P) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        Self::collect_paths_recursive(dir.as_ref(), &mut paths);
+        paths.sort();
+        paths
+    }
+
+    fn collect_paths_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    Self::collect_paths_recursive(&path, out);
+                } else if path.extension().is_some_and(|ext| ext == "json")
+                    && !path.to_string_lossy().contains("schema")
+                {
+                    out.push(path);
+                }
+            }
+        }
+    }
+
+    /// Discover and load all valid vehicle profiles in a directory
+    pub fn discover<P: AsRef<Path>>(dir: P) -> Vec<Self> {
+        Self::discover_paths(dir)
+            .into_iter()
+            .filter_map(|p| Self::load_from_file(p).ok())
+            .collect()
     }
 }

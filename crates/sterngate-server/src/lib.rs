@@ -124,4 +124,46 @@ mod tests {
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
+
+    #[tokio::test]
+    async fn test_server_cbf_and_profiles_endpoints() {
+        let iface = Box::new(VirtualCanInterface::new());
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher));
+
+        // 1. Test /api/v1/cbf/stats
+        let req = Request::builder()
+            .uri("/api/v1/cbf/stats")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 2. Test /api/v1/cbf/search?q=VGS
+        let req = Request::builder()
+            .uri("/api/v1/cbf/search?q=VGS")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 3. Test /api/v1/cbf/inspect/EGS52
+        let req = Request::builder()
+            .uri("/api/v1/cbf/inspect/EGS52")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 4. Test /api/v1/profiles
+        let req = Request::builder()
+            .uri("/api/v1/profiles")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
 }

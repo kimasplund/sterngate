@@ -236,6 +236,48 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         [SYSTEM] Flasher daemon ready. Waiting for staged payload.<br>
       </div>
     </div>
+
+    <!-- Daimler ECU Database & CBF Catalog Explorer -->
+    <div class="card" style="grid-column: span 2;">
+      <div class="card-title">
+        <span>Daimler ECU Database & CBF Catalog Explorer</span>
+        <div class="badges">
+          <span id="cbf-stat-badge" class="badge badge-voltage">990 ECUs / 2,055 CBFs</span>
+          <span class="badge badge-online">41.2% REDUNDANCY INDEXED</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+        <input type="text" id="cbf-search-input" placeholder="Search ECU or chassis (e.g. EGS, VGSNAG, W211, ME97, CR4)..." style="flex: 1; min-width: 240px;" onkeyup="handleCbfSearch(event)">
+        <button class="btn btn-primary" onclick="searchCbf()">Search</button>
+        <button class="btn" onclick="searchCbfPreset('EGS')">EGS (722.6)</button>
+        <button class="btn" onclick="searchCbfPreset('VGS')">VGS (7G/9G)</button>
+        <button class="btn" onclick="searchCbfPreset('W211')">W211</button>
+        <button class="btn" onclick="searchCbfPreset('ME97')">ME97 (V8)</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ECU Name</th>
+            <th>Protocol</th>
+            <th>CAN (Tx / Rx)</th>
+            <th>Latest Date</th>
+            <th>Copies / Versions</th>
+            <th>DTCs</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="cbf-results-table">
+          <tr><td colspan="7" style="color: var(--text-muted); text-align: center;">Enter an ECU or chassis name above to search 990 canonical Mercedes ECUs.</td></tr>
+        </tbody>
+      </table>
+      <div id="cbf-inspect-modal" style="display: none; margin-top: 1rem; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 id="inspect-title" style="color: var(--accent);">ECU Inspection</h4>
+          <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeInspect()">✕ Close</button>
+        </div>
+        <div id="inspect-content" style="font-size: 0.85rem; line-height: 1.6; color: var(--text);"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -504,6 +546,76 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
           clearInterval(interval);
         }
       }, 500);
+    }
+
+    async function searchCbfPreset(q) {
+      document.getElementById('cbf-search-input').value = q;
+      await searchCbf();
+    }
+
+    function handleCbfSearch(e) {
+      if (e.key === 'Enter') {
+        searchCbf();
+      }
+    }
+
+    async function searchCbf() {
+      const q = document.getElementById('cbf-search-input').value.trim();
+      const tbody = document.getElementById('cbf-results-table');
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Searching CBF database...</td></tr>';
+      try {
+        const res = await fetch(`/api/v1/cbf/search?q=${encodeURIComponent(q)}&limit=15`);
+        const data = await res.json();
+        if (!data.results || data.results.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--warning);">No matching ECUs found in catalog.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.results.map(r => `
+          <tr>
+            <td><b style="color: var(--accent);">${r.ecu_name}</b></td>
+            <td><span class="badge" style="background: rgba(188, 140, 255, 0.15); color: var(--purple); border: 1px solid var(--purple);">${r.protocol}</span></td>
+            <td><code>${r.tx_id || 'N/A'} / ${r.rx_id || 'N/A'}</code></td>
+            <td>${r.date}</td>
+            <td>${r.total_copies} cop${r.total_copies === 1 ? 'y' : 'ies'} (${r.distinct_versions} ver)</td>
+            <td>${r.dtc_count}</td>
+            <td><button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="inspectCbf('${r.ecu_name}')">Inspect</button></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color: var(--danger); text-align: center;">Error searching catalog: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function inspectCbf(ecu) {
+      const modal = document.getElementById('cbf-inspect-modal');
+      const title = document.getElementById('inspect-title');
+      const content = document.getElementById('inspect-content');
+      modal.style.display = 'block';
+      title.textContent = `ECU Inspection: ${ecu}`;
+      content.innerHTML = 'Loading inspection metadata...';
+      try {
+        const res = await fetch(`/api/v1/cbf/inspect/${encodeURIComponent(ecu)}`);
+        const data = await res.json();
+        const canon = data.canonical_version;
+        const chassisList = data.all_chassis_supported ? data.all_chassis_supported.join(', ') : 'None';
+        content.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div><b>Protocol:</b> ${canon.protocol}</div>
+            <div><b>CAN Arbitration:</b> Tx: ${canon.tx_id || 'N/A'}, Rx: ${canon.rx_id || 'N/A'}</div>
+            <div><b>Canonical Date:</b> ${canon.date} (${(canon.size_bytes / 1024).toFixed(1)} KB)</div>
+            <div><b>Diagnostic Tables:</b> ${canon.presentation_count} presentations, ${canon.dtc_count} DTCs</div>
+            <div><b>Deduplication:</b> ${data.total_copies_in_cbf} copies (${data.distinct_versions_count} distinct version(s))</div>
+            <div><b>Archive Path:</b> <code>${canon.primary_path}</code></div>
+          </div>
+          <div style="margin-top: 0.5rem;"><b>Supported Chassis Folders (${data.all_chassis_supported ? data.all_chassis_supported.length : 0}):</b> <span style="color: var(--text-muted);">${chassisList}</span></div>
+        `;
+      } catch (err) {
+        content.innerHTML = `<span style="color: var(--danger);">Error inspecting ECU: ${err.message}</span>`;
+      }
+    }
+
+    function closeInspect() {
+      document.getElementById('cbf-inspect-modal').style.display = 'none';
     }
   </script>
 </body>

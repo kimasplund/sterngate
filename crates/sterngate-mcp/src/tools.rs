@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use sterngate_core::{Dtc, TelemetrySnapshot};
+use sterngate_core::{CbfCatalog, Dtc, TelemetrySnapshot};
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 
 pub fn get_tools_list() -> Value {
@@ -357,45 +357,15 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
             let query = arguments
                 .get("query")
                 .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_uppercase();
-            let cat_data = std::fs::read_to_string("data/cbf_catalog.json")
-                .or_else(|_| std::fs::read_to_string("../../data/cbf_catalog.json"))
-                .map_err(|e| format!("Failed to read cbf_catalog.json: {}", e))?;
-            let cat: Value = serde_json::from_str(&cat_data)
-                .map_err(|e| format!("JSON parse error in catalog: {}", e))?;
+                .unwrap_or("");
+            let limit = arguments
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(25) as usize;
 
-            let mut results = Vec::new();
-            if let Some(ecus) = cat.get("ecus").and_then(|v| v.as_object()) {
-                for (name, info) in ecus {
-                    let chassis_list: Vec<String> = info
-                        .get("all_chassis_supported")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|c| c.as_str().map(|s| s.to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    let matches_name = name.contains(&query);
-                    let matches_chassis = chassis_list
-                        .iter()
-                        .any(|c| c.to_uppercase().contains(&query));
-
-                    if matches_name || matches_chassis {
-                        results.push(json!({
-                            "ecu_name": name,
-                            "canonical_version": info.get("canonical_version"),
-                            "total_copies_in_cbf": info.get("total_copies_in_cbf"),
-                            "distinct_versions_count": info.get("distinct_versions_count"),
-                            "all_chassis_supported": chassis_list,
-                        }));
-                        if results.len() >= 25 {
-                            break;
-                        }
-                    }
-                }
-            }
+            let catalog = CbfCatalog::load_default()
+                .map_err(|e| format!("Failed to load CBF catalog: {}", e))?;
+            let results = catalog.search(query, limit);
 
             Ok(json!({
                 "query": query,
