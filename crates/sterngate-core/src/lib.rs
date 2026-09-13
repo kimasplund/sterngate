@@ -9,8 +9,8 @@ pub mod parameter;
 pub mod profile;
 
 pub use catalog::{
-    CatalogMetadata, CbfCatalog, CbfEcuEntry, CbfVersionHistoryEntry, CbfVersionInfo, EcuCatalog,
-    EcuCatalogEntry, EcuSearchResult, EcuVersionHistoryEntry, EcuVersionInfo,
+    CatalogMetadata, CbfCatalog, CbfEcuEntry, CbfVersionInfo, EcuCatalog, EcuCatalogEntry,
+    EcuSearchResult, EcuVersionInfo,
 };
 pub use command::{CommandEnvelope, CommandValidationReport};
 pub use dtc::Dtc;
@@ -129,14 +129,18 @@ mod tests {
         // Exact get_ecu inspection
         let egs52 = catalog.get_ecu("EGS52").unwrap();
         assert_eq!(egs52.ecu_name, "EGS52");
-        assert_eq!(egs52.distinct_versions_count, 1);
-        assert_eq!(egs52.canonical_version.protocol, "UDS");
-        assert_eq!(egs52.canonical_version.tx_id.as_deref(), Some("0x7e1"));
-        assert_eq!(egs52.canonical_version.rx_id.as_deref(), Some("0x7e9"));
+        assert_eq!(egs52.protocol, "UDS");
+        assert_eq!(egs52.tx_id.as_deref(), Some("0x7e1"));
+        assert_eq!(egs52.rx_id.as_deref(), Some("0x7e9"));
+        assert_eq!(egs52.func_id.as_deref(), Some("0x7df"));
+        assert_eq!(egs52.dtc_count, 114);
+        assert!(!egs52.chassis.is_empty());
 
-        // VGSNAG2 multi-version check
+        // VGSNAG2 check
         let vgs = catalog.get_ecu("VGSNAG2").unwrap();
-        assert_eq!(vgs.distinct_versions_count, 3);
+        assert_eq!(vgs.protocol, "UDS");
+        assert_eq!(vgs.dtc_count, 258);
+        assert!(!vgs.chassis.is_empty());
     }
 
     #[test]

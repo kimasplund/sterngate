@@ -303,17 +303,20 @@ async function searchCbf() {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--warning);">${i18n.t('cbf.no_matches')}</td></tr>`;
       return;
     }
-    tbody.innerHTML = data.results.map(r => `
-      <tr>
-        <td><b>${r.ecu_name}</b></td>
-        <td><span class="badge ${r.protocol === 'UDS' ? 'badge-primary' : 'badge-offline'}">${r.protocol}</span></td>
-        <td><code>${r.tx_id || 'N/A'} / ${r.rx_id || 'N/A'}</code></td>
-        <td>${r.date || 'N/A'}</td>
-        <td>${r.total_copies || 1} copies (${r.distinct_versions || 1} ver)</td>
-        <td>${r.dtc_count || 0}</td>
-        <td><button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="inspectCbf('${r.ecu_name}')">${i18n.t('cbf.btn_inspect')}</button></td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = data.results.map(r => {
+      const chassisStr = r.chassis && r.chassis.length > 0 ? r.chassis.join(', ') : 'Universal';
+      return `
+        <tr>
+          <td><b>${r.ecu_name}</b></td>
+          <td><span class="badge ${r.protocol === 'UDS' ? 'badge-primary' : 'badge-offline'}">${r.protocol}</span></td>
+          <td><code>${r.tx_id || 'N/A'} / ${r.rx_id || 'N/A'}</code></td>
+          <td><code>${r.func_id || '0x7DF'}</code></td>
+          <td>${r.dtc_count || 0}</td>
+          <td><span style="font-size: 0.8rem; color: var(--text-muted);">${chassisStr}</span></td>
+          <td><button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="inspectCbf('${r.ecu_name}')">${i18n.t('cbf.btn_inspect')}</button></td>
+        </tr>
+      `;
+    }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">${err.message}</td></tr>`;
   }
@@ -321,29 +324,31 @@ async function searchCbf() {
 
 async function inspectCbf(ecu) {
   const modal = document.getElementById('cbf-inspect-modal');
-  const title = document.getElementById('cbf-inspect-title');
-  const content = document.getElementById('cbf-inspect-content');
+  const title = document.getElementById('cbf-inspect-title') || document.getElementById('inspect-title');
+  const content = document.getElementById('cbf-inspect-content') || document.getElementById('inspect-content');
   modal.style.display = 'block';
-  title.textContent = `${i18n.t('cbf.inspect_title')} ${ecu}`;
-  content.innerHTML = i18n.t('cbf.loading');
+  if (title) title.textContent = `${i18n.t('cbf.inspect_title')} ${ecu}`;
+  if (content) content.innerHTML = i18n.t('cbf.loading');
   try {
     const res = await fetch(`/api/v1/ecu/inspect/${encodeURIComponent(ecu)}`);
     const data = await res.json();
-    const canon = data.canonical_version;
-    const chassisList = data.all_chassis_supported ? data.all_chassis_supported.join(', ') : 'None';
+    const chassisList = data.chassis && data.chassis.length > 0
+      ? data.chassis.join(', ')
+      : (data.all_chassis_supported && data.all_chassis_supported.length > 0 ? data.all_chassis_supported.join(', ') : 'Universal / Unspecified');
+    const chassisCount = data.chassis ? data.chassis.length : (data.all_chassis_supported ? data.all_chassis_supported.length : 0);
     content.innerHTML = `
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
-        <div><b>Protocol:</b> ${canon.protocol}</div>
-        <div><b>CAN Arbitration:</b> Tx: ${canon.tx_id || 'N/A'}, Rx: ${canon.rx_id || 'N/A'}</div>
-        <div><b>Canonical Date:</b> ${canon.date} (${(canon.size_bytes / 1024).toFixed(1)} KB)</div>
-        <div><b>Diagnostic Tables:</b> ${canon.presentation_count} presentations, ${canon.dtc_count} DTCs</div>
-        <div><b>Deduplication:</b> ${data.total_copies_in_cbf} copies (${data.distinct_versions_count} distinct version(s))</div>
-        <div><b>Archive Path:</b> <code>${canon.primary_path}</code></div>
+        <div><b>Protocol:</b> <span class="badge ${data.protocol === 'UDS' ? 'badge-primary' : 'badge-offline'}">${data.protocol}</span></div>
+        <div><b>CAN Physical:</b> Tx: <code>${data.tx_id || 'N/A'}</code>, Rx: <code>${data.rx_id || 'N/A'}</code></div>
+        <div><b>Functional ID:</b> <code>${data.func_id || '0x7DF'}</code></div>
+        <div><b>Known Fault Codes:</b> ${data.dtc_count || 0} DTCs</div>
+        <div><b>Specification:</b> Sterngate Native JSON</div>
+        <div><b>Safety Interlock:</b> Flasher State Machine Ready</div>
       </div>
-      <div style="margin-top: 0.5rem;"><b>Supported Chassis Folders (${data.all_chassis_supported ? data.all_chassis_supported.length : 0}):</b> <span style="color: var(--text-muted);">${chassisList}</span></div>
+      <div style="margin-top: 0.5rem;"><b>Compatible Vehicle Platforms (${chassisCount}):</b> <span style="color: var(--text-muted);">${chassisList}</span></div>
     `;
   } catch (err) {
-    content.innerHTML = `<span style="color: var(--danger);">Error inspecting ECU: ${err.message}</span>`;
+    if (content) content.innerHTML = `<span style="color: var(--danger);">Error inspecting ECU: ${err.message}</span>`;
   }
 }
 

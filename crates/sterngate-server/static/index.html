@@ -206,8 +206,8 @@
       <div class="card-title">
         <span data-i18n="cbf.title">Daimler ECU Database & CBF Catalog Explorer</span>
         <div class="badges">
-          <span id="cbf-stat-badge" class="badge badge-voltage" data-i18n="cbf.stats_badge">990 ECUs / 2,055 CBFs</span>
-          <span class="badge badge-online" data-i18n="cbf.redundancy_badge">41.2% REDUNDANCY INDEXED</span>
+          <span id="cbf-stat-badge" class="badge badge-voltage" data-i18n="cbf.stats_badge">990 Canonical ECUs</span>
+          <span class="badge badge-online" data-i18n="cbf.redundancy_badge">ACTIVE JSON ROUTING</span>
         </div>
       </div>
       <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
@@ -224,9 +224,9 @@
             <th data-i18n="cbf.col_name">ECU Name</th>
             <th data-i18n="cbf.col_proto">Protocol</th>
             <th data-i18n="cbf.col_can">CAN (Tx / Rx)</th>
-            <th data-i18n="cbf.col_date">Latest Date</th>
-            <th data-i18n="cbf.col_copies">Copies / Versions</th>
+            <th data-i18n="cbf.col_func">Functional ID</th>
             <th data-i18n="cbf.col_dtcs">DTCs</th>
+            <th data-i18n="cbf.col_chassis">Chassis / Platform</th>
             <th data-i18n="cbf.col_action">Action</th>
           </tr>
         </thead>
@@ -236,10 +236,10 @@
       </table>
       <div id="cbf-inspect-modal" style="display: none; margin-top: 1rem; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <h4 id="inspect-title" style="color: var(--accent);">ECU Inspection</h4>
+          <h4 id="cbf-inspect-title" style="color: var(--accent);">ECU Diagnostic Definition</h4>
           <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeInspect()" data-i18n="cbf.btn_close">✕ Close</button>
         </div>
-        <div id="inspect-content" style="font-size: 0.85rem; line-height: 1.6; color: var(--text);"></div>
+        <div id="cbf-inspect-content" style="font-size: 0.85rem; line-height: 1.6; color: var(--text);"></div>
       </div>
     </div>
   </div>

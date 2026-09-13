@@ -338,21 +338,26 @@ async fn main() -> Result<()> {
                 match action {
                     EcuCommands::Stats => {
                         println!("============================================================");
-                        println!("  Automotive ECU Database Statistics");
+                        println!("  Mercedes-Benz ECU Diagnostic Catalog Statistics");
                         println!("============================================================");
                         let meta = catalog.stats();
+                        let title = meta
+                            .title
+                            .as_deref()
+                            .unwrap_or("Sterngate Native ECU Catalog");
+                        println!("  • Catalog Title:                     {}", title);
                         println!(
-                            "  • Unique ECU Types:                  {}",
-                            meta.unique_ecus
+                            "  • Canonical ECU Definitions:         {}",
+                            if meta.total_ecus > 0 {
+                                meta.total_ecus
+                            } else {
+                                meta.unique_ecus
+                            }
                         );
                         if meta.total_cbf_files > 0 {
                             println!(
                                 "  • Legacy Source Files Indexed:       {}",
                                 meta.total_cbf_files
-                            );
-                            println!(
-                                "  • Redundant Legacy Copies:           {} (41.2% duplicates)",
-                                meta.redundant_file_copies
                             );
                         }
                     }
@@ -362,21 +367,21 @@ async fn main() -> Result<()> {
                         println!("============================================================");
                         let results = catalog.search(&query, 50);
                         for r in &results {
+                            let chassis_str = if r.chassis.is_empty() {
+                                "Universal / Unspecified".to_string()
+                            } else {
+                                r.chassis.join(", ")
+                            };
                             println!(
-                                "  • {:<16} | Date: {:<10} | {:<7} | CAN: {:<6}/{:<6} | {} copy(ies), {} version(s)",
+                                "  • {:<16} | {:<7} | CAN Tx/Rx: {:<6} / {:<6} | Func: {:<5} | DTCs: {:<4} | Chassis: {}",
                                 r.ecu_name,
-                                r.date,
                                 r.protocol,
                                 r.tx_id.as_deref().unwrap_or("N/A"),
                                 r.rx_id.as_deref().unwrap_or("N/A"),
-                                r.total_copies,
-                                r.distinct_versions
+                                r.func_id.as_deref().unwrap_or("0x7DF"),
+                                r.dtc_count,
+                                chassis_str
                             );
-                            if !r.all_chassis_supported.is_empty()
-                                && !r.ecu_name.eq_ignore_ascii_case(&query)
-                            {
-                                println!("    Chassis: {}", r.all_chassis_supported.join(", "));
-                            }
                         }
                         println!("\nFound {} matching ECU(s).", results.len());
                     }
@@ -385,39 +390,29 @@ async fn main() -> Result<()> {
                             println!(
                                 "============================================================"
                             );
-                            println!("  ECU: {}", info.ecu_name);
+                            println!("  ECU Diagnostic Definition: {}", info.ecu_name);
                             println!(
                                 "============================================================"
                             );
+                            println!("  • Protocol:          {}", info.protocol);
                             println!(
-                                "  Total Copies Across Chassis: {}",
-                                info.total_copies_in_cbf
+                                "  • Physical Tx CAN:   {}",
+                                info.tx_id.as_deref().unwrap_or("N/A")
                             );
                             println!(
-                                "  Distinct Versions:           {}",
-                                info.distinct_versions_count
-                            );
-                            let canon = &info.canonical_version;
-                            println!("\n  Canonical (Latest) Version:");
-                            println!("    • Date:             {}", canon.date);
-                            println!("    • Protocol:         {}", canon.protocol);
-                            println!(
-                                "    • Tx CAN ID:        {}",
-                                canon.tx_id.as_deref().unwrap_or("N/A")
+                                "  • Physical Rx CAN:   {}",
+                                info.rx_id.as_deref().unwrap_or("N/A")
                             );
                             println!(
-                                "    • Rx CAN ID:        {}",
-                                canon.rx_id.as_deref().unwrap_or("N/A")
+                                "  • Functional ID:     {}",
+                                info.func_id.as_deref().unwrap_or("0x7DF")
                             );
-                            println!("    • Size:             {} bytes", canon.size_bytes);
-                            println!("    • Presentations:    {}", canon.presentation_count);
-                            println!("    • DTC Fault Codes:  {}", canon.dtc_count);
-                            println!("    • Canonical Origin: {}", canon.primary_path);
+                            println!("  • Known DTC Codes:   {}", info.dtc_count);
                             println!(
-                                "\n  Supported Chassis Folders ({} total):",
-                                info.all_chassis_supported.len()
+                                "\n  Supported Chassis Platforms ({} total):",
+                                info.chassis.len()
                             );
-                            for c in &info.all_chassis_supported {
+                            for c in &info.chassis {
                                 println!("    - {}", c);
                             }
                         } else {

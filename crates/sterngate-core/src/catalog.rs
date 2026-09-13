@@ -5,34 +5,25 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CatalogMetadata {
-    pub generated_at: String,
     #[serde(default)]
     pub title: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
     pub total_ecus: usize,
     #[serde(default)]
     pub total_cbf_files: usize,
+    #[serde(default)]
     pub unique_ecus: usize,
     #[serde(default)]
-    pub unique_sha256_hashes: usize,
-    #[serde(default)]
-    pub exact_duplicate_groups: usize,
-    #[serde(default)]
     pub redundant_file_copies: usize,
-    #[serde(default)]
-    pub multi_version_ecus: usize,
-    #[serde(default)]
-    pub processing_time_seconds: Option<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct EcuVersionInfo {
-    pub sha256: String,
-    pub date: String,
-    pub iso_date: String,
-    pub size_bytes: u64,
+    #[serde(default)]
     pub protocol: String,
     #[serde(default)]
     pub tx_id: Option<String>,
@@ -40,46 +31,42 @@ pub struct EcuVersionInfo {
     pub rx_id: Option<String>,
     #[serde(default)]
     pub func_id: Option<String>,
-    pub presentation_count: usize,
+    #[serde(default)]
     pub dtc_count: usize,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub size_bytes: u64,
+    #[serde(default)]
+    pub presentation_count: usize,
+    #[serde(default)]
     pub primary_path: String,
 }
 
 pub type CbfVersionInfo = EcuVersionInfo;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EcuVersionHistoryEntry {
-    pub sha256: String,
-    pub size: u64,
-    pub date: String,
-    pub iso_date: String,
+pub struct EcuCatalogEntry {
+    pub ecu_name: String,
     pub protocol: String,
-    #[serde(default)]
-    pub gpd_version: Option<String>,
     #[serde(default)]
     pub tx_id: Option<String>,
     #[serde(default)]
     pub rx_id: Option<String>,
     #[serde(default)]
     pub func_id: Option<String>,
-    pub presentation_count: usize,
+    #[serde(default)]
     pub dtc_count: usize,
-    pub occurrences: Vec<String>,
-    pub chassis_list: Vec<String>,
-}
-
-pub type CbfVersionHistoryEntry = EcuVersionHistoryEntry;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct EcuCatalogEntry {
-    pub ecu_name: String,
+    #[serde(default)]
+    pub chassis: Vec<String>,
+    #[serde(default)]
     pub canonical_version: EcuVersionInfo,
     #[serde(default)]
-    pub total_copies_in_cbf: usize,
-    pub distinct_versions_count: usize,
     pub all_chassis_supported: Vec<String>,
     #[serde(default)]
-    pub version_history: Vec<EcuVersionHistoryEntry>,
+    pub total_copies_in_cbf: usize,
+    #[serde(default)]
+    pub distinct_versions_count: usize,
 }
 
 pub type CbfEcuEntry = EcuCatalogEntry;
@@ -87,14 +74,21 @@ pub type CbfEcuEntry = EcuCatalogEntry;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EcuSearchResult {
     pub ecu_name: String,
-    pub date: String,
     pub protocol: String,
     pub tx_id: Option<String>,
     pub rx_id: Option<String>,
-    pub total_copies: usize,
-    pub distinct_versions: usize,
+    pub func_id: Option<String>,
     pub dtc_count: usize,
+    pub chassis: Vec<String>,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub total_copies: usize,
+    #[serde(default)]
+    pub distinct_versions: usize,
+    #[serde(default)]
     pub primary_path: String,
+    #[serde(default)]
     pub all_chassis_supported: Vec<String>,
 }
 
@@ -117,13 +111,37 @@ impl EcuCatalog {
                 e
             ))
         })?;
-        serde_json::from_str(&content).map_err(|e| {
+        let mut cat: Self = serde_json::from_str(&content).map_err(|e| {
             SterngateError::ProfileError(format!(
                 "Failed to parse ECU catalog JSON at {}: {}",
                 path_ref.display(),
                 e
             ))
-        })
+        })?;
+
+        // Harmonize fields for 100% backward compatibility
+        for entry in cat.ecus.values_mut() {
+            if entry.all_chassis_supported.is_empty() {
+                entry.all_chassis_supported = entry.chassis.clone();
+            }
+            if entry.chassis.is_empty() {
+                entry.chassis = entry.all_chassis_supported.clone();
+            }
+            if entry.distinct_versions_count == 0 {
+                entry.distinct_versions_count = 1;
+            }
+            if entry.total_copies_in_cbf == 0 {
+                entry.total_copies_in_cbf = 1;
+            }
+            if entry.canonical_version.protocol.is_empty() {
+                entry.canonical_version.protocol = entry.protocol.clone();
+                entry.canonical_version.tx_id = entry.tx_id.clone();
+                entry.canonical_version.rx_id = entry.rx_id.clone();
+                entry.canonical_version.func_id = entry.func_id.clone();
+                entry.canonical_version.dtc_count = entry.dtc_count;
+            }
+        }
+        Ok(cat)
     }
 
     /// Load catalog using standard lookup heuristics
@@ -190,13 +208,15 @@ impl EcuCatalog {
                 if matches_name || matches_chassis {
                     Some(EcuSearchResult {
                         ecu_name: info.ecu_name.clone(),
+                        protocol: info.protocol.clone(),
+                        tx_id: info.tx_id.clone(),
+                        rx_id: info.rx_id.clone(),
+                        func_id: info.func_id.clone(),
+                        dtc_count: info.dtc_count,
+                        chassis: info.chassis.clone(),
                         date: info.canonical_version.date.clone(),
-                        protocol: info.canonical_version.protocol.clone(),
-                        tx_id: info.canonical_version.tx_id.clone(),
-                        rx_id: info.canonical_version.rx_id.clone(),
                         total_copies: info.total_copies_in_cbf,
                         distinct_versions: info.distinct_versions_count,
-                        dtc_count: info.canonical_version.dtc_count,
                         primary_path: info.canonical_version.primary_path.clone(),
                         all_chassis_supported: info.all_chassis_supported.clone(),
                     })
