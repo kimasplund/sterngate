@@ -99,3 +99,4 @@ const i18n = new I18nManager();
 document.addEventListener('DOMContentLoaded', () => {
   i18n.init();
 });
+

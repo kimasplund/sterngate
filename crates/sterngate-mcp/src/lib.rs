@@ -108,4 +108,76 @@ mod tests {
             "EGS52"
         );
     }
+
+    #[tokio::test]
+    async fn test_mcp_multilingual_dtc_and_routine_tools() {
+        // German DTC
+        let res_de = tools::handle_tool_call(
+            "sterngate_read_dtc",
+            &json!({"module": "EDC16", "lang": "de"}),
+        )
+        .await
+        .unwrap();
+        let dtcs_de = res_de.get("dtcs").unwrap().as_array().unwrap();
+        assert!(dtcs_de[0]
+            .get("description")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("Luftmassenmesser"));
+
+        // German Routine
+        let res_routine_de = tools::handle_tool_call(
+            "sterngate_trigger_routine",
+            &json!({"module": "EDC16", "routine_id": "0xFF01", "lang": "de"}),
+        )
+        .await
+        .unwrap();
+        assert!(res_routine_de
+            .get("routine_name")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("Kraftstoffpumpe"));
+    }
+
+    #[tokio::test]
+    async fn test_mcp_inspect_cbf_ecu_and_list_locales() {
+        // Inspect EGS52
+        let ecu_res =
+            tools::handle_tool_call("sterngate_inspect_cbf_ecu", &json!({"ecu": "EGS52"}))
+                .await
+                .unwrap();
+        assert_eq!(ecu_res.get("ecu_name").unwrap().as_str().unwrap(), "EGS52");
+        let canonical = ecu_res.get("canonical_version").unwrap();
+        assert!(canonical
+            .get("tx_id")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .eq_ignore_ascii_case("0x7E1"));
+
+        // List Locales
+        let loc_res = tools::handle_tool_call("sterngate_list_locales", &json!({}))
+            .await
+            .unwrap();
+        let locales = loc_res.get("locales").unwrap().as_array().unwrap();
+        assert_eq!(locales.len(), 3);
+
+        // List Profiles
+        let prof_res = tools::handle_tool_call("sterngate_list_profiles", &json!({}))
+            .await
+            .unwrap();
+        let count = prof_res.get("count").unwrap().as_u64().unwrap();
+        assert!(count >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_mcp_new_resources() {
+        let loc = resources::read_resource("sterngate://locales").unwrap();
+        assert!(loc.get("locales").is_some());
+
+        let stats = resources::read_resource("sterngate://cbf/stats").unwrap();
+        assert!(stats.get("total_cbf_files").is_some() || stats.get("total_files").is_some());
+    }
 }

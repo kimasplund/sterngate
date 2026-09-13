@@ -1,5 +1,7 @@
 use serde_json::{json, Value};
-use sterngate_core::{CbfCatalog, Dtc, TelemetrySnapshot};
+use sterngate_core::{
+    lookup_routine_name, CbfCatalog, Dtc, Language, TelemetrySnapshot, VehicleProfile,
+};
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 
 pub fn get_tools_list() -> Value {
@@ -27,7 +29,7 @@ pub fn get_tools_list() -> Value {
         },
         {
             "name": "sterngate_read_dtc",
-            "description": "Read Diagnostic Trouble Codes (DTCs) from the vehicle gateway and target modules (e.g. Bosch EDC16 engine, EGS52 transmission, Airmatic). Returns standard alphanumeric codes with descriptions.",
+            "description": "Read Diagnostic Trouble Codes (DTCs) from the vehicle gateway and target modules (e.g. Bosch EDC16 engine, EGS52 transmission, Airmatic). Returns standard alphanumeric codes with localized descriptions.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -35,6 +37,12 @@ pub fn get_tools_list() -> Value {
                         "type": "string",
                         "description": "Target module name (e.g. EDC16, EGS52, CGW). Defaults to EDC16.",
                         "default": "EDC16"
+                    },
+                    "lang": {
+                        "type": "string",
+                        "description": "Language for DTC descriptions: 'en' (English), 'de' (German / Daimler OEM), 'sv' (Swedish). Default: 'en'",
+                        "enum": ["en", "de", "sv"],
+                        "default": "en"
                     }
                 }
             }
@@ -128,6 +136,12 @@ pub fn get_tools_list() -> Value {
                         "type": "integer",
                         "description": "Routine sub-function: 1 for startRoutine, 2 for stopRoutine, 3 for requestResults. Default: 1",
                         "default": 1
+                    },
+                    "lang": {
+                        "type": "string",
+                        "description": "Language for routine name and status feedback: 'en' (English), 'de' (German), 'sv' (Swedish). Default: 'en'",
+                        "enum": ["en", "de", "sv"],
+                        "default": "en"
                     }
                 }
             }
@@ -161,8 +175,35 @@ pub fn get_tools_list() -> Value {
                     "query": {
                         "type": "string",
                         "description": "ECU name or chassis keyword (e.g. 'EGS52', 'CR3', 'W211')"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of search results to return (default: 25)",
+                        "default": 25
                     }
                 }
+            }
+        },
+        {
+            "name": "sterngate_inspect_cbf_ecu",
+            "description": "Inspect detailed diagnostic routing, CAN transmission/reception IDs, protocol, fault code count, presentation count, and supported chassis for a specific ECU in the Daimler CBF catalog (e.g. 'EGS52', 'CR3', 'VGSNAG2').",
+            "inputSchema": {
+                "type": "object",
+                "required": ["ecu"],
+                "properties": {
+                    "ecu": {
+                        "type": "string",
+                        "description": "ECU name (e.g. 'EGS52', 'CR3', 'MED177', 'VGSNAG2')"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_list_locales",
+            "description": "List supported UI, diagnostic, and fault code languages in Sterngate (English, authentic Daimler OEM German, Swedish).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
             }
         }
     ])
@@ -200,9 +241,18 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
             Ok(serde_json::to_value(snap).unwrap())
         }
         "sterngate_read_dtc" => {
-            let dtcs = vec![Dtc::parse_iso15031(0x01, 0x00, 0x28, "EDC16")];
+            let lang: Language = arguments
+                .get("lang")
+                .and_then(|v| v.as_str())
+                .unwrap_or("en")
+                .parse()
+                .unwrap_or_default();
+            let mut dtc = Dtc::parse_iso15031(0x01, 0x00, 0x28, "EDC16");
+            dtc.localize(lang);
+            let dtcs = vec![dtc];
             Ok(json!({
                 "module": arguments.get("module").and_then(|v| v.as_str()).unwrap_or("EDC16"),
+                "language": lang.to_string(),
                 "dtcs": dtcs,
                 "status": "1 fault code active"
             }))
@@ -249,14 +299,42 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 "baudrate": 500000
             }))
         }
-        "sterngate_list_profiles" => Ok(json!({
-            "profiles": [
-                { "id": "mercedes_w211_om646_edc16", "oem": "Mercedes-Benz", "chassis": "W211/S211", "engine": "OM646 2.2L CDI", "transmission": "722.6 EGS52" },
-                { "id": "mercedes_w211_om648_edc16", "oem": "Mercedes-Benz", "chassis": "W211/S211", "engine": "OM648 3.2L I6 CDI", "transmission": "722.6 EGS52" },
-                { "id": "vag_golf_mk6_edc17", "oem": "Volkswagen AG", "chassis": "Golf Mk6", "engine": "2.0 TDI EDC17", "transmission": "DQ250 DSG" },
-                { "id": "bmw_e90_m57_dde6", "oem": "BMW", "chassis": "E90", "engine": "M57 3.0d DDE6", "transmission": "ZF 6HP" }
-            ]
-        })),
+        "sterngate_list_profiles" => {
+            let candidates = ["profiles", "../../profiles", "../profiles"];
+            let mut profiles_meta = Vec::new();
+            for dir in candidates {
+                let p = std::path::Path::new(dir);
+                if p.exists() {
+                    let discovered = VehicleProfile::discover(p);
+                    for prof in discovered {
+                        profiles_meta.push(json!({
+                            "id": prof.profile_name,
+                            "oem": prof.oem,
+                            "chassis": prof.chassis,
+                            "gateway_type": prof.gateway_type,
+                            "default_bitrate": prof.default_bitrate,
+                            "modules_count": prof.modules.len(),
+                            "parameters_count": prof.parameters.len(),
+                            "modules": prof.modules.keys().collect::<Vec<_>>()
+                        }));
+                    }
+                    break;
+                }
+            }
+            if profiles_meta.is_empty() {
+                profiles_meta.push(json!({
+                    "id": "mercedes_w211_om646_edc16",
+                    "oem": "Mercedes-Benz",
+                    "chassis": "W211/S211",
+                    "modules_count": 2,
+                    "parameters_count": 5
+                }));
+            }
+            Ok(json!({
+                "count": profiles_meta.len(),
+                "profiles": profiles_meta
+            }))
+        }
         "sterngate_verify_flash_staging" => {
             let voltage = 13.8;
             Ok(json!({
@@ -287,6 +365,12 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 .get("sub_function")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(1) as u8;
+            let lang: Language = arguments
+                .get("lang")
+                .and_then(|v| v.as_str())
+                .unwrap_or("en")
+                .parse()
+                .unwrap_or_default();
 
             let (tx_id, rx_id) = if module.eq_ignore_ascii_case("EGS52") {
                 (0x7E1, 0x7E9)
@@ -297,20 +381,13 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
             let mut uds = sterngate_protocol::UdsClient::new(&mut mock_iface, tx_id, rx_id);
             match uds.routine_control(sub_fn, r_id, &[]).await {
                 Ok(resp) => {
-                    let desc = match r_id {
-                        0xFF01 => "Fuel Pump Prime & Rail Bleed",
-                        0x0201 => "Reset NMK Injector Zero-Quantity Adaptations",
-                        0x0202 => "Trigger DPF Regeneration",
-                        0x0203 => "Throttle Valve / EGR Stop Relearn",
-                        0x0205 => "SBC Brake Hydraulic Bleed Routine",
-                        0xFF00 => "Erase Flash Memory Routine",
-                        _ => "Diagnostic Routine Control",
-                    };
+                    let desc = lookup_routine_name(r_id, lang);
                     Ok(json!({
                         "success": true,
                         "module": module,
                         "routine_id": format!("0x{:04X}", r_id),
                         "routine_name": desc,
+                        "language": lang.to_string(),
                         "sub_function": sub_fn,
                         "status": "Completed successfully",
                         "raw_response_hex": resp.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
@@ -373,6 +450,28 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 "results": results
             }))
         }
+        "sterngate_inspect_cbf_ecu" => {
+            let ecu = arguments
+                .get("ecu")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "Missing required parameter 'ecu'".to_string())?;
+
+            let catalog = CbfCatalog::load_default()
+                .map_err(|e| format!("Failed to load CBF catalog: {}", e))?;
+
+            if let Some(entry) = catalog.get_ecu(ecu) {
+                Ok(serde_json::to_value(entry).unwrap())
+            } else {
+                Err(format!("ECU '{}' not found in CBF catalog", ecu))
+            }
+        }
+        "sterngate_list_locales" => Ok(json!({
+            "locales": [
+                { "code": "en", "name": "English", "default": true },
+                { "code": "de", "name": "Deutsch (Daimler OEM terminology)", "default": false },
+                { "code": "sv", "name": "Svenska", "default": false }
+            ]
+        })),
         _ => Err(format!("Unknown tool name: {}", name)),
     }
 }

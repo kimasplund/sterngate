@@ -38,3 +38,4 @@ function createCommandEnvelope(targetModule, service, did, payloadBytes) {
     payload: Array.from(payloadBytes)
   };
 }
+

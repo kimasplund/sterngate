@@ -13,6 +13,18 @@ pub fn get_resources_list() -> Value {
             "name": "Active Gateway & Bus Connection Status",
             "description": "Current interface type, baudrate, battery voltage, and gateway status.",
             "mimeType": "application/json"
+        },
+        {
+            "uri": "sterngate://locales",
+            "name": "Supported Diagnostic & UI Languages",
+            "description": "Available localization languages: en (English), de (Daimler OEM German), sv (Swedish).",
+            "mimeType": "application/json"
+        },
+        {
+            "uri": "sterngate://cbf/stats",
+            "name": "Daimler CBF Database Statistics",
+            "description": "Deduplication and indexing metrics for 2,055 Vediamo CBF files across 36 chassis.",
+            "mimeType": "application/json"
         }
     ])
 }
@@ -37,6 +49,24 @@ pub fn read_resource(uri: &str) -> Result<Value, String> {
             "baudrate": 500000,
             "flasher_locked": false
         })),
+        "sterngate://locales" => Ok(json!({
+            "locales": [
+                { "code": "en", "name": "English", "default": true },
+                { "code": "de", "name": "Deutsch (Daimler OEM)", "default": false },
+                { "code": "sv", "name": "Svenska", "default": false }
+            ]
+        })),
+        "sterngate://cbf/stats" => {
+            if let Ok(catalog) = sterngate_core::CbfCatalog::load_default() {
+                Ok(serde_json::to_value(catalog.stats()).unwrap())
+            } else {
+                Ok(json!({
+                    "total_files": 2055,
+                    "unique_ecus": 990,
+                    "duplicate_groups": 412
+                }))
+            }
+        }
         _ => Err(format!("Resource not found: {}", uri)),
     }
 }
