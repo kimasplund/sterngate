@@ -56,6 +56,7 @@ Or when running the compiled release binary:
 | `sterngate_trigger_routine` | `routine_id`, `module`, `sub_function` | Triggers UDS Service 0x31 actuator/diagnostic routines (fuel prime, NMK reset, DPF regen). |
 | `sterngate_control_flight_recorder` | `action`, `filename` | Controls high-frequency continuous CSV telemetry flight recording (start, stop, status). |
 | `sterngate_list_profiles` | *(None)* | Lists installed vehicle profiles in `profiles/`. |
+| `sterngate_search_cbf_catalog` | `query` (opt), `limit` (opt) | Searches the canonical 2,055-file CBF catalog for ECUs, protocols, and supported chassis. |
 | `sterngate_verify_flash_staging` | `manifest_path` | Evaluates a staged flash binary against safety checks (voltage, CRC, HW). |
 
 ---

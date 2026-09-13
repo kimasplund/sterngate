@@ -93,4 +93,19 @@ mod tests {
         .unwrap();
         assert!(!stop_res.get("is_recording").unwrap().as_bool().unwrap());
     }
+
+    #[tokio::test]
+    async fn test_mcp_search_cbf_catalog_tool() {
+        let res =
+            tools::handle_tool_call("sterngate_search_cbf_catalog", &json!({"query": "EGS52"}))
+                .await
+                .unwrap();
+        let matches = res.get("total_matches").unwrap().as_u64().unwrap();
+        assert!(matches >= 1);
+        let results = res.get("results").unwrap().as_array().unwrap();
+        assert_eq!(
+            results[0].get("ecu_name").unwrap().as_str().unwrap(),
+            "EGS52"
+        );
+    }
 }

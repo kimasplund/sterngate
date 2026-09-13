@@ -88,7 +88,40 @@ Sterngate includes an automated binary CBF extractor (`scripts/cbf_extractor.py`
 
 ---
 
-## 3. CLI Profile Management
+## 3. CBF Deduplication, Cataloging & Inspection
+
+Sterngate includes an automated deduplication analyzer (`scripts/cbf_dedup_analyzer.py`) that indexes all 2,055 Vediamo CBF files into a canonical catalog (`data/cbf_catalog.json`).
+
+### Catalog Statistics
+- **Total CBF files**: 2,055
+- **Unique ECUs**: 990
+- **Duplicate groups**: 412 (846 files or 41.2% are exact byte-for-byte duplicates across chassis folders)
+- **Multi-version ECUs**: 172 ECUs have multiple chronological revisions (e.g., `VGSNAG2` 7G-Tronic has 2016, 2017, and 2019 versions; `HERMES` telematics has 6 versions spanning 2016–2020)
+
+### CLI Catalog Commands
+```bash
+# Display overall CBF database and deduplication statistics
+sterngate cbf stats
+
+# Search ECUs by name or chassis keyword
+sterngate cbf search EGS
+sterngate cbf search W211
+
+# Detailed inspection of an ECU (canonical file, protocol, CAN IDs, DTC count, chassis list)
+sterngate cbf inspect VGSNAG2
+sterngate cbf inspect EDC16
+```
+
+### Re-analyzing or Updating the Catalog
+```bash
+python3 scripts/cbf_dedup_analyzer.py \
+  --cbf-dir data/cbf \
+  --output data/cbf_catalog.json
+```
+
+---
+
+## 4. CLI Profile Management
 
 Sterngate provides direct CLI commands to inspect and list installed vehicle packs:
 
@@ -102,7 +135,7 @@ sterngate profile inspect profiles/mercedes/w211_om642_cr4.json
 
 ---
 
-## 4. Parameter Scaling Types
+## 5. Parameter Scaling Types
 
 Sterngate supports:
 - **Linear**: `slope * raw + offset`

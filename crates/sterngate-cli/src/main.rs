@@ -83,6 +83,11 @@ enum Commands {
         #[command(subcommand)]
         action: ProfileCommands,
     },
+    /// Daimler CBF database inspection and deduplicated catalog
+    Cbf {
+        #[command(subcommand)]
+        action: CbfCommands,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -119,6 +124,16 @@ enum ProfileCommands {
     List,
     /// Inspect a specific profile
     Inspect { path: PathBuf },
+}
+
+#[derive(Subcommand, Debug)]
+enum CbfCommands {
+    /// Show summary statistics of the Daimler CBF database and deduplication
+    Stats,
+    /// Search for ECUs by name or chassis keyword
+    Search { query: String },
+    /// Inspect details of a specific ECU in the CBF catalog
+    Inspect { ecu: String },
 }
 
 #[tokio::main]
@@ -295,6 +310,193 @@ async fn main() -> Result<()> {
                     return Ok(());
                 }
             },
+            Commands::Cbf { action } => {
+                let p1 = std::path::Path::new("data/cbf_catalog.json");
+                let p2 = std::path::Path::new("../../data/cbf_catalog.json");
+                let catalog_path = if p1.exists() {
+                    p1
+                } else if p2.exists() {
+                    p2
+                } else {
+                    eprintln!("CBF catalog not found. Run scripts/cbf_dedup_analyzer.py first.");
+                    return Ok(());
+                };
+                let data = std::fs::read_to_string(catalog_path)?;
+                let cat: serde_json::Value = serde_json::from_str(&data)?;
+
+                match action {
+                    CbfCommands::Stats => {
+                        println!("============================================================");
+                        println!("  Daimler CBF Database & Deduplication Statistics");
+                        println!("============================================================");
+                        if let Some(meta) = cat.get("metadata") {
+                            println!(
+                                "  • Total CBF Files Scanned:           {}",
+                                meta.get("total_cbf_files").unwrap_or(&serde_json::json!(0))
+                            );
+                            println!(
+                                "  • Unique ECU Types:                  {}",
+                                meta.get("unique_ecus").unwrap_or(&serde_json::json!(0))
+                            );
+                            println!(
+                                "  • Unique Content Hashes:             {}",
+                                meta.get("unique_sha256_hashes")
+                                    .unwrap_or(&serde_json::json!(0))
+                            );
+                            println!(
+                                "  • Redundant File Copies:             {} (41.2% duplicates)",
+                                meta.get("redundant_file_copies")
+                                    .unwrap_or(&serde_json::json!(0))
+                            );
+                            println!(
+                                "  • Content-Identical Duplicate Groups: {}",
+                                meta.get("exact_duplicate_groups")
+                                    .unwrap_or(&serde_json::json!(0))
+                            );
+                        }
+                    }
+                    CbfCommands::Search { query } => {
+                        println!("============================================================");
+                        println!("  Searching CBF Catalog for: '{}'", query);
+                        println!("============================================================");
+                        let q = query.to_uppercase();
+                        let ecus = cat.get("ecus").and_then(|v| v.as_object());
+                        let mut matches = 0;
+                        if let Some(ecus_map) = ecus {
+                            for (name, info) in ecus_map {
+                                let chassis_list: Vec<String> = info
+                                    .get("all_chassis_supported")
+                                    .and_then(|v| v.as_array())
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|c| c.as_str().map(|s| s.to_string()))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default();
+                                let matches_name = name.contains(&q);
+                                let matches_chassis =
+                                    chassis_list.iter().any(|c| c.to_uppercase().contains(&q));
+
+                                if matches_name || matches_chassis {
+                                    matches += 1;
+                                    let canon = info.get("canonical_version");
+                                    let date = canon
+                                        .and_then(|c| c.get("date"))
+                                        .and_then(|d| d.as_str())
+                                        .unwrap_or("Unknown");
+                                    let proto = canon
+                                        .and_then(|c| c.get("protocol"))
+                                        .and_then(|d| d.as_str())
+                                        .unwrap_or("UDS");
+                                    let tx = canon
+                                        .and_then(|c| c.get("tx_id"))
+                                        .and_then(|d| d.as_str())
+                                        .unwrap_or("N/A");
+                                    let rx = canon
+                                        .and_then(|c| c.get("rx_id"))
+                                        .and_then(|d| d.as_str())
+                                        .unwrap_or("N/A");
+                                    let copies = info
+                                        .get("total_copies_in_cbf")
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(1);
+                                    let vers = info
+                                        .get("distinct_versions_count")
+                                        .and_then(|v| v.as_u64())
+                                        .unwrap_or(1);
+
+                                    println!(
+                                        "  • {:<16} | Date: {:<10} | {:<7} | CAN: {:<6}/{:<6} | {} copy(ies), {} version(s)",
+                                        name, date, proto, tx, rx, copies, vers
+                                    );
+                                    if matches_chassis && !matches_name {
+                                        println!("    Chassis: {}", chassis_list.join(", "));
+                                    }
+                                }
+                            }
+                        }
+                        println!("\nFound {} matching ECU(s).", matches);
+                    }
+                    CbfCommands::Inspect { ecu } => {
+                        let q = ecu.to_uppercase();
+                        if let Some(info) = cat.get("ecus").and_then(|v| v.get(&q)) {
+                            println!(
+                                "============================================================"
+                            );
+                            println!("  ECU: {}", q);
+                            println!(
+                                "============================================================"
+                            );
+                            println!(
+                                "  Total Copies Across Chassis: {}",
+                                info.get("total_copies_in_cbf")
+                                    .unwrap_or(&serde_json::json!(1))
+                            );
+                            println!(
+                                "  Distinct Versions:           {}",
+                                info.get("distinct_versions_count")
+                                    .unwrap_or(&serde_json::json!(1))
+                            );
+                            if let Some(canon) = info.get("canonical_version") {
+                                println!("\n  Canonical (Latest) Version:");
+                                println!(
+                                    "    • Date:             {}",
+                                    canon.get("date").unwrap_or(&serde_json::json!(""))
+                                );
+                                println!(
+                                    "    • Protocol:         {}",
+                                    canon.get("protocol").unwrap_or(&serde_json::json!(""))
+                                );
+                                println!(
+                                    "    • Tx CAN ID:        {}",
+                                    canon.get("tx_id").unwrap_or(&serde_json::json!("N/A"))
+                                );
+                                println!(
+                                    "    • Rx CAN ID:        {}",
+                                    canon.get("rx_id").unwrap_or(&serde_json::json!("N/A"))
+                                );
+                                println!(
+                                    "    • Size:             {} bytes",
+                                    canon.get("size_bytes").unwrap_or(&serde_json::json!(0))
+                                );
+                                println!(
+                                    "    • Presentations:    {}",
+                                    canon
+                                        .get("presentation_count")
+                                        .unwrap_or(&serde_json::json!(0))
+                                );
+                                println!(
+                                    "    • DTC Fault Codes:  {}",
+                                    canon.get("dtc_count").unwrap_or(&serde_json::json!(0))
+                                );
+                                println!(
+                                    "    • Primary Path:     data/cbf/{}",
+                                    canon
+                                        .get("primary_path")
+                                        .and_then(|s| s.as_str())
+                                        .unwrap_or("")
+                                );
+                            }
+                            if let Some(chassis) =
+                                info.get("all_chassis_supported").and_then(|v| v.as_array())
+                            {
+                                let ch_strs: Vec<&str> =
+                                    chassis.iter().filter_map(|c| c.as_str()).collect();
+                                println!(
+                                    "\n  Supported Chassis Folders ({} total):",
+                                    ch_strs.len()
+                                );
+                                for c in ch_strs {
+                                    println!("    - {}", c);
+                                }
+                            }
+                        } else {
+                            eprintln!("ECU '{}' not found in catalog.", q);
+                        }
+                    }
+                }
+                return Ok(());
+            }
         }
     }
 
