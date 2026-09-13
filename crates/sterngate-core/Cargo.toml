@@ -11,4 +11,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
+crc32fast = { workspace = true }
+uuid = { workspace = true }
 

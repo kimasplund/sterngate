@@ -1,10 +1,12 @@
 pub mod flasher;
+pub mod gate;
 pub mod isotp;
 pub mod kwp2000;
 pub mod seedkey;
 pub mod uds;
 
 pub use flasher::FlashingWorker;
+pub use gate::TransactionGate;
 pub use isotp::IsoTpChannel;
 pub use kwp2000::KwpClient;
 pub use seedkey::{DaimlerSeedKey, DaimlerSolver, SeedKeySolver};
@@ -82,5 +84,38 @@ mod tests {
             .await
             .unwrap();
         assert!(report_good_voltage.passed);
+    }
+
+    #[tokio::test]
+    async fn test_transaction_gate_verification() {
+        use sterngate_core::{CommandEnvelope, VehicleProfile};
+
+        let gate = TransactionGate::new();
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+
+        // 1. Valid envelope targeting 722.6 transmission fluid temp (0x2001, 1 byte)
+        let valid_env = CommandEnvelope::new("EGS52", 0x2E, Some(0x2001), vec![0x78]);
+        let report = gate
+            .verify_and_authorize(&valid_env, &profile)
+            .await
+            .unwrap();
+        assert!(report.is_valid);
+
+        // 2. Replay with same idempotency key -> MUST FAIL
+        let duplicate = valid_env.clone();
+        assert!(gate
+            .verify_and_authorize(&duplicate, &profile)
+            .await
+            .is_err());
+
+        // 3. Schema mismatch: DID 0x2001 expects 1 byte, send 3 bytes -> MUST FAIL
+        let invalid_schema =
+            CommandEnvelope::new("EGS52", 0x2E, Some(0x2001), vec![0x01, 0x02, 0x03]);
+        assert!(gate
+            .verify_and_authorize(&invalid_schema, &profile)
+            .await
+            .is_err());
     }
 }

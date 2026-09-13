@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use sterngate_core::{TelemetrySnapshot, VehicleProfile};
 use sterngate_hal::VehicleInterface;
-use sterngate_protocol::FlashingWorker;
+use sterngate_protocol::{FlashingWorker, TransactionGate};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 #[derive(Clone)]
@@ -9,6 +9,7 @@ pub struct AppState {
     pub interface: Arc<Mutex<Box<dyn VehicleInterface>>>,
     pub profile: Arc<RwLock<VehicleProfile>>,
     pub flasher: Arc<FlashingWorker>,
+    pub gate: Arc<TransactionGate>,
     pub telemetry_tx: broadcast::Sender<TelemetrySnapshot>,
 }
 
@@ -23,6 +24,7 @@ impl AppState {
             interface: Arc::new(Mutex::new(interface)),
             profile: Arc::new(RwLock::new(profile)),
             flasher,
+            gate: Arc::new(TransactionGate::new()),
             telemetry_tx: tx,
         }
     }

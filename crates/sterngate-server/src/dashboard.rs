@@ -176,6 +176,42 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
   </div>
 
   <script>
+    function makeCrcTable() {
+      let c;
+      const table = [];
+      for (let n = 0; n < 256; n++) {
+        c = n;
+        for (let k = 0; k < 8; k++) {
+          c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+        }
+        table[n] = c;
+      }
+      return table;
+    }
+    const CRC_TABLE = makeCrcTable();
+    function crc32(bytes) {
+      let crc = 0 ^ (-1);
+      for (let i = 0; i < bytes.length; i++) {
+        crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xFF];
+      }
+      return (crc ^ (-1)) >>> 0;
+    }
+
+    function createCommandEnvelope(targetModule, service, did, payloadBytes) {
+      return {
+        command_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'cmd-' + Date.now(),
+        timestamp_ms: Date.now(),
+        ttl_ms: 10000,
+        idempotency_key: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'idemp-' + Math.random(),
+        target_module: targetModule,
+        service: service,
+        did: did,
+        payload_len: payloadBytes.length,
+        payload_crc32: crc32(payloadBytes),
+        payload: Array.from(payloadBytes)
+      };
+    }
+
     const ws = new WebSocket(`ws://${location.host}/ws/telemetry`);
     ws.onmessage = (e) => {
       try {
@@ -210,6 +246,17 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
       const res = await fetch('/api/v1/telemetry');
       const snap = await res.json();
       if (snap.engine_rpm) document.getElementById('val-rpm').textContent = Math.round(snap.engine_rpm);
+    }
+
+    async function sendVerifiedCoding(didHex, dataBytes) {
+      const did = parseInt(didHex.replace('0x', ''), 16);
+      const envelope = createCommandEnvelope('EDC16', 0x2E, did, dataBytes);
+      const res = await fetch('/api/v1/coding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ envelope })
+      });
+      return await res.json();
     }
 
     async function startSimulatedFlash() {

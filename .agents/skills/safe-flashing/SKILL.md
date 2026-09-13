@@ -63,3 +63,21 @@ Between data blocks, it continuously guarantees:
 - If any frame is dropped or an unrecoverable NACK (`0x7F`) is received before erasing, the sequence aborts cleanly.
 - If an error occurs *after* erasing has completed, the worker enters `RecoveryMode` and attempts re-flashing the recovery image.
 
+---
+
+## 4. Zero-Trust Command Integrity & Network Drop Resilience
+
+All mutating commands (variant coding, parameter writes, routine actuation, and flash triggers) are treated as untrusted and potentially incomplete:
+
+1. **Envelope Verification**:
+   - Every request from Web UI or P2P tunnels must arrive encapsulated in a `CommandEnvelope`.
+   - The core verifies exact byte length (`payload_len`) and IEEE 802.3 CRC32 (`payload_crc32`) match the raw payload.
+   - Any truncated packet or network glitch immediately triggers `SterngateError::CorruptedPayload` with zero CAN transmission.
+2. **Replay & Stale Command Protection**:
+   - The envelope carries `timestamp_ms` and a strictly bounded `ttl_ms` (typically 3000ms).
+   - If a request is delayed over high-latency cellular or reconnecting WiFi, it is rejected with `SterngateError::ExpiredCommand`.
+   - `idempotency_key` guarantees commands are never executed more than once.
+3. **Deterministic Local Autonomy**:
+   - Once a flashing or long-running routine is validated and started, the core worker executes detached locally.
+   - Loss of WebSocket connection, browser closing, or P2P QUIC disconnect NEVER interrupts the $S_3$ keep-alive or in-flight transfer blocks.
+

@@ -1,3 +1,4 @@
+pub mod command;
 pub mod dtc;
 pub mod error;
 pub mod flash;
@@ -5,6 +6,7 @@ pub mod frame;
 pub mod parameter;
 pub mod profile;
 
+pub use command::{CommandEnvelope, CommandValidationReport};
 pub use dtc::Dtc;
 pub use error::{Result, SterngateError};
 pub use flash::{FlashPackageManifest, FlashProgress, FlashState, PreFlightReport};
@@ -74,5 +76,34 @@ mod tests {
         let edc16 = profile.get_module("EDC16").unwrap();
         assert_eq!(edc16.tx_can_id().unwrap(), 0x7E0);
         assert_eq!(edc16.rx_can_id().unwrap(), 0x7E8);
+    }
+
+    #[test]
+    fn test_command_envelope_integrity_validation() {
+        let payload = vec![0x12, 0x34, 0x56, 0x78];
+        let env = CommandEnvelope::new("EDC16", 0x2E, Some(0x2001), payload.clone());
+
+        // Valid envelope must pass
+        assert!(env.validate_integrity().is_ok());
+
+        // Truncated envelope (e.g. lost 1 byte over Wi-Fi drop)
+        let mut truncated = env.clone();
+        truncated.payload.pop();
+        assert!(truncated.validate_integrity().is_err());
+
+        // Bit-flipped envelope (checksum mismatch)
+        let mut corrupted = env.clone();
+        corrupted.payload[0] ^= 0xFF;
+        assert!(corrupted.validate_integrity().is_err());
+    }
+
+    #[test]
+    fn test_command_envelope_ttl_expiration() {
+        let env = CommandEnvelope::new("EDC16", 0x14, None, vec![]).with_ttl(1000);
+        let current_time = env.timestamp_ms + 500;
+        assert!(!env.is_expired(current_time));
+
+        let expired_time = env.timestamp_ms + 1500;
+        assert!(env.is_expired(expired_time));
     }
 }

@@ -28,7 +28,8 @@ When modifying or generating code for Sterngate, you **MUST** strictly adhere to
 > 2. **Voltage Interlock**: Refuse to trigger erase (`0x31 Routine 0xFF00`) unless the measured system voltage is $\ge 12.5\text{ V}$.
 > 3. **Keep-Alive Guarantee**: Maintain the $S_3$ session timer via `TesterPresent` (`0x3E 80`) every $2000\text{ ms}$ whenever an extended or programming session (`0x10 02` / `0x10 03`) is active.
 > 4. **API Lockout**: When the Flashing State Machine transitions out of `Idle`, all diagnostic reads, variant coding, and external API requests must immediately yield `HTTP 423 Locked`.
-> 5. **Error Handling**: Never panic (`unwrap()`) in protocol state machines or CAN dispatch loops. Use strongly typed `SterngateError` with graceful recovery.
+> 5. **Zero-Trust Command Integrity**: Any mutating request (variant coding, routine actuation, flash trigger) arriving from an external interface (Web UI, REST API, or P2P QUIC link) must be encapsulated in a `CommandEnvelope`. The core `TransactionGate` MUST verify exact payload length, CRC32 checksum, timestamp freshness (TTL), and idempotency key before dispatching any bytes to the CAN bus. Unverified or truncated commands are dropped immediately.
+> 6. **Error Handling**: Never panic (`unwrap()`) in protocol state machines or CAN dispatch loops. Use strongly typed `SterngateError` with graceful recovery.
 
 ---
 
@@ -113,4 +114,5 @@ Whenever you add or modify protocols, CLI flags, or profile schemas, you **MUST*
   - Always write unit tests for protocol frame parsers, scaling formulas, and state machines.
   - Use `VirtualCanInterface` in integration tests so tests pass deterministically on CI without real CAN hardware.
 - **Documentation**: Provide clear Rust doc comments (`///`) on all public types, traits, and functions.
+- **Commit on Save**: Whenever a coherent set of file modifications or feature enhancements is completed, immediately format, test, and commit the changes to git history (`git add . && git commit -m "..."`). Never leave uncommitted changes hanging between sessions.
 

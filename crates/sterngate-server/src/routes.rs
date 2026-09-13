@@ -179,8 +179,9 @@ async fn stage_flash(
 
 #[derive(Deserialize)]
 struct CodingPayload {
-    did_hex: String,
-    data_hex: String,
+    envelope: Option<sterngate_core::CommandEnvelope>,
+    did_hex: Option<String>,
+    data_hex: Option<String>,
 }
 
 async fn write_coding(
@@ -197,33 +198,58 @@ async fn write_coding(
         );
     }
 
-    let did = u16::from_str_radix(payload.did_hex.trim_start_matches("0x"), 16).unwrap_or(0);
-    let raw_bytes: Result<Vec<u8>, _> = (0..payload.data_hex.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&payload.data_hex[i..i + 2], 16))
-        .collect();
+    let envelope = if let Some(env) = payload.envelope {
+        env
+    } else {
+        let did_hex = payload.did_hex.unwrap_or_default();
+        let data_hex = payload.data_hex.unwrap_or_default();
+        let did = u16::from_str_radix(did_hex.trim_start_matches("0x"), 16).unwrap_or(0);
+        let raw_bytes: Result<Vec<u8>, _> = (0..data_hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&data_hex[i..i + 2], 16))
+            .collect();
 
-    let bytes = match raw_bytes {
-        Ok(b) => b,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    success: false,
-                    message: "Invalid hex payload".into(),
-                }),
-            )
-        }
+        let bytes = match raw_bytes {
+            Ok(b) => b,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(GenericResponse {
+                        success: false,
+                        message: "Invalid hex payload format".into(),
+                    }),
+                )
+            }
+        };
+
+        sterngate_core::CommandEnvelope::new("EDC16", 0x2E, Some(did), bytes)
     };
 
+    // Strict Zero-Trust Verification Gate
+    let profile = state.profile.read().await;
+    if let Err(e) = state.gate.verify_and_authorize(&envelope, &profile).await {
+        tracing::warn!("Rejected unverified or corrupt command: {}", e);
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(GenericResponse {
+                success: false,
+                message: format!("Command verification gate failed: {}", e),
+            }),
+        );
+    }
+
+    let did = envelope.did.unwrap_or(0);
     let mut iface = state.interface.lock().await;
     let mut uds = UdsClient::new(iface.as_mut(), 0x7E0, 0x7E8);
-    match uds.write_data_by_identifier(did, &bytes).await {
+    match uds.write_data_by_identifier(did, &envelope.payload).await {
         Ok(_) => (
             StatusCode::OK,
             Json(GenericResponse {
                 success: true,
-                message: format!("Successfully wrote DID 0x{:04X}", did),
+                message: format!(
+                    "Successfully verified and wrote DID 0x{:04X} (Command ID: {})",
+                    did, envelope.command_id
+                ),
             }),
         ),
         Err(e) => (
