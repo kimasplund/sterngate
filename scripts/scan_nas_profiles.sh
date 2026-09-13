@@ -33,3 +33,4 @@ gio list "${SMB_ROOT}/SdFlash" 2>/dev/null || echo "    No SdFlash files accessi
 
 echo ""
 echo "[✓] Scan completed. Available archives can be extracted into ${TARGET_DIR} for profile generation."
+

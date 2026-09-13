@@ -60,25 +60,49 @@ Profiles reside in `profiles/<oem>/<model>_<engine>.json`. They define how Stern
 
 ---
 
-## 2. Converting Legacy CBF Files to Sterngate JSON
+## 2. Reverse Engineering CBF Files to Sterngate JSON
 
-Legacy Mercedes tools use binary `.cbf` files (e.g., `CR4.cbf` for EDC16, `EGS52.cbf` for 722.6).
+Sterngate includes an automated binary CBF extractor (`scripts/cbf_extractor.py`) to parse Daimler Caesar Binary Format files directly from the NAS archive (`smb://kims-nas.local/public/DTS Projects/`):
 
-To convert a `.cbf` to Sterngate JSON:
-1. Decompile `.cbf` using open-source tools such as `CaesarSuite` or `cbf-parser`:
+### Extraction Workflow
+1. Extract CBF files from the archive:
    ```bash
-   cbf-parser CR4.cbf --json cr4_raw.json
+   python3 -c '
+   import py7zr
+   with py7zr.SevenZipFile("/run/user/1000/gvfs/smb-share:server=kims-nas.local,share=public/DTS Projects/DTS_Daimler Refresh_V2 #fuckacmeinc.7z", "r") as z:
+       z.extract(path="/tmp/cbf_extracted", targets=["Old_211_219/cbf/CR4.CBF", "Old_211_219/cbf/EGS52.CBF"])
+   '
    ```
-2. Extract the target DIDs, byte lengths, and linear conversion factors:
-   $$\text{Physical Value} = \text{Raw} \times \text{slope} + \text{offset}$$
-3. Validate against the schema:
+2. Generate the Sterngate JSON profile:
    ```bash
-   cargo test --package sterngate-core test_validate_profiles
+   python3 scripts/cbf_extractor.py \
+     --cbf /tmp/cbf_extracted/Old_211_219/cbf/CR4.CBF \
+           /tmp/cbf_extracted/&_204_207_212_218/cbf/VGSNAG2.CBF \
+           /tmp/cbf_extracted/Old_211_219/cbf/SBC211.CBF \
+           /tmp/cbf_extracted/Old_211_219/cbf/ZGW211.CBF \
+     --profile-id mercedes_w211_om642_cr4 \
+     --oem Mercedes-Benz \
+     --chassis W211/S211 \
+     --output profiles/mercedes/w211_om642_cr4.json
    ```
 
 ---
 
-## 3. Parameter Scaling Types
+## 3. CLI Profile Management
+
+Sterngate provides direct CLI commands to inspect and list installed vehicle packs:
+
+```bash
+# List all discovered profiles with module counts and parameter stats
+sterngate profile list
+
+# Inspect detailed ECU routing and DID scaling
+sterngate profile inspect profiles/mercedes/w211_om642_cr4.json
+```
+
+---
+
+## 4. Parameter Scaling Types
 
 Sterngate supports:
 - **Linear**: `slope * raw + offset`

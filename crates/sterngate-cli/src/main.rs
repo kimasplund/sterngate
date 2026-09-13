@@ -183,18 +183,64 @@ async fn main() -> Result<()> {
             },
             Commands::Profile { action } => match action {
                 ProfileCommands::List => {
-                    println!("Available Profiles:");
-                    println!("  - profiles/mercedes/w211_om646_edc16.json (Mercedes W211 OM646 CDI + 722.6)");
-                    println!("  - profiles/mercedes/w211_om648_edc16.json (Mercedes W211 OM648 I6 CDI + 722.6)");
-                    println!("  - profiles/vag/golf_mk6_edc17.json (Volkswagen Golf Mk6 2.0 TDI EDC17 + DSG)");
-                    println!("  - profiles/bmw/e90_m57_dde6.json (BMW E90 M57 3.0d DDE6 + ZF 6HP)");
+                    println!("============================================================");
+                    println!("  Sterngate Installed Vehicle Profiles");
+                    println!("============================================================");
+                    let mut files = Vec::new();
+                    find_profile_files(std::path::Path::new("profiles"), &mut files);
+                    let mut found = 0;
+                    for path in files {
+                        if let Ok(prof) = VehicleProfile::load_from_file(&path) {
+                            found += 1;
+                            println!(
+                                "  • {:<32} | {:<14} | {} ({} modules, {} DIDs)",
+                                prof.profile_name,
+                                prof.oem,
+                                prof.chassis,
+                                prof.modules.len(),
+                                prof.parameters.len()
+                            );
+                            println!("    Path: {}", path.display());
+                        }
+                    }
+                    if found == 0 {
+                        println!("  No vehicle profiles found in profiles/");
+                    }
                     return Ok(());
                 }
                 ProfileCommands::Inspect { path } => {
                     let prof = VehicleProfile::load_from_file(&path)?;
-                    println!("Profile: {} ({})", prof.profile_name, prof.oem);
-                    println!("Modules: {:?}", prof.modules.keys().collect::<Vec<_>>());
-                    println!("Parameters defined: {}", prof.parameters.len());
+                    println!("============================================================");
+                    println!("  Profile: {} ({})", prof.profile_name, prof.oem);
+                    println!(
+                        "  Chassis: {} | Gateway: {:?}",
+                        prof.chassis, prof.gateway_type
+                    );
+                    println!("  Default Bitrate: {} bps", prof.default_bitrate);
+                    println!("============================================================");
+                    println!("\nECU Modules:");
+                    for (mod_id, m) in &prof.modules {
+                        println!(
+                            "  [{:<8}] {:<42} | Tx: {:<6} Rx: {:<6} | Protocol: {}",
+                            mod_id, m.name, m.tx_id, m.rx_id, m.protocol
+                        );
+                    }
+                    println!(
+                        "\nDiagnostic Parameters ({} defined):",
+                        prof.parameters.len()
+                    );
+                    for p in &prof.parameters {
+                        println!(
+                            "  • {:<16} DID: {:<6} ({}): [{:<20}] scale: *{} +{} {}",
+                            p.id,
+                            p.did,
+                            p.module,
+                            p.name,
+                            p.scaling.slope,
+                            p.scaling.offset,
+                            p.unit
+                        );
+                    }
                     return Ok(());
                 }
             },
@@ -292,4 +338,19 @@ fn load_profile_safe(path: &PathBuf) -> VehicleProfile {
             parameters: vec![],
         }
     })
+}
+
+fn find_profile_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                find_profile_files(&path, out);
+            } else if path.extension().is_some_and(|ext| ext == "json")
+                && !path.to_string_lossy().contains("schema")
+            {
+                out.push(path);
+            }
+        }
+    }
 }

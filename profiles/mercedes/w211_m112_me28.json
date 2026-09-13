@@ -1,22 +1,15 @@
 {
-  "profile_name": "mercedes_w211_om646_edc16",
+  "profile_name": "mercedes_w211_m112_me28",
   "oem": "Mercedes-Benz",
   "chassis": "W211/S211",
   "gateway_type": "CGW_N93",
   "default_bitrate": 500000,
   "modules": {
-    "EDC16": {
-      "name": "Engine Control Unit (OM646 CDI 3 / EDC16C2)",
+    "ME28": {
+      "name": "Engine Control Unit (M112/M113 V6/V8 Gasoline / ME 2.8)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
-      "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
-    },
-    "CR3": {
-      "name": "Engine Control Unit (OM646 CDI 3 / EDC16C2)",
-      "tx_id": "0x7E0",
-      "rx_id": "0x7E8",
-      "protocol": "UDS",
+      "protocol": "KWP2000",
       "seed_key_algo": "Daimler_Level1"
     },
     "EGS52": {
@@ -45,7 +38,7 @@
     {
       "id": "engine_rpm",
       "name": "Engine Speed (Motordrehzahl)",
-      "module": "EDC16",
+      "module": "ME28",
       "service": 34,
       "did": "0x0100",
       "byte_offset": 3,
@@ -56,12 +49,12 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 5000.0
+      "max": 7000.0
     },
     {
       "id": "coolant_temp",
       "name": "Coolant Temperature (Kuehlmitteltemperatur)",
-      "module": "EDC16",
+      "module": "ME28",
       "service": 34,
       "did": "0x0105",
       "byte_offset": 3,
@@ -75,116 +68,68 @@
       "max": 140.0
     },
     {
-      "id": "rail_pressure",
-      "name": "Common Rail Pressure (Raildruck Istwert)",
-      "module": "EDC16",
+      "id": "throttle_angle",
+      "name": "Throttle Valve Angle (Drosselklappenwinkel)",
+      "module": "ME28",
       "service": 34,
-      "did": "0x200B",
+      "did": "0x0111",
+      "byte_offset": 3,
+      "length": 1,
+      "scaling": {
+        "slope": 0.392,
+        "offset": 0.0
+      },
+      "unit": "%",
+      "min": 0.0,
+      "max": 100.0
+    },
+    {
+      "id": "mass_air_flow",
+      "name": "Mass Air Flow MAF (Luftmasse kg/h)",
+      "module": "ME28",
+      "service": 34,
+      "did": "0x0110",
       "byte_offset": 3,
       "length": 2,
       "scaling": {
         "slope": 0.1,
         "offset": 0.0
       },
-      "unit": "bar",
+      "unit": "kg/h",
       "min": 0.0,
-      "max": 1800.0
+      "max": 600.0
     },
     {
-      "id": "boost_pressure",
-      "name": "Boost Pressure (Ladedruck Istwert)",
-      "module": "EDC16",
+      "id": "lambda_b1s1",
+      "name": "Lambda Upstream O2 Voltage Bank 1",
+      "module": "ME28",
       "service": 34,
-      "did": "0x2010",
+      "did": "0x0114",
       "byte_offset": 3,
       "length": 2,
       "scaling": {
-        "slope": 1.0,
+        "slope": 0.001,
         "offset": 0.0
       },
-      "unit": "hPa",
-      "min": 500.0,
-      "max": 3000.0
+      "unit": "V",
+      "min": 0.0,
+      "max": 1.2
     },
     {
-      "id": "air_mass",
-      "name": "Air Mass Flow (Luftmasse Soll/Ist)",
-      "module": "EDC16",
+      "id": "lambda_b2s1",
+      "name": "Lambda Upstream O2 Voltage Bank 2",
+      "module": "ME28",
       "service": 34,
-      "did": "0x2015",
+      "did": "0x0115",
       "byte_offset": 3,
       "length": 2,
       "scaling": {
-        "slope": 0.1,
+        "slope": 0.001,
         "offset": 0.0
       },
-      "unit": "mg/hub",
+      "unit": "V",
       "min": 0.0,
-      "max": 1200.0
-    },
-    {
-      "id": "inj_corr_cyl1",
-      "name": "Smooth Running Correction Cyl 1 (Laufruheregler Zyl 1)",
-      "module": "EDC16",
-      "service": 34,
-      "did": "0x2021",
-      "byte_offset": 3,
-      "length": 2,
-      "scaling": {
-        "slope": 0.01,
-        "offset": -5.0
-      },
-      "unit": "mm\u00b3/stroke",
-      "min": -5.0,
-      "max": 5.0
-    },
-    {
-      "id": "inj_corr_cyl2",
-      "name": "Smooth Running Correction Cyl 2 (Laufruheregler Zyl 2)",
-      "module": "EDC16",
-      "service": 34,
-      "did": "0x2022",
-      "byte_offset": 3,
-      "length": 2,
-      "scaling": {
-        "slope": 0.01,
-        "offset": -5.0
-      },
-      "unit": "mm\u00b3/stroke",
-      "min": -5.0,
-      "max": 5.0
-    },
-    {
-      "id": "inj_corr_cyl3",
-      "name": "Smooth Running Correction Cyl 3 (Laufruheregler Zyl 3)",
-      "module": "EDC16",
-      "service": 34,
-      "did": "0x2023",
-      "byte_offset": 3,
-      "length": 2,
-      "scaling": {
-        "slope": 0.01,
-        "offset": -5.0
-      },
-      "unit": "mm\u00b3/stroke",
-      "min": -5.0,
-      "max": 5.0
-    },
-    {
-      "id": "inj_corr_cyl4",
-      "name": "Smooth Running Correction Cyl 4 (Laufruheregler Zyl 4)",
-      "module": "EDC16",
-      "service": 34,
-      "did": "0x2024",
-      "byte_offset": 3,
-      "length": 2,
-      "scaling": {
-        "slope": 0.01,
-        "offset": -5.0
-      },
-      "unit": "mm\u00b3/stroke",
-      "min": -5.0,
-      "max": 5.0
+      "max": 1.2
     },
     {
       "id": "trans_fluid_temp",

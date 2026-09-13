@@ -1,29 +1,22 @@
 {
-  "profile_name": "mercedes_w211_om646_edc16",
+  "profile_name": "mercedes_w211_om642_cr4",
   "oem": "Mercedes-Benz",
   "chassis": "W211/S211",
   "gateway_type": "CGW_N93",
   "default_bitrate": 500000,
   "modules": {
-    "EDC16": {
-      "name": "Engine Control Unit (OM646 CDI 3 / EDC16C2)",
+    "CR4": {
+      "name": "Engine Control Unit (OM642 V6 CDI 4 / EDC16CP31)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "UDS",
       "seed_key_algo": "Daimler_Level1"
     },
-    "CR3": {
-      "name": "Engine Control Unit (OM646 CDI 3 / EDC16C2)",
-      "tx_id": "0x7E0",
-      "rx_id": "0x7E8",
-      "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
-    },
-    "EGS52": {
-      "name": "Electronic Transmission Control (722.6 5-Speed / NAG1)",
+    "VGSNAG2": {
+      "name": "Fully Integrated Transmission Control (722.9 7G-Tronic)",
       "tx_id": "0x7E1",
       "rx_id": "0x7E9",
-      "protocol": "KWP2000",
+      "protocol": "UDS",
       "seed_key_algo": "Daimler_Level1"
     },
     "SBC211": {
@@ -45,7 +38,7 @@
     {
       "id": "engine_rpm",
       "name": "Engine Speed (Motordrehzahl)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x0100",
       "byte_offset": 3,
@@ -61,7 +54,7 @@
     {
       "id": "coolant_temp",
       "name": "Coolant Temperature (Kuehlmitteltemperatur)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x0105",
       "byte_offset": 3,
@@ -77,7 +70,7 @@
     {
       "id": "rail_pressure",
       "name": "Common Rail Pressure (Raildruck Istwert)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x200B",
       "byte_offset": 3,
@@ -93,7 +86,7 @@
     {
       "id": "boost_pressure",
       "name": "Boost Pressure (Ladedruck Istwert)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x2010",
       "byte_offset": 3,
@@ -109,7 +102,7 @@
     {
       "id": "air_mass",
       "name": "Air Mass Flow (Luftmasse Soll/Ist)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x2015",
       "byte_offset": 3,
@@ -125,7 +118,7 @@
     {
       "id": "inj_corr_cyl1",
       "name": "Smooth Running Correction Cyl 1 (Laufruheregler Zyl 1)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x2021",
       "byte_offset": 3,
@@ -141,7 +134,7 @@
     {
       "id": "inj_corr_cyl2",
       "name": "Smooth Running Correction Cyl 2 (Laufruheregler Zyl 2)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x2022",
       "byte_offset": 3,
@@ -157,7 +150,7 @@
     {
       "id": "inj_corr_cyl3",
       "name": "Smooth Running Correction Cyl 3 (Laufruheregler Zyl 3)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x2023",
       "byte_offset": 3,
@@ -173,7 +166,7 @@
     {
       "id": "inj_corr_cyl4",
       "name": "Smooth Running Correction Cyl 4 (Laufruheregler Zyl 4)",
-      "module": "EDC16",
+      "module": "CR4",
       "service": 34,
       "did": "0x2024",
       "byte_offset": 3,
@@ -187,9 +180,41 @@
       "max": 5.0
     },
     {
+      "id": "inj_corr_cyl5",
+      "name": "Smooth Running Correction Cyl 5 (Laufruheregler Zyl 5)",
+      "module": "CR4",
+      "service": 34,
+      "did": "0x2025",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 0.01,
+        "offset": -5.0
+      },
+      "unit": "mm\u00b3/stroke",
+      "min": -5.0,
+      "max": 5.0
+    },
+    {
+      "id": "inj_corr_cyl6",
+      "name": "Smooth Running Correction Cyl 6 (Laufruheregler Zyl 6)",
+      "module": "CR4",
+      "service": 34,
+      "did": "0x2026",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 0.01,
+        "offset": -5.0
+      },
+      "unit": "mm\u00b3/stroke",
+      "min": -5.0,
+      "max": 5.0
+    },
+    {
       "id": "trans_fluid_temp",
       "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
-      "module": "EGS52",
+      "module": "VGSNAG2",
       "service": 34,
       "did": "0x2001",
       "byte_offset": 3,
@@ -205,7 +230,7 @@
     {
       "id": "tcc_slip_rpm",
       "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
-      "module": "EGS52",
+      "module": "VGSNAG2",
       "service": 34,
       "did": "0x2002",
       "byte_offset": 3,
@@ -221,7 +246,7 @@
     {
       "id": "turbine_speed",
       "name": "Turbine Speed n2 (Turbinendrehzahl)",
-      "module": "EGS52",
+      "module": "VGSNAG2",
       "service": 34,
       "did": "0x2003",
       "byte_offset": 3,
@@ -237,7 +262,7 @@
     {
       "id": "output_speed",
       "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
-      "module": "EGS52",
+      "module": "VGSNAG2",
       "service": 34,
       "did": "0x2004",
       "byte_offset": 3,
