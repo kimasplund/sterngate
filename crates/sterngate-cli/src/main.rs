@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use sterngate_core::{CbfCatalog, VehicleProfile};
+use sterngate_core::{lookup_routine_name, CbfCatalog, Dtc, Language, VehicleProfile};
 use sterngate_hal::{SocketCanInterface, VehicleInterface, VirtualCanInterface};
 use sterngate_mcp::McpServer;
 use sterngate_p2p::P2pNode;
@@ -60,6 +60,10 @@ struct Cli {
     #[arg(long, default_value = "profiles/mercedes/w211_om646_edc16.json")]
     profile: PathBuf,
 
+    /// UI and diagnostic output language (en, de, sv)
+    #[arg(long, default_value = "en")]
+    lang: String,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -96,6 +100,9 @@ enum DiagCommands {
     Dtc {
         #[arg(long, default_value = "EDC16")]
         module: String,
+        /// Language for DTC descriptions (en, de, sv)
+        #[arg(long, default_value = "en")]
+        lang: String,
     },
     /// Snapshot of live powertrain telemetry
     Live,
@@ -115,6 +122,9 @@ enum DiagCommands {
         /// Routine sub-function (1=startRoutine, 2=stopRoutine, 3=requestResults)
         #[arg(long, default_value_t = 1)]
         sub_function: u8,
+        /// Language for routine descriptions (en, de, sv)
+        #[arg(long, default_value = "en")]
+        lang: String,
     },
 }
 
@@ -186,11 +196,19 @@ async fn main() -> Result<()> {
                 return Ok(());
             }
             Commands::Diag { action } => match action {
-                DiagCommands::Dtc { module } => {
-                    info!("Querying DTCs from {}...", module);
-                    println!(
-                        "DTC P0100: Mass Air Flow (MAF) Sensor Circuit Malfunction (Confirmed)"
-                    );
+                DiagCommands::Dtc { module, lang } => {
+                    let language: Language = lang.parse().unwrap_or_default();
+                    info!("Querying DTCs from {} (language: {})...", module, language);
+                    let mut d = Dtc::parse_iso15031(0x01, 0x00, 0x28, "EDC16");
+                    d.localize(language);
+                    let status_str = if d.confirmed {
+                        "Confirmed"
+                    } else if d.pending {
+                        "Pending"
+                    } else {
+                        "Stored"
+                    };
+                    println!("DTC {}: {} [{}]", d.code, d.description, status_str);
                     return Ok(());
                 }
                 DiagCommands::Live => {
@@ -211,20 +229,14 @@ async fn main() -> Result<()> {
                     module,
                     routine,
                     sub_function,
+                    lang,
                 } => {
+                    let language: Language = lang.parse().unwrap_or_default();
                     let r_id = u16::from_str_radix(routine.trim_start_matches("0x"), 16)?;
-                    let desc = match r_id {
-                        0xFF01 => "Fuel Pump Prime & Rail Bleed",
-                        0x0201 => "Reset NMK Injector Zero-Quantity Adaptations",
-                        0x0202 => "Trigger DPF Regeneration",
-                        0x0203 => "Throttle Valve / EGR Stop Relearn",
-                        0x0205 => "SBC Brake Hydraulic Bleed Routine",
-                        0xFF00 => "Erase Flash Memory Routine",
-                        _ => "Diagnostic Routine",
-                    };
+                    let desc = lookup_routine_name(r_id, language);
                     info!(
-                        "Executing {} (0x{:04X}) on {} (sub-function: {})...",
-                        desc, r_id, module, sub_function
+                        "Executing {} (0x{:04X}) on {} (sub-function: {}, language: {})...",
+                        desc, r_id, module, sub_function, language
                     );
                     let mut iface = VirtualCanInterface::new();
                     iface.open().await?;

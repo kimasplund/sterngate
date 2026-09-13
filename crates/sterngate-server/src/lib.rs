@@ -1,4 +1,4 @@
-pub mod dashboard;
+pub mod assets;
 pub mod recorder;
 pub mod routes;
 pub mod state;
@@ -165,5 +165,110 @@ mod tests {
             .unwrap();
         let resp = create_router(state).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_static_assets_and_i18n_endpoints() {
+        let mut iface = Box::new(VirtualCanInterface::new());
+        let _ = iface.open().await;
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher));
+
+        // 1. Root index.html
+        let req = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "text/html; charset=utf-8"
+        );
+
+        // 2. CSS asset
+        let req = Request::builder()
+            .uri("/static/css/style.css")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "text/css; charset=utf-8"
+        );
+
+        // 3. JS asset
+        let req = Request::builder()
+            .uri("/static/js/i18n.js")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "application/javascript; charset=utf-8"
+        );
+
+        // 4. Locales JSON assets
+        for lang in &["en", "de", "sv"] {
+            let req = Request::builder()
+                .uri(format!("/static/locales/{}.json", lang))
+                .body(Body::empty())
+                .unwrap();
+            let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+            assert_eq!(
+                resp.headers().get("content-type").unwrap(),
+                "application/json; charset=utf-8"
+            );
+        }
+
+        // 5. /api/v1/locales
+        let req = Request::builder()
+            .uri("/api/v1/locales")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let locales: Vec<String> = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(locales, vec!["en", "de", "sv"]);
+
+        // 6. Multilingual DTC query (/api/v1/dtc?lang=de)
+        let req = Request::builder()
+            .uri("/api/v1/dtc?lang=de")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 7. Localized routine execution with German description
+        let routine_payload = json!({
+            "module": "EDC16",
+            "routine_id_hex": "0xFF01",
+            "sub_function": 1,
+            "lang": "de"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/routine")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&routine_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let resp_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        let msg = resp_json["message"].as_str().unwrap();
+        assert!(
+            msg.contains("Kraftstoffpumpe") || msg.contains("Entlüftung"),
+            "Expected German routine name, got: {}",
+            msg
+        );
     }
 }

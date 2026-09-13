@@ -1,22 +1,32 @@
-use crate::dashboard::DASHBOARD_HTML;
+use crate::assets;
 use crate::state::AppState;
 use crate::ws::ws_telemetry_handler;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse},
+    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::sync::Arc;
-use sterngate_core::{Dtc, FlashPackageManifest, FlashProgress, TelemetrySnapshot, VehicleProfile};
+use sterngate_core::{
+    lookup_routine_name, Dtc, FlashPackageManifest, FlashProgress, Language, TelemetrySnapshot,
+    VehicleProfile,
+};
 use sterngate_protocol::UdsClient;
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
-        .route("/", get(dashboard_handler))
+        .route("/", get(assets::serve_index))
+        .route("/static/css/style.css", get(assets::serve_css))
+        .route("/static/js/envelope.js", get(assets::serve_envelope_js))
+        .route("/static/js/i18n.js", get(assets::serve_i18n_js))
+        .route("/static/js/app.js", get(assets::serve_app_js))
+        .route("/static/locales/en.json", get(assets::serve_locale_en))
+        .route("/static/locales/de.json", get(assets::serve_locale_de))
+        .route("/static/locales/sv.json", get(assets::serve_locale_sv))
         .route("/ws/telemetry", get(ws_telemetry_handler))
         .route("/api/v1/telemetry", get(get_telemetry))
         .route("/api/v1/dtc", get(get_dtcs))
@@ -33,11 +43,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/cbf/stats", get(get_cbf_stats))
         .route("/api/v1/cbf/search", get(search_cbf_catalog))
         .route("/api/v1/cbf/inspect/{ecu}", get(inspect_cbf_ecu))
+        .route("/api/v1/locales", get(get_available_locales))
         .with_state(state)
-}
-
-async fn dashboard_handler() -> Html<&'static str> {
-    Html(DASHBOARD_HTML)
 }
 
 pub async fn sample_telemetry(state: &AppState) -> TelemetrySnapshot {
@@ -111,13 +118,32 @@ async fn get_telemetry(State(state): State<Arc<AppState>>) -> Json<TelemetrySnap
     Json(snap)
 }
 
-async fn get_dtcs(State(state): State<Arc<AppState>>) -> Json<Vec<Dtc>> {
+#[derive(Deserialize, Default)]
+struct DtcQuery {
+    lang: Option<String>,
+}
+
+async fn get_dtcs(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<DtcQuery>,
+) -> Json<Vec<Dtc>> {
+    let lang: Language = query
+        .lang
+        .as_deref()
+        .unwrap_or("en")
+        .parse()
+        .unwrap_or_default();
+
     let mut iface = state.interface.lock().await;
     let mut uds = UdsClient::new(iface.as_mut(), 0x7E0, 0x7E8);
-    let dtcs = uds
+    let mut dtcs = uds
         .read_dtc_information(0x02, "EDC16")
         .await
         .unwrap_or_default();
+
+    for d in &mut dtcs {
+        d.localize(lang);
+    }
     Json(dtcs)
 }
 
@@ -282,6 +308,7 @@ struct RoutinePayload {
     routine_id_hex: Option<String>,
     sub_function: Option<u8>,
     option_record_hex: Option<String>,
+    lang: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -309,6 +336,13 @@ async fn execute_routine(
             }),
         );
     }
+
+    let lang: Language = payload
+        .lang
+        .as_deref()
+        .unwrap_or("en")
+        .parse()
+        .unwrap_or_default();
 
     let envelope = if let Some(env) = payload.envelope {
         env
@@ -392,15 +426,7 @@ async fn execute_routine(
                 .map(|b| format!("{:02X}", b))
                 .collect::<Vec<_>>()
                 .join(" ");
-            let routine_desc = match routine_id {
-                0xFF01 => "Fuel Pump Prime & Rail Bleed",
-                0x0201 => "Reset NMK Injector Zero-Quantity Adaptations",
-                0x0202 => "Trigger DPF Regeneration",
-                0x0203 => "Throttle Valve / EGR Stop Relearn",
-                0x0205 => "SBC Brake Hydraulic Bleed Routine",
-                0xFF00 => "Erase Flash Memory Routine",
-                _ => "Diagnostic Routine Control",
-            };
+            let routine_desc = lookup_routine_name(routine_id, lang);
             (
                 StatusCode::OK,
                 Json(RoutineResponse {
@@ -563,4 +589,8 @@ async fn get_all_profiles() -> impl IntoResponse {
         }
     }
     Json(Vec::<serde_json::Value>::new()).into_response()
+}
+
+async fn get_available_locales() -> impl IntoResponse {
+    Json(vec!["en", "de", "sv"])
 }

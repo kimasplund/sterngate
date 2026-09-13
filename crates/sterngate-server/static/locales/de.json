@@ -1,0 +1,105 @@
+{
+  "brand": {
+    "title": "Sterngate",
+    "subtitle": "Mercedes W211 / Universelles Fahrzeug-Gateway"
+  },
+  "badge": {
+    "connected": "VERBUNDEN (MOCK/CAN)",
+    "zero_trust": "Zero-Trust Geschützt"
+  },
+  "telemetry": {
+    "title": "Echtzeit-Antriebsstrang-Telemetrie",
+    "refresh": "Aktualisieren",
+    "rpm_label": "MOTORDREHZAHL",
+    "rpm_sub": "OM646 Leerlaufdrehzahl",
+    "coolant_label": "KÜHLMITTELTEMPERATUR",
+    "coolant_sub": "Sollwert: 85–92°C",
+    "trans_label": "GETRIEBEÖL (722.6)",
+    "trans_sub": "722.6 / NAG1 ATF-Füllstandsassistent",
+    "atf_warming": "AUFWÄRMEN ({temp}°C < 78°C) - NICHT BEREIT",
+    "atf_ready": "★ MESSBEREIT BEI {temp}°C: ÖLMESSSTAB PRÜFEN (SOLL: 54-65mm) ★",
+    "atf_overheat": "ABKÜHLEN LASSEN ({temp}°C > 82°C) - ÜBERHITZUNG",
+    "rail_label": "COMMON-RAIL-DRUCK",
+    "rail_sub": "EDC16 CDI Sollwert: 300–1600 bar",
+    "boost_label": "LADEDRUCK (MAP)",
+    "boost_sub": "Atmosphärisch + VTG-Ladedruck",
+    "tcc_label": "WANDLERSCHLUPF (WÜK)",
+    "tcc_sub": "Wandlerüberbrückungskupplung"
+  },
+  "cylinders": {
+    "title": "Zylinder-Laufruheregelung",
+    "cyl1": "Zyl 1",
+    "cyl2": "Zyl 2",
+    "cyl3": "Zyl 3",
+    "cyl4": "Zyl 4",
+    "threshold": "Toleranzgrenze: ±2.0 mm³/Hub. Werte außerhalb von ±3.0 deuten auf Injektorverschleiß oder Verkokung hin."
+  },
+  "recorder": {
+    "title": "Telemetrie-Flugschreiber",
+    "status_idle": "BEREIT",
+    "status_recording": "AUFZEICHNUNG",
+    "desc": "Kontinuierliche 10–50Hz CSV-Aufzeichnung für Rundstrecke, Zugbetrieb, Prüfstand und Straßentests.",
+    "placeholder": "Benutzerdefinierter Protokollname (optional)",
+    "btn_start": "Aufzeichnung starten",
+    "btn_stop": "Aufzeichnung stoppen",
+    "active_file": "Aktive Datei:",
+    "none": "Keine",
+    "captured_rows": "Erfasste Zeilen:",
+    "elapsed": "Verstrichen:"
+  },
+  "routines": {
+    "title": "Stellglied- & Diagnoseroutinen (UDS 0x31)",
+    "desc": "Fahrzeugroutinen über CommandEnvelope-Integritätsprüfung ausführen. Schnelle Stellglieder fördern Kraftstoff, setzen Lernwerte zurück und entlüften Hydraulik.",
+    "btn_prime": "⚡ Kraftstoffpumpe vorfördern (10s Entlüftung)",
+    "btn_nmk": "🔄 NMK Injektoranpassung zurücksetzen",
+    "btn_throttle": "📐 Drosselklappe/AGR Anschlag einlernen",
+    "btn_dpf": "🔥 DPF-Regeneration starten",
+    "btn_sbc": "🛑 SBC Bremsen-Hydraulik Entlüftung",
+    "ph_mod": "Steuergerät (EDC16)",
+    "ph_routine": "Routine-ID (z.B. 0xFF01)",
+    "ph_subfn": "SubFn (1=Start)",
+    "ph_opts": "Options-Hex (optional)",
+    "btn_execute": "Routine ausführen",
+    "ready_log": "[SYSTEM] Routinensteuerung bereit. Schnellstellglied wählen oder Routine-ID eingeben."
+  },
+  "dtc": {
+    "title": "Diagnose-Fehlercodes (DTC)",
+    "btn_scan": "Auslesen",
+    "btn_clear": "Fehlerspeicher löschen",
+    "col_code": "Code",
+    "col_module": "Steuergerät",
+    "col_desc": "Beschreibung",
+    "col_status": "Status",
+    "no_codes": "Keine Diagnosefehler gespeichert.",
+    "cleared": "Fehlerspeicher erfolgreich gelöscht.",
+    "active": "Aktiv",
+    "confirmed": "Bestätigt"
+  },
+  "flasher": {
+    "title": "Autonomer Sicherheits-Flasher (Entkoppelter Worker)",
+    "btn_stage": "Stagen & Flash starten",
+    "safety_notice": "Sicherheitsinterlock: Batteriespannung >= 12.5V, SHA256 & CRC geprüft, API-Sperre aktiv",
+    "ready_log": "[SYSTEM] Flasher-Hintergrunddienst bereit. Warte auf verifizierten Payload."
+  },
+  "cbf": {
+    "title": "Daimler Steuergeräte-Datenbank & CBF-Katalog-Explorer",
+    "stats_badge": "990 Steuergeräte / 2.055 CBFs",
+    "redundancy_badge": "41,2% REDUNDANZ INDEXIERT",
+    "search_ph": "Steuergerät oder Baureihe suchen (z.B. EGS, VGSNAG, W211, ME97, CR4)...",
+    "btn_search": "Suchen",
+    "col_name": "Steuergerät",
+    "col_proto": "Protokoll",
+    "col_can": "CAN (Tx / Rx)",
+    "col_date": "Neuestes Datum",
+    "col_copies": "Kopien / Versionen",
+    "col_dtcs": "Fehlercodes",
+    "col_action": "Aktion",
+    "btn_inspect": "Inspizieren",
+    "prompt": "Geben Sie oben ein Steuergerät oder eine Baureihe ein, um 990 Mercedes-Steuergeräte zu durchsuchen.",
+    "searching": "CBF-Datenbank wird durchsucht...",
+    "no_matches": "Keine passenden Steuergeräte im Katalog gefunden.",
+    "inspect_title": "Steuergeräte-Inspektion:",
+    "btn_close": "✕ Schließen",
+    "loading": "Inspektionsmetadaten werden geladen..."
+  }
+}

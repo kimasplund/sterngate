@@ -4,6 +4,7 @@ pub mod dtc;
 pub mod error;
 pub mod flash;
 pub mod frame;
+pub mod i18n;
 pub mod parameter;
 pub mod profile;
 
@@ -16,6 +17,7 @@ pub use dtc::Dtc;
 pub use error::{Result, SterngateError};
 pub use flash::{FlashPackageManifest, FlashProgress, FlashState, PreFlightReport};
 pub use frame::CanFrame;
+pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
 
@@ -147,5 +149,32 @@ mod tests {
         assert!(profiles
             .iter()
             .any(|p| p.profile_name == "mercedes_w211_om646_edc16"));
+    }
+
+    #[test]
+    fn test_multilingual_dtc_and_routine_lookups() {
+        // English
+        let dtc_en = Dtc::parse_iso15031(0x01, 0x00, 0x28, "EDC16");
+        assert_eq!(
+            dtc_en.description,
+            "Mass Air Flow (MAF) Sensor Circuit Malfunction"
+        );
+        let routine_en = lookup_routine_name(0xFF01, Language::En);
+        assert_eq!(routine_en, "Fuel Pump Prime & Rail Bleed");
+
+        // German
+        let dtc_de = Dtc::parse_iso15031_localized(0x01, 0x00, 0x28, "EDC16", Language::De);
+        assert_eq!(
+            dtc_de.description,
+            "Luftmassenmesser (LMM) Schaltkreis Fehlfunktion"
+        );
+        let routine_de = lookup_routine_name(0xFF01, Language::De);
+        assert_eq!(routine_de, "Kraftstoffpumpe vorfördern & Entlüftung");
+
+        // Swedish
+        let dtc_sv = Dtc::parse_iso15031_localized(0x01, 0x00, 0x28, "EDC16", Language::Sv);
+        assert_eq!(dtc_sv.description, "Luftmassemätare (LMM) Strömkretsfel");
+        let routine_sv = lookup_routine_name(0xFF01, Language::Sv);
+        assert_eq!(routine_sv, "Bränslepump grundning och urluftning");
     }
 }
