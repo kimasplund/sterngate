@@ -55,11 +55,15 @@ crates/
    - `CanFrame`: 11-bit standard and 29-bit extended frames with microsecond timestamps.
    - `VehicleProfile`: JSON-deserializable profile describing ECU addresses, DIDs, scaling formulas, and units.
    - `FlashPackage`: Manifest structure for staging firmware with target hardware and checksums.
+   - `CascadeWatchdog`: Autonomous detection engine for 13 notorious Mercedes-Benz cascades of death.
+   - `CompressorProtectionGuard` & `SuspensionLeakDetector`: Thermal watchdog (40s auto-cutoff) and pneumatic leak diagnostics.
+   - `VehicleGarage` & `DecodedVin`: Local Git-backed per-vehicle configuration tracking and VIN decoder.
+   - `DriveBenchmark`: High-frequency drive telemetry sampling and A/B comparative benchmark analysis.
 
 2. **`sterngate-hal`**:
    - `VehicleInterface`: The unified asynchronous trait (`send`, `recv`, `open`, `close`, `set_filter`).
    - `SocketCanInterface`: Native Linux CAN interface (`can0`, `can1`, `vcan0`).
-   - `VirtualCanInterface`: In-memory emulator that simulates Mercedes W211 Central Gateway (N93), EDC16 engine, and EGS52 transmission for offline tests and development.
+   - `VirtualCanInterface`: In-memory emulator that simulates Mercedes W211 Central Gateway (N93), EDC16 engine, EGS52 transmission, and ABC/ENR suspension for offline tests.
    - `J2534Interface`: PassThru API bridge for hardware like Tactrix OpenPort 2.0.
 
 3. **`sterngate-protocol`**:
@@ -67,19 +71,20 @@ crates/
    - `UdsClient`: Standard ISO 14229 diagnostics client.
    - `SeedKeyRegistry`: Algorithmic solvers (Daimler standard Level 01, Level 03, Level 0B) without proprietary Windows DLLs.
    - `FlashingWorker`: Decoupled Tokio state machine managing erase, download, transfer, exit, and CRC routines.
+   - `VehicleScanner`: Multi-ECU gateway scanner, ENR compressor control, and ABC hydraulic surge limiter.
 
 4. **`sterngate-p2p`**:
    - Wraps Iroh for P2P QUIC communication between `--client` (car-side SBC) and `--server` (technician machine).
    - Generates and dials `NodeTicket` strings.
 
 5. **`sterngate-server`**:
-   - Exposes REST routes (`/api/v1/telemetry`, `/api/v1/dtc`, `/api/v1/coding`, `/api/v1/flash`).
+   - Exposes REST routes (`/api/v1/telemetry`, `/api/v1/dtc`, `/api/v1/coding`, `/api/v1/flash`, `/api/v1/vehicles`, `/api/v1/analyze/cascades`, `/api/v1/abc/control`).
    - Streams live parameters over WebSockets at 20–50 Hz.
-   - Serves the embedded single-page dashboard at `http://localhost:8080`.
+   - Serves the embedded single-page dashboard at `http://localhost:8080` localized in English, German, and Swedish.
 
 6. **`sterngate-mcp`**:
    - Implements JSON-RPC 2.0 stdio Model Context Protocol.
-   - Enables AI agents to read DTCs, inspect live telemetry, check vehicle profiles, and run pre-flash checks.
+   - Enables AI agents to read DTCs, inspect live telemetry, check vehicle profiles, evaluate 13 cascades of death, actuate compressor/ABC safety guards, and run pre-flash checks.
 
 7. **`sterngate-cli`**:
    - Clap CLI interface unifying all operational modes:
@@ -88,9 +93,10 @@ crates/
      * `sterngate --server --ticket <TICKET>`: Remote technician node.
      * `sterngate mcp`: Model Context Protocol server.
      * `sterngate mock`: Virtual simulation mode for zero-hardware testing.
-     * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities (dtc, live, clear, routine).
+     * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities (dtc, live, clear, routine, scan).
      * `sterngate ecu <subcommand>`: 990-ECU diagnostic catalog index (stats, search, inspect).
      * `sterngate profile <subcommand>`: Vehicle profile management (list, inspect).
+     * `sterngate analyze <subcommand>`: Predictive analytics and containment (suspension, compare, cascades, abc).
 
 ---
 

@@ -10,11 +10,19 @@
 
 ## Key Capabilities
 
+- **13 Mercedes Cascades of Death Monitored**: Autonomous early warning watchdog that detects failing $1.50–$160 wear parts before they cause catastrophic $2,000–$10,000+ mechanical or electrical destruction (SBC accumulator, Black Death washers, pilot bushing ATF wicking, TCC slip, DPF/M55 swirl motor, camshaft magnets, air suspension compressor burnout, ABC pulsation damper surge, ESL steering lock seizure, M272/M273 balance shaft wear, Valeo radiator glycol contamination, SAM water ingress, and OM642 oil cooler starvation).
+- **Active Hardware Safety Guards**: Software-controlled kill-switches and pressure limiters:
+  * **ENR / AIRMATIC Compressor Guard**: Autonomous thermal watchdog with 40s continuous run cutoff, 180s cooldown, and Routine `0x0210` safe mode relay disconnect.
+  * **ABC Hydraulic Surge Limiter**: Routine `0x0220` pressure dump (reduce 200 bar to 120 bar safe fallback) and Routine `0x0221` strut isolation valve lock to prevent line explosion over hot exhaust.
+- **Vehicle Garage & Per-Car Git Configuration Tracking**: Automatically identifies and decodes VINs (e.g. S211 Estate OM646), creates an isolated Git repository under `data/vehicles/<VIN>/`, and commits every diagnostic scan, live vital snapshot, and variant coding session with full history and rollback capability.
+- **In-Flight Drive Benchmarking & A/B Comparative Analysis**: High-frequency drive telemetry sampling (consumption, boost, rail pressure, coolant, TCC lockup slip) with mathematical diesel consumption modeling and A/B comparison to verify if tuning, adaptations, or hardware changes were beneficial.
+- **21st-Century Compact 990-ECU Catalog**: Compact JSON routing index (1,001 lines, 170 KB) mapping CAN Tx/Rx IDs, protocols (UDS/KWP2000), functional IDs, DTC counts, and multi-chassis platforms without legacy binary file bloat.
+- **Multilingual Diagnostics**: Fully localized in English (`en`), German (`de`, authentic Daimler OEM terms), and Swedish (`sv`) across all DTCs, routines, parameters, CLI output, and web dashboard.
 - **Beyond Generic OBD-II**: Interrogates manufacturer-specific DIDs through the vehicle's Central Gateway (CGW) using UDS (ISO 14229) and KWP2000 (ISO 14230). Read 722.6 automatic transmission fluid temperatures (for the crucial 80°C level check), cylinder-by-cylinder smooth running injector balances, torque converter clutch slip, and Airmatic line pressures.
 - **Universal Modularity**: Decouples vehicle profiles from executable code. Profiles are stored in declarative JSON schemas under `profiles/`. Switch between a Mercedes W211 OM646 CDI, a VAG Golf Mk6 2.0 TDI (EDC17 + DSG), or a BMW E90 3.0d (DDE6) without recompiling the binary.
 - **Decoupled Safe Flashing**: Atomic local file staging, strict pre-flight safety gates (voltage $\ge 12.5\text{ V}$, SHA256 & Bosch CRC32 verification, HW/SW calibration match), and a detached Tokio worker immune to browser closes or network drops.
 - **P2P Remote Operations (Iroh)**: Integrated peer-to-peer QUIC tunneling allows an end customer to plug the device into their OBD port and share a short Node Ticket with a remote technician anywhere in the world—punching through carrier-grade NATs without port forwarding.
-- **Built-in Model Context Protocol (MCP) Server**: Exposes diagnostic routines, live telemetry snapshots, fault code scanning, and flash safety verification directly to AI agents.
+- **Built-in Model Context Protocol (MCP) Server**: Exposes diagnostic routines, live telemetry snapshots, fault code scanning, 13-cascade checks, safety limiters, and flash safety verification directly to AI agents.
 - **Hardware Abstraction Layer (HAL)**: Native support for Linux SocketCAN (`can0`, CANable, gs_usb, Candlelight, SPI MCP2518FD), SAE J2534 PassThru (Tactrix OpenPort 2.0), and zero-hardware virtual simulation.
 
 ---
@@ -93,6 +101,113 @@ Connects over end-to-end encrypted QUIC directly into the car's gateway and serv
 sterngate mcp
 ```
 Communicates over standard input/output (JSON-RPC 2.0).
+
+---
+
+## 5. Mercedes-Benz 'Cascade of Death' Early Warning Watchdog
+
+Automotive components in Mercedes-Benz vehicles (particularly W211, W219, W220, W204, W164) often fail in multi-stage cascading chains where a neglected $1.50–$160 wear item triggers multi-thousand-dollar catastrophic damage. Sterngate actively monitors **13 canonical failure chains**:
+
+| # | Monitored Failure Chain | Root Cause Wear Item | Catastrophic Destruction ($$$$) | Detection Heuristics | Active Containment Strategy |
+| :---: | :--- | :--- | :--- | :--- | :--- |
+| **1** | **SBC Hydraulic Accumulator Exhaustion** | Nitrogen accumulator `A 000 430 26 94` ($120) | Pump motor burnout -> Total loss of power brake assist ($2,500) | Pre-charge $<70\text{ bar}$ (warning), $<55\text{ bar}$ (critical); pump duty cycle $\ge 75\%$ of pedal taps. | Accumulator pre-charge watchdog; bleeder calibration routines. |
+| **2** | **Common Rail Injector 'Black Death'** | Copper crush washer `A 611 017 00 60` ($1.50) | Blow-by carbon cements injector into cylinder head; melts wiring harness ($1,800–$3,500) | Smooth-running balance $>+3.5\text{ mm}^3/\text{hub}$; rail pressure bleed down rate. | Early warning before carbon hardens; ceramic anti-seize service alert. |
+| **3** | **722.6 Pilot Bushing ATF Wicking** | 13-pin connector O-rings `A 203 540 02 53` ($8) | Capillary wicking floods EGS52 TCU with ATF; shorts solenoid drivers ($1,500) | ATF temperature jump $>20^\circ\text{C}$ in $<5\text{s}$ with speed sensor jitter (`Y3/6n2`/`Y3/6n3`). | Diagnostic warning to replace $8 adapter plug before TCU board damage occurs. |
+| **4** | **722.6 Torque Converter Lockup Clutch Slip** | PWM lockup solenoid `A 240 270 17 00` ($65) | Friction lining sheds into valve body spools and planetary gearsets ($2,800) | TCC slip $>30\text{ RPM}$ during commanded lockup in 3rd–5th gears. | Alerts to swap PWM solenoid before friction paper strips down to bare steel. |
+| **5** | **DPF Differential Drift -> M55 Swirl Motor Short** | Drifting diff pressure sensor `A 006 153 95 28` ($45) | Backpressure blows turbo oil seal; oil pools onto M55 motor, blowing Fuse 54 ($3,200) | Flat pressure curve ($<15\text{ mbar}$ at $>3000\text{ RPM}$) or regen distance $>1000\text{ km}$. | Pressure plausibility guard prevents highway engine stalls. |
+| **6** | **Camshaft Magnet Oil Wicking** | Cam solenoid seals `A 272 051 01 77` ($30) | Oil wicks through harness into Bosch ME9.7 ECU motherboard & O2 sensors ($2,400) | 5V reference bus dip with simultaneous O2 sensor heater resistance drift. | Prompts immediate installation of sacrificial blocking pigtails (`A 271 150 27 33`). |
+| **7** | **Air Suspension Compressor Burnout (S211 ENR / W211 AIRMATIC)** | Leaking rear bellow `A 211 320 09 25` ($140) | Continuous run melts PTFE seal; $>30\text{A}$ current welds Hella relay closed ($1,200) | Continuous run $>40\text{s}$, drop rate $>4\text{ mm/h}$, duty cycle $>25\%$. | **Autonomous Thermal Watchdog & Software Kill-Switch** (Routine `0x0210`). |
+| **8** | **ABC (Active Body Control) Hydraulic Surge** | Nitrogen damper sphere `A 220 327 02 15` (~$160) | Undamped 300+ bar shockwaves fracture tandem pump shaft and burst lines over hot exhaust ($8,000–$10,000) | Line pressure ripple $>15\text{ bar}$ (warning), $>25\text{ bar}$ (critical). | **Active ABC Limiter**: Software command via Routine `0x0220` (system pressure dump to 120 bar safe mode) + Routine `0x0221` (lock strut isolation valves). |
+| **9** | **Electronic Steering Lock (ESL / ELV) DC Motor Seizure** | Johnson/Nichibo FC-280SC micro-motor brushes ($5) | Motor stalls mid-stroke, NEC micro blows security bit, Terminal 15/50 permanently inhibited ($2,000+) | Bolt unlock latency $>250\text{ms}$ (warning), $>500\text{ms}$ (critical lockout). | **Critical Directive**: Explicitly instructs owner **NOT TO REMOVE KEY** once latency threshold breaches, enabling plug-and-play emulator installation while unlocked. |
+| **10** | **M272/M273 Balance Shaft & Idler Sprocket Wear** | Soft sintered drive sprocket `A 272 050 08 04` ($60) | Teeth grind smooth, chain skips timing, valve-to-piston collision ($6,000+) | Camshaft phase angle deviation $>1.5^\circ$ (warning), $>3.2^\circ$ (imminent jump) at hot idle ($80^\circ\text{C}$ coolant). | Timing phase deviation watchdog flags tooth erosion before permanent DTC 1200/1208 and collision. |
+| **11** | **Valeo Radiator Glycol Intrusion into 722.6 Transmission** | Crimp seam defect in internal cooler ($0 part of radiator) | Glycol dissolves water-based glue on friction plates; linings peel into valve body ($3,500) | Harmonic TCC slip micro-oscillation ($4–12\text{ Hz}$, $>15\text{ RPM}$ warning, $>35\text{ RPM}$ critical). | Prompts immediate cuvette glycol test (`A 001 988 84 44`) and fitting an external air-to-oil transmission cooler. |
+| **12** | **Cowl/Sunroof Drain Clog -> SAM Water Ingress** | Rubber duckbill drain valves clogged with leaves ($0 to clean) | Water overflows into SAM, electrolytic PCB corrosion, MOSFET bridge latches, 3–5A parasitic drain ($1,500/SAM) | Interior CAN-B bus sleep delay $>45\text{s}$ (warning), $>120\text{s}$ (critical) or standby parasitic current $>0.25\text{A}$. | **Deep Sleep Verification Guard**: Audits gateway sleep registers during shutdown and flags persistent wake-up loops. |
+| **13** | **OM642 V-Valley Oil Cooler Seal Starvation** | Orange silicone seals `A 642 188 01 80` bake brittle ($4.50) | Highway high-speed oil depletion out bellhousing weep hole, spun rod bearings ($7,500+) | Highway dynamic oil level consumption rate $>0.10\text{ mm/100km}$ (warning), $>0.25\text{ mm/100km}$ (critical). | **Highway Oil Loss Alarm**: Detects rapid drop before dashboard warning lamp triggers, recommending purple Viton seals (`A 642 188 05 80`). |
+
+```bash
+# Evaluate live vehicle vitals against all 13 cascades
+sterngate analyze cascades
+
+# Evaluate custom telemetry JSON
+sterngate analyze cascades --input custom_vitals.json
+```
+
+---
+
+## 6. Active Hardware Safety Guards & Containment
+
+Sterngate provides direct software containment routines allowing owners and technicians to protect vehicles from cascading failures while driving:
+
+### A. S211 Air Suspension Compressor Protection
+```bash
+# Inhibit compressor to prevent motor burnout & relay welding during leaks (Routine 0x0210)
+sterngate analyze suspension --inhibit
+
+# Set suspension into Workshop / Transport Mode (Routine 0x0211)
+sterngate analyze suspension --workshop
+
+# Restore normal automatic pneumatic self-leveling (Routine 0x0212)
+sterngate analyze suspension --restore
+```
+
+### B. ABC (Active Body Control) Hydraulic Surge Limiter
+```bash
+# Dump system pressure to 120 bar safe fallback to protect lines & pump from 300+ bar surges (Routine 0x0220)
+sterngate analyze abc --dump
+
+# Lock strut level isolation valves to contain fluid loss and line burst over exhaust (Routine 0x0221)
+sterngate analyze abc --lock
+
+# Restore normal active dynamic body control (Routine 0x0222)
+sterngate analyze abc --restore
+```
+
+---
+
+## 7. Vehicle Garage & Git Configuration Rollbacks
+
+Every vehicle scanned by Sterngate is saved into `data/vehicles/<VIN>/`:
+- Automatically decodes the VIN (manufacturer, model, chassis, powertrain, country of origin).
+- Maintains a dedicated Git repository tracking diagnostic quick scan results, live vitals history, and variant coding changes (`coding/<MODULE>.coding.hex`).
+- Allows instant forensic rollback of coding parameters using standard Git semantics:
+```bash
+# Perform a comprehensive gateway quick scan and commit to garage
+sterngate diag scan --save
+
+# List all tracked garage vehicles
+sterngate diag garage
+
+# Inspect configuration history and git log for a vehicle
+sterngate diag garage --vin WDB2112061A892341
+```
+
+---
+
+## 8. In-Flight Drive Telemetry & A/B Benchmark Analysis
+
+Sterngate computes instantaneous fuel consumption rate ($L/100\text{km}$) and compares two drive logs to verify if maintenance, new solenoids, or tuning modifications were beneficial:
+```bash
+# Run A/B comparative benchmark between two drive telemetry runs
+sterngate analyze compare
+```
+
+---
+
+## 9. Daimler 990-ECU Diagnostic Catalog Explorer
+
+Sterngate features a compact 21st-century diagnostic routing catalog (`data/ecu_catalog.json`) indexing 990 canonical Mercedes-Benz ECUs:
+```bash
+# View summary statistics of the ECU catalog
+sterngate ecu stats
+
+# Search for ECUs by name or chassis platform
+sterngate ecu search EGS
+sterngate ecu search W211
+
+# Inspect detailed diagnostic routing for an ECU
+sterngate ecu inspect EGS52
+sterngate ecu inspect VGSNAG2
+```
 
 ---
 
