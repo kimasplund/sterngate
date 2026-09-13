@@ -459,12 +459,45 @@ mod tests {
             .uri("/api/v1/suspension/compressor/status")
             .body(Body::empty())
             .unwrap();
-        let resp = create_router(state).oneshot(req).await.unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
             .await
             .unwrap();
         let status_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert!(status_res["is_inhibited"].as_bool().unwrap());
+
+        // 9. GET /api/v1/analyze/cascades
+        let req = Request::builder()
+            .uri("/api/v1/analyze/cascades")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let cascade_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(cascade_res["total_cascades_checked"], 7);
+
+        // 10. POST /api/v1/analyze/cascades with critical danger input
+        let danger_payload = json!({
+            "sbc_accumulator_pressure_bar": 48.0,
+            "max_cylinder_balance_trim_mm3": 4.2
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/analyze/cascades")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&danger_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let danger_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(danger_res["overall_severity"], "ImminentDanger");
+        assert!(danger_res["alerts"].as_array().unwrap().len() >= 2);
     }
 }

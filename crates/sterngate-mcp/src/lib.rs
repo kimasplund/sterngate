@@ -353,4 +353,65 @@ mod tests {
             "NORMAL"
         );
     }
+
+    #[tokio::test]
+    async fn test_mcp_check_cascade_warnings_tool() {
+        // 1. Healthy check
+        let res_healthy = tools::handle_tool_call(
+            "sterngate_check_cascade_warnings",
+            &json!({
+                "sbc_accumulator_pressure_bar": 78.0,
+                "max_cylinder_balance_trim_mm3": 0.8
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            res_healthy
+                .get("overall_severity")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "Normal"
+        );
+        assert_eq!(
+            res_healthy
+                .get("total_cascades_checked")
+                .unwrap()
+                .as_u64()
+                .unwrap(),
+            7
+        );
+
+        // 2. Imminent danger check
+        let res_danger = tools::handle_tool_call(
+            "sterngate_check_cascade_warnings",
+            &json!({
+                "sbc_accumulator_pressure_bar": 45.0,
+                "max_cylinder_balance_trim_mm3": 4.5,
+                "compressor_continuous_run_sec": 48.0
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            res_danger
+                .get("overall_severity")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "ImminentDanger"
+        );
+        let alerts = res_danger.get("alerts").unwrap().as_array().unwrap();
+        assert!(alerts.len() >= 3);
+
+        // 3. Resource check
+        let catalog_res = resources::read_resource("sterngate://cascades/catalog").unwrap();
+        assert_eq!(
+            catalog_res.get("total_cascades").unwrap().as_u64().unwrap(),
+            7
+        );
+    }
 }

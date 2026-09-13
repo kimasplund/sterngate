@@ -6,8 +6,9 @@ use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use sterngate_core::{
-    lookup_routine_name, DriveBenchmark, DriveSummary, Dtc, EcuCatalog, Language,
-    SuspensionLeakDetector, SuspensionSample, VehicleGarage, VehicleProfile,
+    lookup_routine_name, CascadeSeverity, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark,
+    DriveSummary, Dtc, EcuCatalog, Language, SterngateError, SuspensionLeakDetector,
+    SuspensionSample, VehicleGarage, VehicleProfile,
 };
 use sterngate_hal::{SocketCanInterface, VehicleInterface, VirtualCanInterface};
 use sterngate_mcp::McpServer;
@@ -199,6 +200,12 @@ enum AnalyzeCommands {
         /// Modified drive run CSV log (Run B)
         #[arg(long)]
         run_b: Option<PathBuf>,
+    },
+    /// Evaluate vehicle vitals against known Mercedes-Benz 'Cascade of Death' failure modes
+    Cascades {
+        /// Optional path to telemetry JSON input
+        #[arg(long)]
+        input: Option<PathBuf>,
     },
 }
 
@@ -609,6 +616,86 @@ async fn main() -> Result<()> {
                     println!("\n  Comparative Details:");
                     for d in &cmp.details {
                         println!("    - {}", d);
+                    }
+                    return Ok(());
+                }
+                AnalyzeCommands::Cascades { input } => {
+                    let cascade_input: CascadeTelemetryInput = if let Some(path) = input {
+                        let content = std::fs::read_to_string(&path)?;
+                        serde_json::from_str(&content).map_err(|e| {
+                            SterngateError::Internal(format!("Invalid cascade JSON: {}", e))
+                        })?
+                    } else {
+                        // Live vehicle vitals baseline
+                        CascadeTelemetryInput {
+                            sbc_accumulator_pressure_bar: Some(78.0),
+                            sbc_pump_per_brake_ratio: Some(0.18),
+                            sbc_operating_cycles: Some(125_000),
+                            sbc_max_cycles: Some(300_000),
+                            max_cylinder_balance_trim_mm3: Some(0.8),
+                            cylinder_balance_spread_mm3: Some(1.2),
+                            rail_pressure_bleed_rate_bar_sec: Some(12.0),
+                            atf_temp_rapid_jump_deg_c: Some(0.5),
+                            transmission_speed_sensor_jitter: Some(false),
+                            tcc_slip_rpm: Some(8.0),
+                            tcc_lockup_commanded: Some(true),
+                            dpf_diff_pressure_mbar: Some(35.0),
+                            engine_rpm: Some(750.0),
+                            distance_since_dpf_regen_km: Some(420.0),
+                            cam_magnet_oil_detected: Some(false),
+                            o2_sensor_heater_resistance_drift: Some(false),
+                            five_volt_ref_bus_dip: Some(false),
+                            compressor_continuous_run_sec: Some(0.0),
+                            compressor_duty_cycle_pct: Some(0.0),
+                            suspension_height_drop_rate_mm_h: Some(0.6),
+                            active_dtcs: vec![],
+                        }
+                    };
+
+                    let report = CascadeWatchdog::evaluate(&cascade_input);
+
+                    println!("============================================================");
+                    println!("  Mercedes-Benz 'Cascade of Death' Early Warning Evaluation");
+                    println!("============================================================");
+                    println!(
+                        "  • Overall Risk Status:         {:?}",
+                        report.overall_severity
+                    );
+                    println!(
+                        "  • Monitored Cascades Evaluated: {}",
+                        report.total_cascades_checked
+                    );
+                    println!("  • Active Warning Triggers:     {}", report.alerts.len());
+                    println!();
+
+                    if report.alerts.is_empty() {
+                        println!("  ✅ ALL SYSTEMS HEALTHY");
+                        println!(
+                            "     SBC Accumulator, Injector Copper Washers, 722.6 Pilot Bushing,"
+                        );
+                        println!(
+                            "     TCC Lockup Clutch, DPF/M55 Swirl Flaps, Camshaft Magnets, and"
+                        );
+                        println!(
+                            "     Air Suspension Compressor are within factory operating limits."
+                        );
+                    } else {
+                        for alert in &report.alerts {
+                            let icon = match alert.severity {
+                                CascadeSeverity::Normal => "✅",
+                                CascadeSeverity::Watchlist => "⚠️",
+                                CascadeSeverity::ImminentDanger => "🚨",
+                            };
+                            println!("  {} {} [{:?}]", icon, alert.name, alert.severity);
+                            println!("     Evidence:    {}", alert.telemetry_evidence);
+                            println!("     Root Cause:  {}", alert.root_cause_part);
+                            println!("     Destruction: {}", alert.catastrophic_outcome);
+                            println!("     Action:      {}", alert.recommendation);
+                            if !alert.oem_part_numbers.is_empty() {
+                                println!("     Parts:       {}", alert.oem_part_numbers.join(", "));
+                            }
+                            println!();
+                        }
                     }
                     return Ok(());
                 }

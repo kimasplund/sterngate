@@ -89,9 +89,27 @@
       </div>
       <div style="display: flex; gap: 0.5rem; margin-bottom: 0.85rem; flex-wrap: wrap;">
         <button class="btn btn-primary" onclick="scanVehicleQuick()" data-i18n="garage.btn_scan">⚡ Interrogate Vehicle (Quick Scan)</button>
+        <button class="btn" onclick="checkCascadesLive()" data-i18n="garage.btn_cascades" style="border-color: #d29922; color: #e3b341;">⚠️ Check Cascades of Death</button>
         <button class="btn" onclick="loadGarageHistory()" data-i18n="garage.btn_history">📜 View Git History</button>
         <button class="btn" onclick="analyzeSuspensionLive()" data-i18n="garage.btn_suspension">🎈 S211 Air Suspension Leak Test</button>
         <button class="btn" onclick="compareDriveBenchmarkLive()" data-i18n="garage.btn_compare">📈 A/B Drive Benchmark</button>
+      </div>
+
+      <!-- Mercedes 'Cascade of Death' Early Warning Center -->
+      <div id="cascade-warning-card" style="background: rgba(30, 20, 15, 0.6); border: 1px solid rgba(248, 81, 73, 0.4); border-radius: 6px; padding: 0.85rem; margin-bottom: 0.85rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <b style="color: #f85149;" data-i18n="cascades.title">🚨 Mercedes 'Cascade of Death' Early Warning Center</b>
+            <span id="cascade-status-badge" class="badge badge-ready">ALL SYSTEMS NORMAL</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">
+            <span data-i18n="cascades.subtitle">7 Notorious Cascades Monitored</span>
+          </div>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem;" data-i18n="cascades.desc">
+          Detects inexpensive $2–$15 wear items (O-rings, copper washers, nitrogen spheres) before they snowball into $2,500+ destroyed ECUs or mechanical lockouts.
+        </div>
+        <div id="cascade-alerts-container" style="display: none; font-size: 0.85rem; line-height: 1.5; margin-top: 0.5rem;"></div>
       </div>
 
       <!-- S211 Air Suspension Compressor Protection & Kill-Switch -->

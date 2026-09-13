@@ -504,6 +504,20 @@ impl CompressorProtectionGuard {
         }
     }
 
+    /// Return continuous run seconds of compressor if active or tripped
+    pub fn current_run_seconds(&self) -> f64 {
+        match &self.current_state {
+            CompressorOperationalState::Running {
+                continuous_run_seconds,
+            } => *continuous_run_seconds,
+            CompressorOperationalState::ThermalCutoffTriggered {
+                continuous_run_seconds,
+                ..
+            } => *continuous_run_seconds,
+            _ => 0.0,
+        }
+    }
+
     /// Update with live CAN telemetry sample
     pub fn update(&mut self, timestamp_ms: u64, is_active: bool) -> CompressorGuardAction {
         // If manually inhibited, remain inhibited

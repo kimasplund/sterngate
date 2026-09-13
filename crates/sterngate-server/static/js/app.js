@@ -691,10 +691,98 @@ async function pollCompressorStatus() {
   } catch (e) {}
 }
 
+async function checkCascadesLive() {
+  const badge = document.getElementById('cascade-status-badge');
+  const container = document.getElementById('cascade-alerts-container');
+  if (!badge || !container) return;
+
+  badge.textContent = 'EVALUATING CASCADES...';
+  badge.className = 'badge badge-voltage';
+  container.style.display = 'block';
+  container.innerHTML = '<div style="color: var(--text-muted);">Querying live powertrain and chassis vitals for cascading failure signatures...</div>';
+
+  try {
+    const res = await fetch('/api/v1/analyze/cascades');
+    const report = await res.json();
+
+    if (report.overall_severity === 'ImminentDanger') {
+      badge.textContent = '🚨 IMMINENT CASCADE OF DEATH DETECTED!';
+      badge.className = 'badge badge-recording pulse';
+    } else if (report.overall_severity === 'Watchlist') {
+      badge.textContent = '⚠️ PREVENTIVE WATCHLIST ITEMS DETECTED';
+      badge.className = 'badge badge-voltage';
+    } else {
+      badge.textContent = '✅ ALL SYSTEMS HEALTHY (7 CASCADES MONITORED)';
+      badge.className = 'badge badge-ready';
+    }
+
+    if (!report.alerts || report.alerts.length === 0) {
+      container.innerHTML = `
+        <div style="background: rgba(46, 160, 67, 0.15); border: 1px solid rgba(46, 160, 67, 0.4); border-radius: 4px; padding: 0.75rem; color: #3fb950;">
+          <b>✓ Zero Active Cascade Failures:</b> SBC accumulator pressure, common rail injector balance, 722.6 pilot bushing wicking, TCC lockup slip, DPF differential pressure, camshaft magnets, and air suspension compressor are all within nominal operating tolerances.
+        </div>
+      `;
+    } else {
+      let html = '<div style="display: flex; flex-direction: column; gap: 0.6rem;">';
+      for (const alert of report.alerts) {
+        const isCritical = alert.severity === 'ImminentDanger';
+        const borderColor = isCritical ? '#f85149' : '#d29922';
+        const bgColor = isCritical ? 'rgba(248, 81, 73, 0.15)' : 'rgba(210, 153, 34, 0.15)';
+        const icon = isCritical ? '🚨' : '⚠️';
+
+        html += `
+          <div style="background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 4px; padding: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.5rem;">
+              <b style="color: ${isCritical ? '#f85149' : '#e3b341'};">${icon} ${alert.name} [${alert.severity}]</b>
+              <span style="font-size: 0.75rem; font-family: monospace; color: var(--accent);">${alert.oem_part_numbers ? alert.oem_part_numbers.join(', ') : ''}</span>
+            </div>
+            <div style="font-size: 0.8rem; margin-bottom: 0.3rem;"><b>Telemetry Evidence:</b> <span style="color: var(--text);">${alert.telemetry_evidence}</span></div>
+            <div style="font-size: 0.8rem; margin-bottom: 0.3rem;"><b>Inexpensive Root Cause:</b> <span style="color: var(--warning);">${alert.root_cause_part}</span></div>
+            <div style="font-size: 0.8rem; margin-bottom: 0.3rem;"><b>Catastrophic Destruction:</b> <span style="color: #f85149;">${alert.catastrophic_outcome}</span></div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);"><b>Immediate Action:</b> ${alert.recommendation}</div>
+          </div>
+        `;
+      }
+      html += '</div>';
+      container.innerHTML = html;
+    }
+  } catch (err) {
+    container.innerHTML = `<div style="color: #f85149;">Error evaluating cascades: ${err.message}</div>`;
+  }
+}
+
+async function pollCascadeStatus() {
+  try {
+    const res = await fetch('/api/v1/analyze/cascades');
+    const report = await res.json();
+    const badge = document.getElementById('cascade-status-badge');
+    if (!badge) return;
+
+    if (report.overall_severity === 'ImminentDanger') {
+      badge.textContent = '🚨 IMMINENT CASCADE DETECTED!';
+      badge.className = 'badge badge-recording pulse';
+      const container = document.getElementById('cascade-alerts-container');
+      if (container && container.style.display === 'none') {
+        checkCascadesLive(); // Auto-expand if critical
+      }
+    } else if (report.overall_severity === 'Watchlist') {
+      badge.textContent = '⚠️ WATCHLIST ITEMS DETECTED';
+      badge.className = 'badge badge-voltage';
+    } else {
+      badge.textContent = 'ALL SYSTEMS NORMAL';
+      badge.className = 'badge badge-ready';
+    }
+  } catch (e) {}
+}
+
 // Initial triggers
 document.addEventListener('DOMContentLoaded', () => {
   setupTelemetryWebSocket();
   pollRecorderStatus();
   pollCompressorStatus();
+  pollCascadeStatus();
+  setInterval(pollCompressorStatus, 5000);
+  setInterval(pollCascadeStatus, 10000);
 });
+
 

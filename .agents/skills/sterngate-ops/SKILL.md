@@ -283,6 +283,29 @@ curl -s -X POST http://localhost:8080/api/v1/analyze/compare \
   }' | jq .
 ```
 
+### Mercedes-Benz 'Cascade of Death' Early Warning System
+Detects inexpensive $2–$15 failing wear items before they snowball into $2,500+ destroyed ECUs, welded relays, or transmission lockouts:
+1. **SBC Hydraulic Accumulator Exhaustion**: Accumulator pre-charge pressure ($<70\text{ bar}$ warning / $<55\text{ bar}$ critical) and pump duty cycle per brake application.
+2. **Common Rail Injector 'Black Death'**: Cylinder smooth-running balance ($>+3.5\text{ mm}^3/\text{hub}$) to prevent carbon cementing and harness melting.
+3. **722.6 Pilot Bushing ATF Wicking**: ATF temperature spikes ($>20^\circ\text{C}$ jump) and speed sensor jitter to prevent EGS52 TCU flooding.
+4. **722.6 TCC Lockup Clutch Shredding**: TCC slip ($>30\text{ RPM}$) during commanded lockup to prevent valve body abrasion.
+5. **DPF Differential Drift -> M55 Swirl Motor Short**: Flat pressure curve under boost to prevent turbo oil blow-by and blown Fuse 54.
+6. **Camshaft Magnet Oil Wicking**: 5V sensor reference dip + O2 heater faults to prevent engine ECU oiling.
+7. **Air Suspension Compressor Burnout**: Continuous runtime ($>40\text{s}$) to prevent piston seal melting and relay welding.
+
+```bash
+# Evaluate vehicle vitals against all 7 cascades
+sterngate analyze cascades
+
+# REST API call - Live telemetry evaluation
+curl -s http://localhost:8080/api/v1/analyze/cascades | jq .
+
+# REST API call - Custom telemetry evaluation
+curl -s -X POST http://localhost:8080/api/v1/analyze/cascades \
+  -H "Content-Type: application/json" \
+  -d '{"sbc_accumulator_pressure_bar": 52.0, "max_cylinder_balance_trim_mm3": 3.8}' | jq .
+```
+
 ---
 
 ## 11. Verification Checklist

@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::sync::Arc;
 use sterngate_core::{
-    lookup_routine_name, DriveBenchmark, DriveSummary, Dtc, FlashPackageManifest, FlashProgress,
-    Language, SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot, VehicleGarage,
-    VehicleProfile,
+    lookup_routine_name, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc,
+    FlashPackageManifest, FlashProgress, Language, SuspensionLeakDetector, SuspensionSample,
+    TelemetrySnapshot, VehicleGarage, VehicleProfile,
 };
 use sterngate_protocol::{UdsClient, VehicleScanner};
 
@@ -60,6 +60,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             post(analyze_suspension_health),
         )
         .route("/api/v1/analyze/compare", post(compare_drive_runs))
+        .route("/api/v1/analyze/cascades", get(get_cascade_analysis))
+        .route("/api/v1/analyze/cascades", post(post_cascade_analysis))
         .route(
             "/api/v1/suspension/compressor/control",
             post(control_compressor),
@@ -849,4 +851,58 @@ async fn get_compressor_status(State(state): State<Arc<AppState>>) -> impl IntoR
         "max_continuous_run_seconds": guard.max_continuous_run_seconds,
         "cooldown_period_seconds": guard.cooldown_period_seconds,
     }))
+}
+
+async fn get_cascade_analysis(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let snap = sample_telemetry(&state).await;
+    let guard = state.compressor_guard.lock().unwrap();
+
+    let input = CascadeTelemetryInput {
+        sbc_accumulator_pressure_bar: Some(78.0),
+        sbc_pump_per_brake_ratio: Some(0.18),
+        sbc_operating_cycles: Some(125_000),
+        sbc_max_cycles: Some(300_000),
+        max_cylinder_balance_trim_mm3: snap.inj_corr_cyl1.map(|v| v.abs()),
+        cylinder_balance_spread_mm3: Some(1.2),
+        rail_pressure_bleed_rate_bar_sec: Some(12.0),
+        atf_temp_rapid_jump_deg_c: Some(0.5),
+        transmission_speed_sensor_jitter: Some(false),
+        tcc_slip_rpm: snap.tcc_slip_rpm,
+        tcc_lockup_commanded: Some(true),
+        dpf_diff_pressure_mbar: Some(35.0),
+        engine_rpm: snap.engine_rpm,
+        distance_since_dpf_regen_km: Some(420.0),
+        cam_magnet_oil_detected: Some(false),
+        o2_sensor_heater_resistance_drift: Some(false),
+        five_volt_ref_bus_dip: Some(false),
+        compressor_continuous_run_sec: Some(guard.current_run_seconds()),
+        compressor_duty_cycle_pct: Some(0.0),
+        suspension_height_drop_rate_mm_h: Some(0.6),
+        active_dtcs: vec![],
+    };
+
+    let report = CascadeWatchdog::evaluate(&input);
+    Json(report)
+}
+
+async fn post_cascade_analysis(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<Option<CascadeTelemetryInput>>,
+) -> impl IntoResponse {
+    let snap = sample_telemetry(&state).await;
+    let guard = state.compressor_guard.lock().unwrap();
+
+    let mut input = payload.unwrap_or_default();
+    if input.tcc_slip_rpm.is_none() {
+        input.tcc_slip_rpm = snap.tcc_slip_rpm;
+    }
+    if input.engine_rpm.is_none() {
+        input.engine_rpm = snap.engine_rpm;
+    }
+    if input.compressor_continuous_run_sec.is_none() {
+        input.compressor_continuous_run_sec = Some(guard.current_run_seconds());
+    }
+
+    let report = CascadeWatchdog::evaluate(&input);
+    Json(report)
 }

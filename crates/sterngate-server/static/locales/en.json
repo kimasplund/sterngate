@@ -121,7 +121,13 @@
     "compressor_burnout_notice": "Burnout Prevention: When an air spring leaks, the compressor runs continuously until the motor melts or relay A 002 542 72 19 welds shut. Inhibit compressor to safely drive home or to a workshop.",
     "btn_inhibit_compressor": "🛑 Inhibit Compressor (Safe Mode - Off)",
     "btn_workshop_mode": "📐 Workshop / Transport Mode",
-    "btn_restore_compressor": "🔄 Restore Normal Operation"
+    "btn_restore_compressor": "🔄 Restore Normal Operation",
+    "btn_cascades": "⚠️ Check Cascades of Death"
+  },
+  "cascades": {
+    "title": "🚨 Mercedes 'Cascade of Death' Early Warning Center",
+    "subtitle": "7 Notorious Cascades Monitored",
+    "desc": "Detects inexpensive $2–$15 wear items (O-rings, copper washers, nitrogen spheres) before they snowball into $2,500+ destroyed ECUs or mechanical lockouts."
   }
 }
 

@@ -1,7 +1,8 @@
 use serde_json::{json, Value};
 use sterngate_core::{
-    lookup_routine_name, DriveBenchmark, DriveSummary, Dtc, EcuCatalog, Language,
-    SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot, VehicleGarage, VehicleProfile,
+    lookup_routine_name, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc,
+    EcuCatalog, Language, SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot,
+    VehicleGarage, VehicleProfile,
 };
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 use sterngate_protocol::VehicleScanner;
@@ -275,6 +276,35 @@ pub fn get_tools_list() -> Value {
                     }
                 },
                 "required": ["action"]
+            }
+        },
+        {
+            "name": "sterngate_check_cascade_warnings",
+            "description": "Inspect and evaluate vehicle vitals and diagnostics against known Mercedes-Benz 'Cascade of Death' failure modes (SBC accumulator loss, injector copper seal Black Death, 722.6 pilot bushing wicking, TCC lockup slip, DPF differential drift/M55 short, cam magnet oil wicking, air suspension compressor burnout).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "sbc_accumulator_pressure_bar": {
+                        "type": "number",
+                        "description": "SBC pre-charge accumulator pressure in bar (nominal 70-85 bar, critical <55 bar)"
+                    },
+                    "max_cylinder_balance_trim_mm3": {
+                        "type": "number",
+                        "description": "Maximum smooth-running cylinder balance trim in mm³/hub (nominal <1.5 mm³, critical >3.5 mm³)"
+                    },
+                    "tcc_slip_rpm": {
+                        "type": "number",
+                        "description": "Torque converter clutch slip in RPM during lockup (nominal <30 RPM, critical >60 RPM)"
+                    },
+                    "compressor_continuous_run_sec": {
+                        "type": "number",
+                        "description": "Continuous air suspension compressor runtime in seconds (nominal <25s, critical >40s)"
+                    },
+                    "suspension_height_drop_rate_mm_h": {
+                        "type": "number",
+                        "description": "Stationary rear suspension height drop rate in mm/hour (nominal <2 mm/h, critical >10 mm/h)"
+                    }
+                }
             }
         }
     ])
@@ -858,6 +888,62 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 "compressor_relay_status": if action == "inhibit" || action == "workshop" { "DE_ENERGIZED" } else { "NORMAL" },
                 "burnout_prevention_active": action == "inhibit" || action == "workshop",
             }))
+        }
+        "sterngate_check_cascade_warnings" => {
+            let mut input = CascadeTelemetryInput {
+                sbc_accumulator_pressure_bar: Some(78.0),
+                sbc_pump_per_brake_ratio: Some(0.18),
+                sbc_operating_cycles: Some(125_000),
+                sbc_max_cycles: Some(300_000),
+                max_cylinder_balance_trim_mm3: Some(0.8),
+                cylinder_balance_spread_mm3: Some(1.2),
+                rail_pressure_bleed_rate_bar_sec: Some(12.0),
+                atf_temp_rapid_jump_deg_c: Some(0.5),
+                transmission_speed_sensor_jitter: Some(false),
+                tcc_slip_rpm: Some(8.0),
+                tcc_lockup_commanded: Some(true),
+                dpf_diff_pressure_mbar: Some(35.0),
+                engine_rpm: Some(750.0),
+                distance_since_dpf_regen_km: Some(420.0),
+                cam_magnet_oil_detected: Some(false),
+                o2_sensor_heater_resistance_drift: Some(false),
+                five_volt_ref_bus_dip: Some(false),
+                compressor_continuous_run_sec: Some(0.0),
+                compressor_duty_cycle_pct: Some(0.0),
+                suspension_height_drop_rate_mm_h: Some(0.6),
+                active_dtcs: vec![],
+            };
+
+            if let Some(v) = arguments
+                .get("sbc_accumulator_pressure_bar")
+                .and_then(|v| v.as_f64())
+            {
+                input.sbc_accumulator_pressure_bar = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("max_cylinder_balance_trim_mm3")
+                .and_then(|v| v.as_f64())
+            {
+                input.max_cylinder_balance_trim_mm3 = Some(v);
+            }
+            if let Some(v) = arguments.get("tcc_slip_rpm").and_then(|v| v.as_f64()) {
+                input.tcc_slip_rpm = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("compressor_continuous_run_sec")
+                .and_then(|v| v.as_f64())
+            {
+                input.compressor_continuous_run_sec = Some(v);
+            }
+            if let Some(v) = arguments
+                .get("suspension_height_drop_rate_mm_h")
+                .and_then(|v| v.as_f64())
+            {
+                input.suspension_height_drop_rate_mm_h = Some(v);
+            }
+
+            let report = CascadeWatchdog::evaluate(&input);
+            Ok(json!(report))
         }
         _ => Err(format!("Unknown tool name: {}", name)),
     }

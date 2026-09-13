@@ -62,6 +62,7 @@ Or when running the compiled release binary:
 | `sterngate_list_vehicles` | *(None)* | Lists all recognized vehicles stored in local Git garage by VIN with model, scan count, and last scanned date. |
 | `sterngate_analyze_suspension_leak` | `duration_min` (opt), `left_rear_start_mm` (opt), `left_rear_end_mm` (opt), `right_rear_start_mm` (opt), `right_rear_end_mm` (opt), `compressor_run_time_sec` (opt), `compressor_duty_cycle_pct` (opt) | Evaluates Mercedes S211 rear air suspension (ENR) or W211 AIRMATIC for pneumatic leaks, drop rate mm/h, L/R height asymmetry, and compressor duty cycle strain. |
 | `sterngate_protect_compressor` | `action` (`inhibit`, `restore`, `workshop`), `reason` (opt) | Controls active compressor protection on Mercedes S211 ENR / W211 AIRMATIC to prevent compressor motor burnout and relay welding during air leaks. |
+| `sterngate_check_cascade_warnings` | `sbc_accumulator_pressure_bar` (opt), `max_cylinder_balance_trim_mm3` (opt), `tcc_slip_rpm` (opt), `compressor_continuous_run_sec` (opt), `suspension_height_drop_rate_mm_h` (opt) | Inspects vehicle vitals against 7 notorious Mercedes 'Cascade of Death' failure modes (SBC accumulator, Black Death blow-by, 722.6 pilot bushing wicking, TCC slip, DPF/M55 short, cam magnet oil wicking, air suspension). |
 | `sterngate_compare_drive_runs` | `run_a` (opt), `run_b` (opt), `baseline_...` (opt), `target_...` (opt) | Performs A/B comparative benchmark between two drive telemetry runs to evaluate whether parameter/mechanical changes were beneficial (fuel consumption, TCC slip, boost). |
 | `sterngate_verify_flash_staging` | `target_module`, `expected_hw_id`, `sha256`, `crc32` | Evaluates a staged flash binary against safety checks (battery voltage $\ge 12.5\text{ V}$, CRC32, SHA256, HW match). |
 
@@ -76,6 +77,7 @@ Or when running the compiled release binary:
 | `sterngate://profile/w211_om646` | W211 OM646 Profile | Full DID mappings, scaling equations, and module definitions for W211 CDI. |
 | `sterngate://ecu/status` | ECU Bus Status | Active CAN interface, baudrate, battery voltage, and flasher lockout status. |
 | `sterngate://garage/vehicles` | Vehicle Garage Database | List of tracked vehicles with decoded VINs, installed ECUs, and Git configuration history. |
+| `sterngate://cascades/catalog` | Mercedes Cascades of Death | Descriptions, thresholds, and root part numbers for 7 infamous Mercedes cascading failure modes. |
 
 ---
 
@@ -105,7 +107,10 @@ When a user asks:
   2. The tool calculates height drop rate mm/hour, asymmetry, and compressor duty cycle. If $> 10\text{ mm/h}$, it flags `CriticalLeak` and recommends inspecting rear pneumatic bellows (`A 211 320 09 25`) and relay (`A 002 542 72 19`).
 - *"My rear air suspension is leaking and I need to drive to the shop without burning out the compressor:"*
   1. Call `sterngate_protect_compressor` with `{"action": "inhibit", "reason": "Prevent thermal overload while driving"}` or `{"action": "workshop"}`.
-  2. The tool triggers UDS Routine `0x0210` (Safe Mode Inhibit) or `0x0211` (Workshop Mode), de-energizing the compressor relay circuit to prevent the sustained $>30\text{A}$ overload that welds relay contacts closed.
+- *"Are there any imminent cascade failures or hidden ticking time bombs on my Mercedes?"*
+  1. Call `sterngate_check_cascade_warnings`.
+  2. The tool evaluates the vehicle across all 7 notorious Mercedes cascades (SBC accumulator pressure, injector Black Death copper washers, 722.6 pilot bushing wicking, TCC lockup slip, DPF differential pressure, camshaft magnets, and air suspension).
+  3. If an alert is triggered (e.g. `ImminentDanger`), explain the inexpensive $2–$15 wear part that triggers it and provide the exact OEM part numbers and containment instructions before catastrophic $2,500+ failure occurs.
 - *"Did my adaptation reset or tune improve fuel consumption?"*
   1. Call `sterngate_compare_drive_runs` with baseline and target drive statistics.
   2. The tool returns the fuel consumption delta $L/100\text{km}$, lockup clutch slip delta, and an overall verdict (`Beneficial`, `Neutral`, or `Detrimental`).

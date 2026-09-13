@@ -121,7 +121,13 @@
     "compressor_burnout_notice": "Überhitzungsschutz: Bei undichten Luftbälgen läuft der Kompressor im Dauerbetrieb, bis der Motor durchbrennt oder Relais A 002 542 72 19 verschweißt. Kompressor sperren, um sicher zur Werkstatt zu fahren.",
     "btn_inhibit_compressor": "🛑 Kompressor abschalten (Schutzmodus - Aus)",
     "btn_workshop_mode": "📐 Werkstatt- / Transportmodus",
-    "btn_restore_compressor": "🔄 Normalbetrieb wiederherstellen"
+    "btn_restore_compressor": "🔄 Normalbetrieb wiederherstellen",
+    "btn_cascades": "⚠️ Kaskadenschäden (Cascade of Death) prüfen"
+  },
+  "cascades": {
+    "title": "🚨 Mercedes 'Cascade of Death' Frühwarnzentrum",
+    "subtitle": "7 berüchtigte Kettenreaktionsschäden überwacht",
+    "desc": "Erkennt günstige 2–15 € Verschleißteile (O-Ringe, Kupferdichtringe, Druckspeicher), bevor sie zu 2.500 €+ zerstörten Steuergeräten oder Getriebeschäden führen."
   }
 }
 

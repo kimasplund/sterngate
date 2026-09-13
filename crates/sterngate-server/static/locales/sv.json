@@ -121,7 +121,13 @@
     "compressor_burnout_notice": "Överhettningsskydd: Vid läckande luftbälgar går kompressorn oavbrutet tills elmotorn smälter eller relä A 002 542 72 19 svetsar fast. Stäng av kompressorn för att köra säkert till verkstad.",
     "btn_inhibit_compressor": "🛑 Spärra kompressor (Säkert läge - Av)",
     "btn_workshop_mode": "📐 Verkstads- / Transportläge",
-    "btn_restore_compressor": "🔄 Återställ normal drift"
+    "btn_restore_compressor": "🔄 Återställ normal drift",
+    "btn_cascades": "⚠️ Kontrollera haverikaskader (Cascade of Death)"
+  },
+  "cascades": {
+    "title": "🚨 Mercedes 'Cascade of Death' Tidigt Varningscenter",
+    "subtitle": "7 ökända haverikaskader övervakade",
+    "desc": "Upptäcker billiga slitagedelar för 20–150 kr (O-ringar, kopparbrickor, kväveackumulatorer) innan de eskalerar till styrenhetshaverier på 25 000+ kr."
   }
 }
 

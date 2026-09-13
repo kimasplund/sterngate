@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod cascades;
 pub mod catalog;
 pub mod command;
 pub mod dtc;
@@ -9,6 +10,10 @@ pub mod garage;
 pub mod i18n;
 pub mod parameter;
 pub mod profile;
+
+pub use cascades::{
+    CascadeAlert, CascadeId, CascadeReport, CascadeSeverity, CascadeTelemetryInput, CascadeWatchdog,
+};
 
 pub use analytics::{
     CompressorGuardAction, CompressorOperationalState, CompressorProtectionGuard, DriveBenchmark,
@@ -417,5 +422,79 @@ mod tests {
         let restore = guard.manual_restore();
         assert_eq!(restore, CompressorGuardAction::RestoreAllowed);
         assert_eq!(guard.current_state, CompressorOperationalState::Idle);
+    }
+
+    #[test]
+    fn test_cascades_early_warning_watchdog() {
+        // 1. Healthy vehicle - All nominal
+        let healthy_input = CascadeTelemetryInput {
+            sbc_accumulator_pressure_bar: Some(78.0),
+            sbc_pump_per_brake_ratio: Some(0.18),
+            sbc_operating_cycles: Some(120_000),
+            sbc_max_cycles: Some(300_000),
+            max_cylinder_balance_trim_mm3: Some(0.6),
+            cylinder_balance_spread_mm3: Some(1.1),
+            rail_pressure_bleed_rate_bar_sec: Some(15.0),
+            atf_temp_rapid_jump_deg_c: Some(1.0),
+            transmission_speed_sensor_jitter: Some(false),
+            tcc_slip_rpm: Some(8.0),
+            tcc_lockup_commanded: Some(true),
+            dpf_diff_pressure_mbar: Some(45.0),
+            engine_rpm: Some(3100.0),
+            distance_since_dpf_regen_km: Some(350.0),
+            cam_magnet_oil_detected: Some(false),
+            o2_sensor_heater_resistance_drift: Some(false),
+            five_volt_ref_bus_dip: Some(false),
+            compressor_continuous_run_sec: Some(12.0),
+            compressor_duty_cycle_pct: Some(5.0),
+            suspension_height_drop_rate_mm_h: Some(0.5),
+            active_dtcs: vec![],
+        };
+
+        let report = CascadeWatchdog::evaluate(&healthy_input);
+        assert_eq!(report.overall_severity, CascadeSeverity::Normal);
+        assert!(report.alerts.is_empty());
+        assert_eq!(report.total_cascades_checked, 7);
+
+        // 2. Imminent Danger - SBC Accumulator Exhaustion + Black Death blow-by + Leaking air suspension
+        let danger_input = CascadeTelemetryInput {
+            sbc_accumulator_pressure_bar: Some(49.0), // Critically low!
+            sbc_pump_per_brake_ratio: Some(0.85),     // Runs on 85% of brake taps!
+            sbc_operating_cycles: Some(310_000),
+            sbc_max_cycles: Some(300_000),
+            max_cylinder_balance_trim_mm3: Some(4.1), // Black Death blowby!
+            cylinder_balance_spread_mm3: Some(4.5),
+            rail_pressure_bleed_rate_bar_sec: Some(60.0),
+            atf_temp_rapid_jump_deg_c: Some(28.0), // Pilot bushing ATF short!
+            transmission_speed_sensor_jitter: Some(true),
+            tcc_slip_rpm: Some(75.0), // TCC clutch shredding!
+            tcc_lockup_commanded: Some(true),
+            dpf_diff_pressure_mbar: Some(8.0), // Sensor flatlined at 3200 RPM!
+            engine_rpm: Some(3200.0),
+            distance_since_dpf_regen_km: Some(1250.0),
+            cam_magnet_oil_detected: Some(true),
+            o2_sensor_heater_resistance_drift: Some(true),
+            five_volt_ref_bus_dip: Some(true),
+            compressor_continuous_run_sec: Some(48.0), // Continuous run > 40s!
+            compressor_duty_cycle_pct: Some(38.0),
+            suspension_height_drop_rate_mm_h: Some(14.0),
+            active_dtcs: vec!["C249F".to_string(), "P220A".to_string()],
+        };
+
+        let danger_report = CascadeWatchdog::evaluate(&danger_input);
+        assert_eq!(
+            danger_report.overall_severity,
+            CascadeSeverity::ImminentDanger
+        );
+        assert_eq!(danger_report.alerts.len(), 7); // All 7 cascades triggered!
+
+        // Verify Markdown output contains critical warning banners
+        let md = danger_report.to_markdown();
+        assert!(md.contains("CRITICAL: IMMINENT CASCADE FAILURE DETECTED"));
+        assert!(md.contains("SBC Hydraulic Accumulator Exhaustion"));
+        assert!(md.contains("Common Rail Injector 'Black Death'"));
+        assert!(md.contains("722.6 Transmission Pilot Bushing"));
+        assert!(md.contains("A 611 017 00 60"));
+        assert!(md.contains("A 000 430 26 94"));
     }
 }
