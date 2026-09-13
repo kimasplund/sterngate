@@ -1,0 +1,82 @@
+{
+  "profile_name": "mercedes_w906_sprinter_om642",
+  "oem": "Mercedes-Benz",
+  "chassis": "W906 (Sprinter NCV3)",
+  "gateway_type": "CGW",
+  "default_bitrate": 500000,
+  "modules": {
+    "EGS53": {
+      "name": "Electronic Transmission Control (722.6 5-Speed Updated)",
+      "tx_id": "0x7E1",
+      "rx_id": "0x7E9",
+      "protocol": "KWP2000",
+      "seed_key_algo": "Daimler_Level1"
+    }
+  },
+  "parameters": [
+    {
+      "id": "trans_fluid_temp",
+      "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
+      "module": "EGS53",
+      "service": 34,
+      "did": "0x2001",
+      "byte_offset": 3,
+      "length": 1,
+      "scaling": {
+        "slope": 1.0,
+        "offset": -40.0
+      },
+      "unit": "\u00b0C",
+      "min": -40.0,
+      "max": 150.0
+    },
+    {
+      "id": "tcc_slip_rpm",
+      "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
+      "module": "EGS53",
+      "service": 34,
+      "did": "0x2002",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 2000.0
+    },
+    {
+      "id": "turbine_speed",
+      "name": "Turbine Speed n2 (Turbinendrehzahl)",
+      "module": "EGS53",
+      "service": 34,
+      "did": "0x2003",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 7000.0
+    },
+    {
+      "id": "output_speed",
+      "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
+      "module": "EGS53",
+      "service": 34,
+      "did": "0x2004",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 7000.0
+    }
+  ]
+}

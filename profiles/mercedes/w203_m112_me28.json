@@ -1,0 +1,185 @@
+{
+  "profile_name": "mercedes_w203_m112_me28",
+  "oem": "Mercedes-Benz",
+  "chassis": "W203/C209",
+  "gateway_type": "CGW",
+  "default_bitrate": 500000,
+  "modules": {
+    "ME28": {
+      "name": "Engine Control Unit (M112/M113 V6/V8 Gasoline / ME 2.8)",
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "KWP2000",
+      "seed_key_algo": "Daimler_Level1"
+    },
+    "EGS52": {
+      "name": "Electronic Transmission Control (722.6 5-Speed / NAG1)",
+      "tx_id": "0x7E1",
+      "rx_id": "0x7E9",
+      "protocol": "KWP2000",
+      "seed_key_algo": "Daimler_Level1"
+    }
+  },
+  "parameters": [
+    {
+      "id": "engine_rpm",
+      "name": "Engine Speed (Motordrehzahl)",
+      "module": "ME28",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 0.25,
+        "offset": 0.0
+      },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 7000.0
+    },
+    {
+      "id": "coolant_temp",
+      "name": "Coolant Temperature (Kuehlmitteltemperatur)",
+      "module": "ME28",
+      "service": 34,
+      "did": "0x0105",
+      "byte_offset": 3,
+      "length": 1,
+      "scaling": {
+        "slope": 1.0,
+        "offset": -40.0
+      },
+      "unit": "\u00b0C",
+      "min": -40.0,
+      "max": 140.0
+    },
+    {
+      "id": "throttle_angle",
+      "name": "Throttle Valve Angle (Drosselklappenwinkel)",
+      "module": "ME28",
+      "service": 34,
+      "did": "0x0111",
+      "byte_offset": 3,
+      "length": 1,
+      "scaling": {
+        "slope": 0.392,
+        "offset": 0.0
+      },
+      "unit": "%",
+      "min": 0.0,
+      "max": 100.0
+    },
+    {
+      "id": "mass_air_flow",
+      "name": "Mass Air Flow MAF (Luftmasse kg/h)",
+      "module": "ME28",
+      "service": 34,
+      "did": "0x0110",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 0.1,
+        "offset": 0.0
+      },
+      "unit": "kg/h",
+      "min": 0.0,
+      "max": 600.0
+    },
+    {
+      "id": "lambda_b1s1",
+      "name": "Lambda Upstream O2 Voltage Bank 1",
+      "module": "ME28",
+      "service": 34,
+      "did": "0x0114",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 0.001,
+        "offset": 0.0
+      },
+      "unit": "V",
+      "min": 0.0,
+      "max": 1.2
+    },
+    {
+      "id": "lambda_b2s1",
+      "name": "Lambda Upstream O2 Voltage Bank 2",
+      "module": "ME28",
+      "service": 34,
+      "did": "0x0115",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 0.001,
+        "offset": 0.0
+      },
+      "unit": "V",
+      "min": 0.0,
+      "max": 1.2
+    },
+    {
+      "id": "trans_fluid_temp",
+      "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
+      "module": "EGS52",
+      "service": 34,
+      "did": "0x2001",
+      "byte_offset": 3,
+      "length": 1,
+      "scaling": {
+        "slope": 1.0,
+        "offset": -40.0
+      },
+      "unit": "\u00b0C",
+      "min": -40.0,
+      "max": 150.0
+    },
+    {
+      "id": "tcc_slip_rpm",
+      "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
+      "module": "EGS52",
+      "service": 34,
+      "did": "0x2002",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 2000.0
+    },
+    {
+      "id": "turbine_speed",
+      "name": "Turbine Speed n2 (Turbinendrehzahl)",
+      "module": "EGS52",
+      "service": 34,
+      "did": "0x2003",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 7000.0
+    },
+    {
+      "id": "output_speed",
+      "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
+      "module": "EGS52",
+      "service": 34,
+      "did": "0x2004",
+      "byte_offset": 3,
+      "length": 2,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": "RPM",
+      "min": 0.0,
+      "max": 7000.0
+    }
+  ]
+}

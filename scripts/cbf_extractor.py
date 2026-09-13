@@ -649,16 +649,143 @@ def generate_vehicle_profile(cbf_paths: List[str], profile_id: str, oem: str, ch
     print(f"[✓] Successfully generated profile '{profile_id}' at {output_path} ({len(modules)} modules, {len(all_parameters)} parameters)")
 
 
+def run_batch_extraction(base_dir: str = "data/cbf", output_dir: str = "profiles/mercedes"):
+    print(f"[*] Running batch profile extraction from {base_dir} into {output_dir}...")
+    
+    batches = [
+        {
+            "id": "mercedes_w211_om646_edc16",
+            "chassis": "W211/S211",
+            "files": [
+                f"{base_dir}/Old_211_219/cbf/CR3.CBF",
+                f"{base_dir}/Old_211_219/cbf/EGS52.CBF",
+                f"{base_dir}/Old_211_219/cbf/SBC211.CBF",
+                f"{base_dir}/Old_211_219/cbf/ZGW211.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w211_om642_cr4",
+            "chassis": "W211/S211",
+            "files": [
+                f"{base_dir}/Old_211_219/cbf/CR4.CBF",
+                f"{base_dir}/&_204_207_212_218/cbf/VGSNAG2.CBF",
+                f"{base_dir}/Old_211_219/cbf/SBC211.CBF",
+                f"{base_dir}/Old_211_219/cbf/ZGW211.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w211_m112_me28",
+            "chassis": "W211/S211",
+            "files": [
+                f"{base_dir}/Old_211_219/cbf/ME28.CBF",
+                f"{base_dir}/Old_211_219/cbf/EGS52.CBF",
+                f"{base_dir}/Old_211_219/cbf/SBC211.CBF",
+                f"{base_dir}/Old_211_219/cbf/ZGW211.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w204_om651_crd2",
+            "chassis": "W204/S204",
+            "files": [
+                f"{base_dir}/&_204_207_212_218/cbf/CRD2.CBF",
+                f"{base_dir}/&_204_207_212_218/cbf/VGSNAG2.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w212_om642_cr6",
+            "chassis": "W212/S212",
+            "files": [
+                f"{base_dir}/&_204_207_212_218/cbf/CR6EU5.CBF",
+                f"{base_dir}/&_204_207_212_218/cbf/VGSNAG2.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w221_m273_me97",
+            "chassis": "W221",
+            "files": [
+                f"{base_dir}/Old_221_216/cbf/ME97.CBF",
+                f"{base_dir}/&_204_207_212_218/cbf/VGSNAG2.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w221_om642_cr4",
+            "chassis": "W221",
+            "files": [
+                f"{base_dir}/Old_221_216/cbf/CR4.CBF",
+                f"{base_dir}/&_204_207_212_218/cbf/VGSNAG2.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w203_om646_cr3",
+            "chassis": "W203/CL203/C209",
+            "files": [
+                f"{base_dir}/Old_203_209/cbf/CR3.CBF",
+                f"{base_dir}/Old_203_209/cbf/EGS52.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w203_m112_me28",
+            "chassis": "W203/C209",
+            "files": [
+                f"{base_dir}/Old_203_209/cbf/ME28.CBF",
+                f"{base_dir}/Old_203_209/cbf/EGS52.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w164_om642_cr4",
+            "chassis": "W164/X164/W251",
+            "files": [
+                f"{base_dir}/Old_164_251/cbf/CR4.CBF",
+                f"{base_dir}/&_204_207_212_218/cbf/VGSNAG2.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w906_sprinter_om642",
+            "chassis": "W906 (Sprinter NCV3)",
+            "files": [
+                f"{base_dir}/NFZ_906/cbf/CR4.CBF",
+                f"{base_dir}/NFZ_906/cbf/EGS53.CBF"
+            ]
+        },
+        {
+            "id": "mercedes_w463_g500_m113",
+            "chassis": "W463 (G-Class)",
+            "files": [
+                f"{base_dir}/Old_463/cbf/ME97.CBF",
+                f"{base_dir}/Old_463/cbf/VGSNAG2.CBF"
+            ]
+        }
+    ]
+    
+    count = 0
+    for b in batches:
+        existing_files = [f for f in b["files"] if os.path.exists(f)]
+        if not existing_files:
+            continue
+        out = f"{output_dir}/{b['id'].replace('mercedes_', '')}.json"
+        generate_vehicle_profile(existing_files, b["id"], "Mercedes-Benz", b["chassis"], out)
+        count += 1
+        
+    print(f"\n[✓] Batch extraction completed! {count} production profiles generated in {output_dir}/")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Sterngate CBF Reverse Engineering & Profile Extractor")
+    parser.add_argument("--batch", action="store_true", help="Run batch extraction across data/cbf repository")
+    parser.add_argument("--batch-dir", default="data/cbf", help="Root directory of CBF database (default: data/cbf)")
     parser.add_argument("--cbf", nargs="+", help="Path to one or more .cbf files")
-    parser.add_argument("--profile-id", required=True, help="Profile ID string (e.g. mercedes_w211_om642_cr4)")
+    parser.add_argument("--profile-id", help="Profile ID string (e.g. mercedes_w211_om642_cr4)")
     parser.add_argument("--oem", default="Mercedes-Benz", help="Vehicle OEM name")
-    parser.add_argument("--chassis", required=True, help="Chassis code (e.g. W211, W204, W221)")
-    parser.add_argument("--output", required=True, help="Output path for generated JSON profile")
+    parser.add_argument("--chassis", default="W211", help="Chassis code (e.g. W211, W204, W221)")
+    parser.add_argument("--output", help="Output path for generated JSON profile")
     
     args = parser.parse_args()
-    generate_vehicle_profile(args.cbf, args.profile_id, args.oem, args.chassis, args.output)
+    if args.batch:
+        run_batch_extraction(args.batch_dir)
+    elif args.cbf and args.profile_id and args.output:
+        generate_vehicle_profile(args.cbf, args.profile_id, args.oem, args.chassis, args.output)
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
