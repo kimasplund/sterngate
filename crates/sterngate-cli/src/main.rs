@@ -181,6 +181,15 @@ enum AnalyzeCommands {
         /// Path to recorded telemetry CSV log (optional, runs live simulation if omitted)
         #[arg(long)]
         log: Option<PathBuf>,
+        /// Inhibit compressor to prevent motor burnout (Routine 0x0210 Safe Mode)
+        #[arg(long)]
+        inhibit: bool,
+        /// Restore normal compressor operation and automatic leveling (Routine 0x0212)
+        #[arg(long)]
+        restore: bool,
+        /// Set suspension into workshop / transport mode (Routine 0x0211)
+        #[arg(long)]
+        workshop: bool,
     },
     /// Compare two drive runs (A/B testing for fuel consumption and performance)
     Compare {
@@ -463,7 +472,44 @@ async fn main() -> Result<()> {
                 }
             }
             Commands::Analyze { action } => match action {
-                AnalyzeCommands::Suspension { log: _ } => {
+                AnalyzeCommands::Suspension {
+                    log: _,
+                    inhibit,
+                    restore,
+                    workshop,
+                } => {
+                    if inhibit {
+                        let mut iface = VirtualCanInterface::new();
+                        iface.open().await?;
+                        let res =
+                            VehicleScanner::control_suspension_compressor(&mut iface, "inhibit")
+                                .await?;
+                        println!("🛑 COMPRESSOR INHIBITED (Burnout Safe Mode Activated):");
+                        println!("   {}", res);
+                        println!("   The ENR compressor relay is de-energized to prevent thermal motor burnout.");
+                        return Ok(());
+                    }
+                    if restore {
+                        let mut iface = VirtualCanInterface::new();
+                        iface.open().await?;
+                        let res =
+                            VehicleScanner::control_suspension_compressor(&mut iface, "restore")
+                                .await?;
+                        println!("🔄 COMPRESSOR RESTORED (Normal Leveling Operation):");
+                        println!("   {}", res);
+                        return Ok(());
+                    }
+                    if workshop {
+                        let mut iface = VirtualCanInterface::new();
+                        iface.open().await?;
+                        let res =
+                            VehicleScanner::control_suspension_compressor(&mut iface, "workshop")
+                                .await?;
+                        println!("📐 WORKSHOP / TRANSPORT MODE ACTIVATED:");
+                        println!("   {}", res);
+                        return Ok(());
+                    }
+
                     println!("============================================================");
                     println!("  S211 Rear Air Suspension (ENR) Predictive Leak Analysis");
                     println!("============================================================");

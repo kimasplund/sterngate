@@ -3,7 +3,8 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sterngate_core::{
-    lookup_dtc_description, DecodedVin, Dtc, Language, Result, VehicleEcuSnapshot, VehicleRecord,
+    lookup_dtc_description, DecodedVin, Dtc, Language, Result, SterngateError, VehicleEcuSnapshot,
+    VehicleRecord,
 };
 use sterngate_hal::VehicleInterface;
 
@@ -423,5 +424,52 @@ impl VehicleScanner {
             module_results,
             live_vitals,
         })
+    }
+
+    /// Control the S211 ENR / W211 AIRMATIC compressor: inhibit (safe mode), workshop mode, or restore normal
+    pub async fn control_suspension_compressor(
+        interface: &mut dyn VehicleInterface,
+        action: &str,
+    ) -> Result<String> {
+        let (routine_id, desc) = match action.to_lowercase().as_str() {
+            "inhibit" | "disable" | "safemode" => (
+                0x0210,
+                "Compressor Relay Force Inhibit (Burnout Prevention Safe Mode)",
+            ),
+            "workshop" | "transport" => (
+                0x0211,
+                "Suspension Transport/Workshop Mode (Leveling Inhibit)",
+            ),
+            "restore" | "enable" | "normal" => (0x0212, "Suspension Normal Operation Restored"),
+            _ => {
+                return Err(SterngateError::Internal(format!(
+                    "Invalid compressor action '{}'. Use 'inhibit', 'workshop', or 'restore'",
+                    action
+                )))
+            }
+        };
+
+        // Target ENR211 (0x7E4) with fallback to EDC16/CGW functional
+        let mut uds = UdsClient::new(interface, 0x7E4, 0x7EC);
+        match uds.routine_control(0x01, routine_id, &[]).await {
+            Ok(_) => Ok(format!(
+                "Successfully executed routine 0x{:04X}: {}",
+                routine_id, desc
+            )),
+            Err(e) => {
+                // If 0x7E4 is not directly responding, try via gateway EDC16 (0x7E0)
+                let mut uds_edc = UdsClient::new(interface, 0x7E0, 0x7E8);
+                uds_edc
+                    .routine_control(0x01, routine_id, &[])
+                    .await
+                    .map(|_| {
+                        format!(
+                            "Successfully executed routine 0x{:04X} on gateway: {}",
+                            routine_id, desc
+                        )
+                    })
+                    .map_err(|_| e)
+            }
+        }
     }
 }

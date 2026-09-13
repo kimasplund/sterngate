@@ -610,9 +610,91 @@ function closeGaragePanel() {
   document.getElementById('garage-details-panel').style.display = 'none';
 }
 
+// --- Compressor Protection Logic ---
+async function toggleCompressorInhibit(inhibit) {
+  const action = inhibit ? 'inhibit' : 'restore';
+  const badge = document.getElementById('compressor-state-badge');
+  badge.textContent = inhibit ? 'INHIBITING...' : 'RESTORING...';
+
+  try {
+    const res = await fetch('/api/v1/suspension/compressor/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: action,
+        reason: inhibit ? 'Driver safe mode: air leak burnout protection' : 'Driver normal restore'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to control compressor');
+
+    if (inhibit) {
+      badge.textContent = 'COMPRESSOR: INHIBITED (SAFE MODE)';
+      badge.className = 'badge badge-recording';
+      alert('✓ S211 Air Suspension Compressor is now INHIBITED. Routine 0x0210 executed. Compressor relay power cut to prevent burnout.');
+    } else {
+      badge.textContent = 'COMPRESSOR: NORMAL OPERATION';
+      badge.className = 'badge badge-ready';
+      alert('✓ Normal air suspension leveling restored. Routine 0x0212 executed.');
+    }
+  } catch (err) {
+    alert(`Error controlling compressor: ${err.message}`);
+    pollCompressorStatus();
+  }
+}
+
+async function toggleCompressorWorkshopMode() {
+  const badge = document.getElementById('compressor-state-badge');
+  badge.textContent = 'ACTIVATING WORKSHOP MODE...';
+
+  try {
+    const res = await fetch('/api/v1/suspension/compressor/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'workshop',
+        reason: 'Workshop transport mode requested'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to enter workshop mode');
+
+    badge.textContent = 'COMPRESSOR: WORKSHOP / TRANSPORT MODE';
+    badge.className = 'badge badge-voltage';
+    alert('✓ S211 Air Suspension entered Workshop/Transport Mode (Routine 0x0211). Leveling locked, compressor off.');
+  } catch (err) {
+    alert(`Error setting workshop mode: ${err.message}`);
+    pollCompressorStatus();
+  }
+}
+
+async function pollCompressorStatus() {
+  try {
+    const res = await fetch('/api/v1/suspension/compressor/status');
+    const data = await res.json();
+    const badge = document.getElementById('compressor-state-badge');
+    if (!badge) return;
+
+    if (data.is_inhibited) {
+      badge.textContent = 'COMPRESSOR: INHIBITED (SAFE MODE)';
+      badge.className = 'badge badge-recording';
+    } else if (data.current_state && data.current_state.Running) {
+      badge.textContent = `COMPRESSOR: ACTIVE (${Math.round(data.current_state.Running.continuous_run_seconds)}s)`;
+      badge.className = 'badge badge-voltage';
+    } else if (data.current_state && data.current_state.ThermalCutoffTriggered) {
+      badge.textContent = 'COMPRESSOR: THERMAL CUTOFF (COOLDOWN)';
+      badge.className = 'badge badge-recording';
+    } else {
+      badge.textContent = 'COMPRESSOR: IDLE';
+      badge.className = 'badge badge-ready';
+    }
+  } catch (e) {}
+}
+
 // Initial triggers
 document.addEventListener('DOMContentLoaded', () => {
   setupTelemetryWebSocket();
   pollRecorderStatus();
+  pollCompressorStatus();
 });
 

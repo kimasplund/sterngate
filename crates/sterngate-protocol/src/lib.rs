@@ -158,4 +158,29 @@ mod tests {
         assert_eq!(rec.vin, report.vin);
         assert!(!rec.detected_modules.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_control_suspension_compressor() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        // 1. Inhibit (Safe mode)
+        let res_inhibit = VehicleScanner::control_suspension_compressor(&mut sim, "inhibit")
+            .await
+            .unwrap();
+        assert!(res_inhibit.contains("0x0210"));
+        assert!(res_inhibit.contains("Inhibit"));
+
+        // 2. Workshop / Transport mode
+        let res_workshop = VehicleScanner::control_suspension_compressor(&mut sim, "workshop")
+            .await
+            .unwrap();
+        assert!(res_workshop.contains("0x0211"));
+
+        // 3. Restore normal
+        let res_restore = VehicleScanner::control_suspension_compressor(&mut sim, "restore")
+            .await
+            .unwrap();
+        assert!(res_restore.contains("0x0212"));
+    }
 }

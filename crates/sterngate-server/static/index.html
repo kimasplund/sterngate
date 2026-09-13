@@ -94,6 +94,27 @@
         <button class="btn" onclick="compareDriveBenchmarkLive()" data-i18n="garage.btn_compare">📈 A/B Drive Benchmark</button>
       </div>
 
+      <!-- S211 Air Suspension Compressor Protection & Kill-Switch -->
+      <div style="background: rgba(22, 27, 34, 0.8); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem; margin-bottom: 0.85rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <b style="color: var(--accent);" data-i18n="garage.compressor_title">🛡️ S211 Air Suspension Compressor Guard</b>
+            <span id="compressor-state-badge" class="badge badge-ready">COMPRESSOR: IDLE</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">
+            <span data-i18n="garage.watchdog_status">Thermal Watchdog: 40s Auto-Cutoff</span>
+          </div>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem;" data-i18n="garage.compressor_burnout_notice">
+          Burnout Prevention: When an air spring leaks, the compressor runs continuously until the motor melts or relay A 002 542 72 19 welds shut. Inhibit compressor to safely drive home or to a workshop.
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn btn-danger" onclick="toggleCompressorInhibit(true)" data-i18n="garage.btn_inhibit_compressor">🛑 Inhibit Compressor (Safe Mode - Off)</button>
+          <button class="btn" onclick="toggleCompressorWorkshopMode()" data-i18n="garage.btn_workshop_mode">📐 Workshop / Transport Mode</button>
+          <button class="btn" onclick="toggleCompressorInhibit(false)" data-i18n="garage.btn_restore_compressor">🔄 Restore Normal Operation</button>
+        </div>
+      </div>
+
       <!-- Vehicle Overview Grid -->
       <div id="vehicle-overview-panel" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">

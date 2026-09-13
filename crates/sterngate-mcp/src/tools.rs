@@ -256,6 +256,26 @@ pub fn get_tools_list() -> Value {
                 "type": "object",
                 "properties": {}
             }
+        },
+        {
+            "name": "sterngate_protect_compressor",
+            "description": "Protect or force disable/enable the Mercedes-Benz S211 rear air suspension (ENR) or W211 AIRMATIC compressor to prevent motor burnout, thermal overload, or relay contact welding during air leaks.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["inhibit", "workshop", "restore", "status"],
+                        "description": "Action: 'inhibit' (force cutoff/safe mode via routine 0x0210), 'workshop' (transport mode/leveling locked via routine 0x0211), 'restore' (normal operation via routine 0x0212), or 'status' (query watchdog state)",
+                        "default": "inhibit"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for override (e.g. 'Driver safe mode: leaking rear left bellow')"
+                    }
+                },
+                "required": ["action"]
+            }
         }
     ])
 }
@@ -815,6 +835,29 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 };
             let cmp = DriveBenchmark::compare(&run1, &run2, &name1, &name2);
             Ok(serde_json::to_value(cmp).unwrap())
+        }
+        "sterngate_protect_compressor" => {
+            let action = arguments
+                .get("action")
+                .and_then(|v| v.as_str())
+                .unwrap_or("inhibit");
+            let reason = arguments
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("AI Agent diagnostic protection request");
+
+            let res = VehicleScanner::control_suspension_compressor(&mut mock_iface, action)
+                .await
+                .map_err(|e| format!("Failed to execute compressor command: {}", e))?;
+
+            Ok(json!({
+                "success": true,
+                "action": action,
+                "reason": reason,
+                "message": res,
+                "compressor_relay_status": if action == "inhibit" || action == "workshop" { "DE_ENERGIZED" } else { "NORMAL" },
+                "burnout_prevention_active": action == "inhibit" || action == "workshop",
+            }))
         }
         _ => Err(format!("Unknown tool name: {}", name)),
     }

@@ -13,6 +13,7 @@ pub struct AppState {
     pub telemetry_tx: broadcast::Sender<TelemetrySnapshot>,
     pub recorder: Arc<crate::recorder::FlightRecorder>,
     pub catalog: Arc<Option<EcuCatalog>>,
+    pub compressor_guard: Arc<std::sync::Mutex<sterngate_core::CompressorProtectionGuard>>,
 }
 
 impl AppState {
@@ -31,6 +32,9 @@ impl AppState {
             telemetry_tx: tx,
             recorder: Arc::new(crate::recorder::FlightRecorder::default()),
             catalog: Arc::new(catalog),
+            compressor_guard: Arc::new(std::sync::Mutex::new(
+                sterngate_core::CompressorProtectionGuard::default(),
+            )),
         }
     }
 

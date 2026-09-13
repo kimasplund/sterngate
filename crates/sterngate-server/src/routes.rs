@@ -60,6 +60,14 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             post(analyze_suspension_health),
         )
         .route("/api/v1/analyze/compare", post(compare_drive_runs))
+        .route(
+            "/api/v1/suspension/compressor/control",
+            post(control_compressor),
+        )
+        .route(
+            "/api/v1/suspension/compressor/status",
+            get(get_compressor_status),
+        )
         .with_state(state)
 }
 
@@ -780,4 +788,65 @@ async fn compare_drive_runs(Json(payload): Json<CompareRunsRequest>) -> impl Int
         &payload.name_b,
     );
     Json(cmp)
+}
+
+#[derive(Deserialize)]
+struct CompressorControlRequest {
+    action: String, // "inhibit", "workshop", "restore"
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+async fn control_compressor(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CompressorControlRequest>,
+) -> impl IntoResponse {
+    let action_str = payload.action.to_lowercase();
+    let reason = payload
+        .reason
+        .unwrap_or_else(|| "User manual override".into());
+
+    let guard_state = {
+        let mut guard = state.compressor_guard.lock().unwrap();
+        if action_str == "inhibit" || action_str == "disable" || action_str == "safemode" {
+            guard.manual_inhibit(&reason);
+        } else if action_str == "restore" || action_str == "enable" || action_str == "normal" {
+            guard.manual_restore();
+        }
+        guard.current_state.clone()
+    };
+
+    let mut iface = state.interface.lock().await;
+    match VehicleScanner::control_suspension_compressor(&mut **iface, &action_str).await {
+        Ok(msg) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "message": msg,
+                "guard_state": guard_state,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to dispatch compressor routine: {}", e),
+                "guard_state": guard_state,
+            })),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_compressor_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let guard = state.compressor_guard.lock().unwrap();
+    Json(serde_json::json!({
+        "current_state": guard.current_state,
+        "is_inhibited": guard.is_inhibited,
+        "inhibit_reason": guard.inhibit_reason,
+        "watchdog_enabled": guard.watchdog_enabled,
+        "max_continuous_run_seconds": guard.max_continuous_run_seconds,
+        "cooldown_period_seconds": guard.cooldown_period_seconds,
+    }))
 }

@@ -222,13 +222,15 @@ impl VirtualCanInterface {
                         // 0x0202: DPF Regeneration Trigger
                         // 0x0203: Throttle Valve / EGR Lower Stop Relearn
                         // 0x0205: SBC Brake Hydraulic Bleeding Routine
+                        // 0x0210: Compressor Relay Force Inhibit (Burnout Safe Mode)
+                        // 0x0211: Suspension Workshop / Transport Mode (Leveling Inhibit)
+                        // 0x0212: Suspension Normal Operation Restore
                         // 0xFF00: Erase Flash Routine
-                        0xFF01 | 0x0201 | 0x0202 | 0x0203 | 0x0205 | 0xFF00 => {
-                            Some(CanFrame::new_standard(
-                                resp_id as u16,
-                                &[0x05, 0x71, sub_fn, r_hi, r_lo, 0x00],
-                            ))
-                        }
+                        0xFF01 | 0x0201 | 0x0202 | 0x0203 | 0x0205 | 0x0210 | 0x0211 | 0x0212
+                        | 0xFF00 => Some(CanFrame::new_standard(
+                            resp_id as u16,
+                            &[0x05, 0x71, sub_fn, r_hi, r_lo, 0x00],
+                        )),
                         _ => Some(CanFrame::new_standard(
                             resp_id as u16,
                             &[0x03, 0x7F, 0x31, 0x31], // RequestOutOfRange

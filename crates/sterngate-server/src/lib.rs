@@ -432,7 +432,39 @@ mod tests {
             .header("Content-Type", "application/json")
             .body(Body::from(serde_json::to_vec(&comp_payload).unwrap()))
             .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 7. POST /api/v1/suspension/compressor/control (Inhibit / Safe mode)
+        let ctrl_payload = json!({
+            "action": "inhibit",
+            "reason": "Test inhibit"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/suspension/compressor/control")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&ctrl_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let ctrl_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(ctrl_res["success"].as_bool().unwrap());
+
+        // 8. GET /api/v1/suspension/compressor/status
+        let req = Request::builder()
+            .uri("/api/v1/suspension/compressor/status")
+            .body(Body::empty())
+            .unwrap();
         let resp = create_router(state).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let status_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(status_res["is_inhibited"].as_bool().unwrap());
     }
 }

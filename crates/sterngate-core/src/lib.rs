@@ -11,8 +11,9 @@ pub mod parameter;
 pub mod profile;
 
 pub use analytics::{
-    DriveBenchmark, DriveComparison, DriveSample, DriveSummary, SuspensionHealthReport,
-    SuspensionLeakDetector, SuspensionSample, SuspensionStatus,
+    CompressorGuardAction, CompressorOperationalState, CompressorProtectionGuard, DriveBenchmark,
+    DriveComparison, DriveSample, DriveSummary, SuspensionHealthReport, SuspensionLeakDetector,
+    SuspensionSample, SuspensionStatus,
 };
 pub use catalog::{
     CatalogMetadata, CbfCatalog, CbfEcuEntry, CbfVersionInfo, EcuCatalog, EcuCatalogEntry,
@@ -367,5 +368,54 @@ mod tests {
 
         // Cleanup
         std::fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[test]
+    fn test_compressor_protection_guard_lifecycle() {
+        let mut guard = CompressorProtectionGuard::new(40.0, 180.0);
+        assert_eq!(guard.current_state, CompressorOperationalState::Idle);
+
+        // 1. Normal short run (15s)
+        let a1 = guard.update(1000, true);
+        assert_eq!(a1, CompressorGuardAction::None);
+        let a2 = guard.update(16000, true);
+        assert_eq!(a2, CompressorGuardAction::None);
+        let a3 = guard.update(17000, false);
+        assert_eq!(a3, CompressorGuardAction::None);
+        assert_eq!(guard.current_state, CompressorOperationalState::Idle);
+
+        // 2. Overheat / continuous run > 40s -> thermal watchdog cutoff
+        let _ = guard.update(20000, true);
+        let action = guard.update(60500, true); // 40.5s continuous!
+        match action {
+            CompressorGuardAction::TripCutoff { run_duration_s, .. } => {
+                assert!(run_duration_s >= 40.0);
+            }
+            _ => panic!("Expected thermal cutoff trip"),
+        }
+        match guard.current_state {
+            CompressorOperationalState::ThermalCutoffTriggered {
+                cooldown_remaining_seconds,
+                ..
+            } => {
+                assert!(cooldown_remaining_seconds > 0.0);
+            }
+            _ => panic!("Expected ThermalCutoffTriggered state"),
+        }
+
+        // 3. Manual inhibit (Safe mode / transport mode)
+        let action = guard.manual_inhibit("User transport mode");
+        match action {
+            CompressorGuardAction::TripCutoff { reason, .. } => {
+                assert!(reason.contains("User transport mode"));
+            }
+            _ => panic!("Expected trip cutoff for manual inhibit"),
+        }
+        assert!(guard.is_inhibited);
+
+        // 4. Restore normal operation
+        let restore = guard.manual_restore();
+        assert_eq!(restore, CompressorGuardAction::RestoreAllowed);
+        assert_eq!(guard.current_state, CompressorOperationalState::Idle);
     }
 }

@@ -244,9 +244,27 @@ Detects pneumatic leaks on the Mercedes S211 Estate / W211 AIRMATIC before compr
 # Evaluate pneumatic suspension health
 sterngate analyze suspension
 
-# REST API call
+# Active Compressor Protection (Kill-switch / Safe Mode)
+# Inhibit compressor to prevent motor burnout & relay welding during leaks
+sterngate analyze suspension --inhibit
+
+# Set suspension to Workshop / Transport Mode (fixed height for driving/towing)
+sterngate analyze suspension --workshop
+
+# Restore normal automatic pneumatic leveling
+sterngate analyze suspension --restore
+
+# REST API call - Diagnostic Analysis
 curl -s -X POST http://localhost:8080/api/v1/analyze/suspension \
   -H "Content-Type: application/json" -d '{}' | jq .
+
+# REST API call - Compressor Protection Control
+curl -s -X POST http://localhost:8080/api/v1/suspension/compressor/control \
+  -H "Content-Type: application/json" \
+  -d '{"action": "inhibit", "reason": "Airbag leak detected"}' | jq .
+
+# REST API call - Compressor Protection Status
+curl -s http://localhost:8080/api/v1/suspension/compressor/status | jq .
 ```
 
 ### In-Flight Drive Telemetry & A/B Benchmark Comparison

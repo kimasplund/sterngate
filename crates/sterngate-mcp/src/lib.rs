@@ -301,4 +301,56 @@ mod tests {
             .unwrap()
             .contains("Beneficial"));
     }
+
+    #[tokio::test]
+    async fn test_mcp_protect_compressor_tool() {
+        // 1. Inhibit (Burnout safe mode)
+        let res_inhibit = tools::handle_tool_call(
+            "sterngate_protect_compressor",
+            &json!({"action": "inhibit", "reason": "Air leak detected"}),
+        )
+        .await
+        .unwrap();
+
+        assert!(res_inhibit.get("success").unwrap().as_bool().unwrap());
+        assert_eq!(
+            res_inhibit
+                .get("compressor_relay_status")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "DE_ENERGIZED"
+        );
+        assert!(res_inhibit
+            .get("burnout_prevention_active")
+            .unwrap()
+            .as_bool()
+            .unwrap());
+
+        // 2. Workshop / Transport mode
+        let res_ws = tools::handle_tool_call(
+            "sterngate_protect_compressor",
+            &json!({"action": "workshop"}),
+        )
+        .await
+        .unwrap();
+        assert!(res_ws.get("success").unwrap().as_bool().unwrap());
+
+        // 3. Restore normal
+        let res_restore = tools::handle_tool_call(
+            "sterngate_protect_compressor",
+            &json!({"action": "restore"}),
+        )
+        .await
+        .unwrap();
+        assert!(res_restore.get("success").unwrap().as_bool().unwrap());
+        assert_eq!(
+            res_restore
+                .get("compressor_relay_status")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "NORMAL"
+        );
+    }
 }

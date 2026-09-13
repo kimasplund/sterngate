@@ -439,3 +439,155 @@ impl DriveBenchmark {
         }
     }
 }
+
+/// Operational state of the suspension air compressor
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CompressorOperationalState {
+    /// Compressor is off and ready
+    Idle,
+    /// Compressor is currently active
+    Running { continuous_run_seconds: f64 },
+    /// Manually or diagnostics inhibited (safe mode)
+    Inhibited { reason: String },
+    /// Autonomous thermal watchdog triggered cutoff to prevent burnout
+    ThermalCutoffTriggered {
+        continuous_run_seconds: f64,
+        cooldown_remaining_seconds: f64,
+    },
+}
+
+/// Action commanded by the compressor watchdog
+#[derive(Debug, Clone, PartialEq)]
+pub enum CompressorGuardAction {
+    None,
+    /// Must send UDS Routine 0x0210 / 0x0211 to cut power immediately
+    TripCutoff {
+        run_duration_s: f64,
+        reason: String,
+    },
+    /// Normal operation can safely resume
+    RestoreAllowed,
+}
+
+/// Compressor protection watchdog preventing thermal overload and relay welding
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompressorProtectionGuard {
+    pub max_continuous_run_seconds: f64,
+    pub cooldown_period_seconds: f64,
+    pub watchdog_enabled: bool,
+    pub is_inhibited: bool,
+    pub inhibit_reason: Option<String>,
+    pub current_state: CompressorOperationalState,
+    #[serde(skip)]
+    active_start_timestamp_ms: Option<u64>,
+    #[serde(skip)]
+    last_trip_timestamp_ms: Option<u64>,
+}
+
+impl Default for CompressorProtectionGuard {
+    fn default() -> Self {
+        Self::new(40.0, 180.0)
+    }
+}
+
+impl CompressorProtectionGuard {
+    pub fn new(max_continuous_s: f64, cooldown_s: f64) -> Self {
+        Self {
+            max_continuous_run_seconds: max_continuous_s,
+            cooldown_period_seconds: cooldown_s,
+            watchdog_enabled: true,
+            is_inhibited: false,
+            inhibit_reason: None,
+            current_state: CompressorOperationalState::Idle,
+            active_start_timestamp_ms: None,
+            last_trip_timestamp_ms: None,
+        }
+    }
+
+    /// Update with live CAN telemetry sample
+    pub fn update(&mut self, timestamp_ms: u64, is_active: bool) -> CompressorGuardAction {
+        // If manually inhibited, remain inhibited
+        if self.is_inhibited {
+            self.current_state = CompressorOperationalState::Inhibited {
+                reason: self
+                    .inhibit_reason
+                    .clone()
+                    .unwrap_or_else(|| "Safe mode manual inhibit".into()),
+            };
+            return CompressorGuardAction::None;
+        }
+
+        // Check cooldown from previous thermal trip
+        if let Some(trip_ts) = self.last_trip_timestamp_ms {
+            let elapsed_s = (timestamp_ms.saturating_sub(trip_ts) as f64) / 1000.0;
+            if elapsed_s < self.cooldown_period_seconds {
+                let remaining = (self.cooldown_period_seconds - elapsed_s).max(0.0);
+                self.current_state = CompressorOperationalState::ThermalCutoffTriggered {
+                    continuous_run_seconds: self.max_continuous_run_seconds,
+                    cooldown_remaining_seconds: remaining,
+                };
+                return CompressorGuardAction::None;
+            } else {
+                // Cooldown elapsed
+                self.last_trip_timestamp_ms = None;
+                self.current_state = CompressorOperationalState::Idle;
+            }
+        }
+
+        if is_active {
+            let start = *self.active_start_timestamp_ms.get_or_insert(timestamp_ms);
+            let duration_s = (timestamp_ms.saturating_sub(start) as f64) / 1000.0;
+            self.current_state = CompressorOperationalState::Running {
+                continuous_run_seconds: duration_s,
+            };
+
+            // Thermal watchdog trip check
+            if self.watchdog_enabled && duration_s >= self.max_continuous_run_seconds {
+                self.last_trip_timestamp_ms = Some(timestamp_ms);
+                self.active_start_timestamp_ms = None;
+                self.current_state = CompressorOperationalState::ThermalCutoffTriggered {
+                    continuous_run_seconds: duration_s,
+                    cooldown_remaining_seconds: self.cooldown_period_seconds,
+                };
+                return CompressorGuardAction::TripCutoff {
+                    run_duration_s: duration_s,
+                    reason: format!(
+                        "Compressor exceeded OEM thermal continuous threshold ({:.1}s >= {:.1}s). Cutoff triggered to prevent motor burnout and relay welding.",
+                        duration_s, self.max_continuous_run_seconds
+                    ),
+                };
+            }
+        } else {
+            self.active_start_timestamp_ms = None;
+            if self.last_trip_timestamp_ms.is_none() {
+                self.current_state = CompressorOperationalState::Idle;
+            }
+        }
+
+        CompressorGuardAction::None
+    }
+
+    /// Manually inhibit compressor (Safe Mode / Transport Mode)
+    pub fn manual_inhibit(&mut self, reason: &str) -> CompressorGuardAction {
+        self.is_inhibited = true;
+        self.inhibit_reason = Some(reason.to_string());
+        self.active_start_timestamp_ms = None;
+        self.current_state = CompressorOperationalState::Inhibited {
+            reason: reason.to_string(),
+        };
+        CompressorGuardAction::TripCutoff {
+            run_duration_s: 0.0,
+            reason: reason.to_string(),
+        }
+    }
+
+    /// Restore normal automatic leveling compressor operation
+    pub fn manual_restore(&mut self) -> CompressorGuardAction {
+        self.is_inhibited = false;
+        self.inhibit_reason = None;
+        self.last_trip_timestamp_ms = None;
+        self.active_start_timestamp_ms = None;
+        self.current_state = CompressorOperationalState::Idle;
+        CompressorGuardAction::RestoreAllowed
+    }
+}

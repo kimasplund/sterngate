@@ -115,7 +115,13 @@
     "col_chassis": "Karosskod:",
     "col_engine": "Drivlina:",
     "col_voltage": "Batteri / Generator:",
-    "col_modules": "Svarande styrenheter:"
+    "col_modules": "Svarande styrenheter:",
+    "compressor_title": "🛡️ S211 Luftfjädring Kompressorskydd",
+    "watchdog_status": "Termisk vakt: 40s automatisk avstängning",
+    "compressor_burnout_notice": "Överhettningsskydd: Vid läckande luftbälgar går kompressorn oavbrutet tills elmotorn smälter eller relä A 002 542 72 19 svetsar fast. Stäng av kompressorn för att köra säkert till verkstad.",
+    "btn_inhibit_compressor": "🛑 Spärra kompressor (Säkert läge - Av)",
+    "btn_workshop_mode": "📐 Verkstads- / Transportläge",
+    "btn_restore_compressor": "🔄 Återställ normal drift"
   }
 }
 

@@ -61,6 +61,7 @@ Or when running the compiled release binary:
 | `sterngate_scan_vehicle` | `lang` (opt: `en`, `de`, `sv`), `save_to_garage` (opt) | Executes full quick scan across all gateway ECUs, decodes VIN, reads DTCs, samples vitals, and commits snapshot to vehicle's Git garage repo. |
 | `sterngate_list_vehicles` | *(None)* | Lists all recognized vehicles stored in local Git garage by VIN with model, scan count, and last scanned date. |
 | `sterngate_analyze_suspension_leak` | `duration_min` (opt), `left_rear_start_mm` (opt), `left_rear_end_mm` (opt), `right_rear_start_mm` (opt), `right_rear_end_mm` (opt), `compressor_run_time_sec` (opt), `compressor_duty_cycle_pct` (opt) | Evaluates Mercedes S211 rear air suspension (ENR) or W211 AIRMATIC for pneumatic leaks, drop rate mm/h, L/R height asymmetry, and compressor duty cycle strain. |
+| `sterngate_protect_compressor` | `action` (`inhibit`, `restore`, `workshop`), `reason` (opt) | Controls active compressor protection on Mercedes S211 ENR / W211 AIRMATIC to prevent compressor motor burnout and relay welding during air leaks. |
 | `sterngate_compare_drive_runs` | `run_a` (opt), `run_b` (opt), `baseline_...` (opt), `target_...` (opt) | Performs A/B comparative benchmark between two drive telemetry runs to evaluate whether parameter/mechanical changes were beneficial (fuel consumption, TCC slip, boost). |
 | `sterngate_verify_flash_staging` | `target_module`, `expected_hw_id`, `sha256`, `crc32` | Evaluates a staged flash binary against safety checks (battery voltage $\ge 12.5\text{ V}$, CRC32, SHA256, HW match). |
 
@@ -102,6 +103,9 @@ When a user asks:
 - *"My S211 wagon is sagging overnight on the rear left side, is the airbag leaking?"*
   1. Call `sterngate_analyze_suspension_leak` with recorded height measurements or live telemetry.
   2. The tool calculates height drop rate mm/hour, asymmetry, and compressor duty cycle. If $> 10\text{ mm/h}$, it flags `CriticalLeak` and recommends inspecting rear pneumatic bellows (`A 211 320 09 25`) and relay (`A 002 542 72 19`).
+- *"My rear air suspension is leaking and I need to drive to the shop without burning out the compressor:"*
+  1. Call `sterngate_protect_compressor` with `{"action": "inhibit", "reason": "Prevent thermal overload while driving"}` or `{"action": "workshop"}`.
+  2. The tool triggers UDS Routine `0x0210` (Safe Mode Inhibit) or `0x0211` (Workshop Mode), de-energizing the compressor relay circuit to prevent the sustained $>30\text{A}$ overload that welds relay contacts closed.
 - *"Did my adaptation reset or tune improve fuel consumption?"*
   1. Call `sterngate_compare_drive_runs` with baseline and target drive statistics.
   2. The tool returns the fuel consumption delta $L/100\text{km}$, lockup clutch slip delta, and an overall verdict (`Beneficial`, `Neutral`, or `Detrimental`).

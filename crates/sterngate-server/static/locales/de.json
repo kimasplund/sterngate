@@ -115,7 +115,13 @@
     "col_chassis": "Baureihe / Karosserie:",
     "col_engine": "Antriebsstrang:",
     "col_voltage": "Batterie / Generator:",
-    "col_modules": "Antwortende Steuergeräte:"
+    "col_modules": "Antwortende Steuergeräte:",
+    "compressor_title": "🛡️ S211 Luftfederungs-Kompressorschutz",
+    "watchdog_status": "Thermowächter: 40s Zwangsabschaltung",
+    "compressor_burnout_notice": "Überhitzungsschutz: Bei undichten Luftbälgen läuft der Kompressor im Dauerbetrieb, bis der Motor durchbrennt oder Relais A 002 542 72 19 verschweißt. Kompressor sperren, um sicher zur Werkstatt zu fahren.",
+    "btn_inhibit_compressor": "🛑 Kompressor abschalten (Schutzmodus - Aus)",
+    "btn_workshop_mode": "📐 Werkstatt- / Transportmodus",
+    "btn_restore_compressor": "🔄 Normalbetrieb wiederherstellen"
   }
 }
 

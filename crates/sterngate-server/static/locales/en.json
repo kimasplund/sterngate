@@ -115,7 +115,13 @@
     "col_chassis": "Chassis / Body:",
     "col_engine": "Powertrain:",
     "col_voltage": "Battery / Alternator:",
-    "col_modules": "Modules Responding:"
+    "col_modules": "Modules Responding:",
+    "compressor_title": "🛡️ S211 Air Suspension Compressor Guard",
+    "watchdog_status": "Thermal Watchdog: 40s Auto-Cutoff",
+    "compressor_burnout_notice": "Burnout Prevention: When an air spring leaks, the compressor runs continuously until the motor melts or relay A 002 542 72 19 welds shut. Inhibit compressor to safely drive home or to a workshop.",
+    "btn_inhibit_compressor": "🛑 Inhibit Compressor (Safe Mode - Off)",
+    "btn_workshop_mode": "📐 Workshop / Transport Mode",
+    "btn_restore_compressor": "🔄 Restore Normal Operation"
   }
 }
 
