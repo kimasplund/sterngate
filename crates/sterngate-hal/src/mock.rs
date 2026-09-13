@@ -209,6 +209,38 @@ impl VirtualCanInterface {
                     ))
                 }
             }
+            // RoutineControl (0x31)
+            0x31 => {
+                if payload.len() >= 5 {
+                    let sub_fn = payload[2];
+                    let r_hi = payload[3];
+                    let r_lo = payload[4];
+                    let routine_id = u16::from_be_bytes([r_hi, r_lo]);
+                    match routine_id {
+                        // 0xFF01: Fuel Pump Prime & Rail Bleed
+                        // 0x0201: Reset Zero-Quantity Injector Adaptations (NMK)
+                        // 0x0202: DPF Regeneration Trigger
+                        // 0x0203: Throttle Valve / EGR Lower Stop Relearn
+                        // 0x0205: SBC Brake Hydraulic Bleeding Routine
+                        // 0xFF00: Erase Flash Routine
+                        0xFF01 | 0x0201 | 0x0202 | 0x0203 | 0x0205 | 0xFF00 => {
+                            Some(CanFrame::new_standard(
+                                resp_id as u16,
+                                &[0x05, 0x71, sub_fn, r_hi, r_lo, 0x00],
+                            ))
+                        }
+                        _ => Some(CanFrame::new_standard(
+                            resp_id as u16,
+                            &[0x03, 0x7F, 0x31, 0x31], // RequestOutOfRange
+                        )),
+                    }
+                } else {
+                    Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x03, 0x7F, 0x31, 0x13], // IncorrectMessageLength
+                    ))
+                }
+            }
             _ => {
                 Some(CanFrame::new_standard(
                     resp_id as u16,

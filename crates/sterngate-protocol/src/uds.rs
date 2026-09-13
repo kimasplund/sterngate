@@ -154,6 +154,20 @@ impl<'a> UdsClient<'a> {
         Ok(())
     }
 
+    /// RoutineControl (0x31)
+    /// sub_function: 0x01 (startRoutine), 0x02 (stopRoutine), 0x03 (requestRoutineResults)
+    pub async fn routine_control(
+        &mut self,
+        sub_function: u8,
+        routine_id: u16,
+        option_record: &[u8],
+    ) -> Result<Vec<u8>> {
+        let b = routine_id.to_be_bytes();
+        let mut payload = vec![sub_function, b[0], b[1]];
+        payload.extend_from_slice(option_record);
+        self.send_request(0x31, &payload).await
+    }
+
     fn lookup_nrc_description(nrc: u8) -> String {
         match nrc {
             0x10 => "General Reject".into(),

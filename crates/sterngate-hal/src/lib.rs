@@ -52,4 +52,22 @@ mod tests {
         assert_eq!(resp.data[3], 0x01);
         assert_eq!(resp.data[4], 120); // 120 - 40 = 80°C (Exact target!)
     }
+
+    #[tokio::test]
+    async fn test_virtual_can_routine_control() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        // Send RoutineControl (0x31) Start (0x01) Fuel Pump Prime (0xFF01) to EDC16 (0x7E0)
+        let req = CanFrame::new_standard(0x7E0, &[0x04, 0x31, 0x01, 0xFF, 0x01]);
+        sim.send(req).await.unwrap();
+
+        let resp = sim.recv().await.unwrap();
+        assert_eq!(resp.id, 0x7E8);
+        assert_eq!(resp.data[1], 0x71); // Positive response to 0x31
+        assert_eq!(resp.data[2], 0x01); // sub-function startRoutine
+        assert_eq!(resp.data[3], 0xFF); // routine high byte
+        assert_eq!(resp.data[4], 0x01); // routine low byte
+        assert_eq!(resp.data[5], 0x00); // routine status ok
+    }
 }

@@ -53,6 +53,8 @@ Or when running the compiled release binary:
 | `sterngate_read_parameter` | `name` or `did` | Reads a specific sensor parameter (e.g. `Transmission Fluid Temp`, `0x2001`). |
 | `sterngate_write_parameter`| `did`, `hex_value` | Performs variant coding / parameter write after security handshake. |
 | `sterngate_inspect_ecu` | `module` | Fetches hardware ID, software revision, and calibration ID. |
+| `sterngate_trigger_routine` | `routine_id`, `module`, `sub_function` | Triggers UDS Service 0x31 actuator/diagnostic routines (fuel prime, NMK reset, DPF regen). |
+| `sterngate_control_flight_recorder` | `action`, `filename` | Controls high-frequency continuous CSV telemetry flight recording (start, stop, status). |
 | `sterngate_list_profiles` | *(None)* | Lists installed vehicle profiles in `profiles/`. |
 | `sterngate_verify_flash_staging` | `manifest_path` | Evaluates a staged flash binary against safety checks (voltage, CRC, HW). |
 

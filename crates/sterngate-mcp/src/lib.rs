@@ -58,4 +58,39 @@ mod tests {
             "mercedes_w211_om646_edc16"
         );
     }
+
+    #[tokio::test]
+    async fn test_mcp_trigger_routine_tool() {
+        let res = tools::handle_tool_call(
+            "sterngate_trigger_routine",
+            &json!({"module": "EDC16", "routine_id": "0xFF01", "sub_function": 1}),
+        )
+        .await
+        .unwrap();
+        assert!(res.get("success").unwrap().as_bool().unwrap());
+        assert_eq!(res.get("routine_id").unwrap().as_str().unwrap(), "0xFF01");
+        assert_eq!(
+            res.get("routine_name").unwrap().as_str().unwrap(),
+            "Fuel Pump Prime & Rail Bleed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_mcp_control_flight_recorder_tool() {
+        let start_res = tools::handle_tool_call(
+            "sterngate_control_flight_recorder",
+            &json!({"action": "start", "filename": "track_test.csv"}),
+        )
+        .await
+        .unwrap();
+        assert!(start_res.get("is_recording").unwrap().as_bool().unwrap());
+
+        let stop_res = tools::handle_tool_call(
+            "sterngate_control_flight_recorder",
+            &json!({"action": "stop"}),
+        )
+        .await
+        .unwrap();
+        assert!(!stop_res.get("is_recording").unwrap().as_bool().unwrap());
+    }
 }

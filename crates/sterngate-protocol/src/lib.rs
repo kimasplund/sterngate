@@ -118,4 +118,19 @@ mod tests {
             .await
             .is_err());
     }
+
+    #[tokio::test]
+    async fn test_uds_client_routine_control() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        let mut uds = UdsClient::new(&mut sim, 0x7E0, 0x7E8);
+        // Start Fuel Pump Prime & Rail Bleed (0xFF01)
+        let resp = uds.routine_control(0x01, 0xFF01, &[]).await.unwrap();
+        assert_eq!(resp[0], 0x71); // Positive response
+        assert_eq!(resp[1], 0x01); // startRoutine
+        assert_eq!(resp[2], 0xFF); // Routine ID high
+        assert_eq!(resp[3], 0x01); // Routine ID low
+        assert_eq!(resp[4], 0x00); // Status OK
+    }
 }

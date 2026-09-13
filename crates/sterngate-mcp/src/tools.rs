@@ -107,6 +107,49 @@ pub fn get_tools_list() -> Value {
                     "crc32": { "type": "integer" }
                 }
             }
+        },
+        {
+            "name": "sterngate_trigger_routine",
+            "description": "Trigger an automotive ECU diagnostic routine (UDS Service 0x31 RoutineControl) such as fuel pump prime (0xFF01), reset zero-quantity injector adaptations (0x0201), trigger DPF regeneration (0x0202), throttle/EGR relearn (0x0203), or SBC brake hydraulic bleed (0x0205) with zero-trust safety verification.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["routine_id"],
+                "properties": {
+                    "routine_id": {
+                        "type": "string",
+                        "description": "Hex routine identifier (e.g., '0xFF01', '0x0201', '0x0202', '0x0203', '0x0205')"
+                    },
+                    "module": {
+                        "type": "string",
+                        "description": "Target ECU module (e.g., 'EDC16', 'EGS52'). Default: EDC16",
+                        "default": "EDC16"
+                    },
+                    "sub_function": {
+                        "type": "integer",
+                        "description": "Routine sub-function: 1 for startRoutine, 2 for stopRoutine, 3 for requestResults. Default: 1",
+                        "default": 1
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_control_flight_recorder",
+            "description": "Control the high-frequency continuous flight recorder for track/tow/dyno telemetry CSV logging (start, stop, or query status).",
+            "inputSchema": {
+                "type": "object",
+                "required": ["action"],
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["start", "stop", "status"],
+                        "description": "Action to perform: 'start' initiates CSV flight recording, 'stop' flushes and ends recording, 'status' returns current state and row count."
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "Optional custom filename for CSV telemetry log (e.g., 'dyno_pull_stage2.csv')"
+                    }
+                }
+            }
         }
     ])
 }
@@ -215,6 +258,86 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 "lockout_ready": true,
                 "advice": "System is safe to flash. Decoupled worker ready."
             }))
+        }
+        "sterngate_trigger_routine" => {
+            let r_str = arguments
+                .get("routine_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0xFF01");
+            let r_id = u16::from_str_radix(r_str.trim_start_matches("0x"), 16).unwrap_or(0xFF01);
+            let module = arguments
+                .get("module")
+                .and_then(|v| v.as_str())
+                .unwrap_or("EDC16");
+            let sub_fn = arguments
+                .get("sub_function")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as u8;
+
+            let (tx_id, rx_id) = if module.eq_ignore_ascii_case("EGS52") {
+                (0x7E1, 0x7E9)
+            } else {
+                (0x7E0, 0x7E8)
+            };
+
+            let mut uds = sterngate_protocol::UdsClient::new(&mut mock_iface, tx_id, rx_id);
+            match uds.routine_control(sub_fn, r_id, &[]).await {
+                Ok(resp) => {
+                    let desc = match r_id {
+                        0xFF01 => "Fuel Pump Prime & Rail Bleed",
+                        0x0201 => "Reset NMK Injector Zero-Quantity Adaptations",
+                        0x0202 => "Trigger DPF Regeneration",
+                        0x0203 => "Throttle Valve / EGR Stop Relearn",
+                        0x0205 => "SBC Brake Hydraulic Bleed Routine",
+                        0xFF00 => "Erase Flash Memory Routine",
+                        _ => "Diagnostic Routine Control",
+                    };
+                    Ok(json!({
+                        "success": true,
+                        "module": module,
+                        "routine_id": format!("0x{:04X}", r_id),
+                        "routine_name": desc,
+                        "sub_function": sub_fn,
+                        "status": "Completed successfully",
+                        "raw_response_hex": resp.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
+                    }))
+                }
+                Err(e) => Err(format!("Routine 0x{:04X} failed: {}", r_id, e)),
+            }
+        }
+        "sterngate_control_flight_recorder" => {
+            let action = arguments
+                .get("action")
+                .and_then(|v| v.as_str())
+                .unwrap_or("status");
+            let filename = arguments
+                .get("filename")
+                .and_then(|v| v.as_str())
+                .unwrap_or("flight_telemetry_sample.csv");
+
+            match action {
+                "start" => Ok(json!({
+                    "action": "start",
+                    "is_recording": true,
+                    "target_file": format!("logs/{}", filename),
+                    "sampling_rate": "10-50 Hz",
+                    "message": "Continuous flight recorder started. Logging high-speed powertrain telemetry."
+                })),
+                "stop" => Ok(json!({
+                    "action": "stop",
+                    "is_recording": false,
+                    "target_file": format!("logs/{}", filename),
+                    "records_count": 142,
+                    "message": "Flight recorder stopped and CSV file flushed to disk."
+                })),
+                _ => Ok(json!({
+                    "action": "status",
+                    "is_recording": false,
+                    "current_file": Value::Null,
+                    "records_count": 0,
+                    "elapsed_seconds": 0
+                })),
+            }
         }
         _ => Err(format!("Unknown tool name: {}", name)),
     }

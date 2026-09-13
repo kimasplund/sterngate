@@ -27,6 +27,14 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
     .badge { padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
     .badge-online { background: rgba(46, 160, 67, 0.2); color: var(--success); border: 1px solid var(--success); }
     .badge-voltage { background: rgba(88, 166, 255, 0.2); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-recording { background: rgba(248, 81, 73, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+    .badge-ready { background: rgba(46, 160, 67, 0.25); color: #3fb950; border: 1px solid #3fb950; }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+    .pulse { animation: pulse 1.5s infinite ease-in-out; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem; }
     .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
     .card-title { font-size: 1rem; color: var(--text-muted); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; align-items: center; }
@@ -45,12 +53,15 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
     .btn-danger:hover { background: rgba(248, 81, 73, 0.3); }
     .btn-primary { background: #238636; color: #fff; border-color: #2ea043; }
     .btn-primary:hover { background: #2ea043; }
+    .btn-group { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+    input[type="text"] { background: #0d1117; border: 1px solid var(--border); color: var(--text); padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem; }
+    input[type="text"]:focus { outline: none; border-color: var(--accent); }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.5rem; }
     th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
     th { color: var(--text-muted); }
     .progress-bar { width: 100%; height: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden; margin: 1rem 0; border: 1px solid var(--border); }
     .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--success)); transition: width 0.2s; }
-    .log-box { background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; height: 120px; overflow-y: auto; color: #8b949e; }
+    .log-box { background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; height: 120px; overflow-y: auto; color: #8b949e; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -89,7 +100,10 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         <div class="gauge">
           <div class="gauge-label">TRANSMISSION FLUID (722.6)</div>
           <div id="val-trans-temp" class="gauge-val" style="color: var(--accent);">80°C</div>
-          <div class="highlight-target">✓ Exact Level Check Temp (80°C)</div>
+          <div id="badge-trans-status" class="badge badge-ready pulse" style="display: inline-block; margin-top: 0.35rem; font-size: 0.7rem;">
+            ★ DIPSTICK READY: 80°C (SPEC 54-65mm) ★
+          </div>
+          <div class="gauge-label" style="margin-top: 0.25rem;">722.6 / NAG1 ATF Level Assistant</div>
         </div>
         <div class="gauge">
           <div class="gauge-label">COMMON RAIL PRESSURE</div>
@@ -137,6 +151,53 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
       <small style="display: block; margin-top: 1rem; color: var(--text-muted);">Threshold: ±2.0 mm³/stroke. Values outside ±3.0 indicate injector wear or nozzle fouling.</small>
     </div>
 
+    <!-- Continuous Flight Telemetry Recorder -->
+    <div class="card">
+      <div class="card-title">
+        <span>Flight Telemetry Recorder</span>
+        <span id="rec-status-badge" class="badge" style="background: #21262d; color: var(--text-muted); border: 1px solid var(--border);">IDLE</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        Continuous 10–50Hz CSV logging for track, tow, dyno, and road testing.
+      </div>
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+        <input id="rec-filename" type="text" placeholder="Custom log name (optional)" style="flex: 1;">
+        <button id="btn-rec-toggle" class="btn btn-danger" onclick="toggleFlightRecorder()">Start Recording</button>
+      </div>
+      <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.35rem;">
+        <div>Active File: <span id="rec-file-path" style="color: var(--accent); font-family: monospace;">None</span></div>
+        <div>Captured Rows: <b id="rec-rows-count" style="color: #fff;">0</b> | Elapsed: <span id="rec-elapsed">0s</span></div>
+      </div>
+    </div>
+
+    <!-- Actuator & Diagnostic Routines -->
+    <div class="card" style="grid-column: span 2;">
+      <div class="card-title">
+        <span>Actuator & Diagnostic Routines (UDS 0x31)</span>
+        <span class="badge" style="background: rgba(188, 140, 255, 0.2); color: var(--purple); border: 1px solid var(--purple);">Zero-Trust Protected</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        Execute vehicle routines via CommandEnvelope verification. Fast actuators prime fuel rails, reset adaptation curves, and bleed hydraulics.
+      </div>
+      <div class="btn-group">
+        <button class="btn" onclick="triggerQuickRoutine('0xFF01', 'EDC16', 'Fuel Pump Prime & Rail Bleed')">⚡ Prime Fuel Pump (10s Bleed)</button>
+        <button class="btn" onclick="triggerQuickRoutine('0x0201', 'EDC16', 'Reset NMK Injector Adaptations')">🔄 Reset NMK Adaptations</button>
+        <button class="btn" onclick="triggerQuickRoutine('0x0203', 'EDC16', 'Throttle & EGR Stop Relearn')">📐 Throttle/EGR Stop Relearn</button>
+        <button class="btn" onclick="triggerQuickRoutine('0x0202', 'EDC16', 'DPF Service Regeneration')">🔥 Trigger DPF Regeneration</button>
+        <button class="btn" onclick="triggerQuickRoutine('0x0205', 'EDC16', 'SBC Brake Hydraulic Bleed')">🛑 SBC Brake Hydraulic Bleed</button>
+      </div>
+      <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem;">
+        <input id="custom-mod" type="text" placeholder="Module (EDC16)" value="EDC16" style="width: 100px;">
+        <input id="custom-routine-id" type="text" placeholder="Routine ID (e.g. 0xFF01)" style="width: 160px;">
+        <input id="custom-subfn" type="text" placeholder="SubFn (1=Start)" value="1" style="width: 110px;">
+        <input id="custom-opts" type="text" placeholder="Option Hex (optional)" style="flex: 1;">
+        <button class="btn btn-primary" onclick="triggerCustomRoutine()">Execute Routine</button>
+      </div>
+      <div id="routine-logs" class="log-box" style="height: 100px;">
+        [SYSTEM] Routine controller ready. Select a quick actuator or input custom routine ID.<br>
+      </div>
+    </div>
+
     <!-- DTC Scanner -->
     <div class="card">
       <div class="card-title">
@@ -157,15 +218,17 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
     </div>
 
     <!-- Safe Flasher Staging -->
-    <div class="card" style="grid-column: span 2;">
+    <div class="card">
       <div class="card-title">
         <span>Autonomous Safe Flasher (Decoupled Worker)</span>
         <span id="flash-state-badge" class="badge badge-voltage">IDLE</span>
       </div>
       <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem;">
         <button class="btn btn-primary" onclick="startSimulatedFlash()">Stage & Execute Flash</button>
-        <span style="font-size: 0.85rem; color: var(--text-muted)">Safety Gate: Battery >= 12.5V, SHA256 & CRC verified, API Lockout active</span>
       </div>
+      <span style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        Safety Gate: Battery >= 12.5V, SHA256 & CRC verified, API Lockout active
+      </span>
       <div class="progress-bar">
         <div id="flash-progress" class="progress-fill"></div>
       </div>
@@ -212,17 +275,55 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
       };
     }
 
+    function updateCylBar(idVal, idBar, val) {
+      if (val !== null && val !== undefined) {
+        document.getElementById(idVal).textContent = (val >= 0 ? '+' : '') + val.toFixed(2) + ' mm³';
+        const pct = Math.min(Math.max((val + 3.0) / 6.0 * 100, 5), 95);
+        const bar = document.getElementById(idBar);
+        bar.style.width = pct + '%';
+        bar.style.background = Math.abs(val) > 2.0 ? 'var(--warning)' : 'var(--success)';
+      }
+    }
+
     const ws = new WebSocket(`ws://${location.host}/ws/telemetry`);
     ws.onmessage = (e) => {
       try {
         const snap = JSON.parse(e.data);
-        if (snap.engine_rpm) document.getElementById('val-rpm').textContent = Math.round(snap.engine_rpm);
-        if (snap.coolant_temp) document.getElementById('val-coolant').textContent = snap.coolant_temp + '°C';
-        if (snap.trans_fluid_temp) document.getElementById('val-trans-temp').textContent = snap.trans_fluid_temp + '°C';
-        if (snap.rail_pressure) document.getElementById('val-rail').textContent = snap.rail_pressure.toFixed(1) + ' bar';
-        if (snap.boost_pressure) document.getElementById('val-boost').textContent = Math.round(snap.boost_pressure) + ' hPa';
-        if (snap.tcc_slip_rpm) document.getElementById('val-tcc').textContent = Math.round(snap.tcc_slip_rpm) + ' RPM';
-        if (snap.battery_voltage) document.getElementById('badge-voltage').textContent = snap.battery_voltage.toFixed(1) + 'V';
+        if (snap.engine_rpm !== null && snap.engine_rpm !== undefined) document.getElementById('val-rpm').textContent = Math.round(snap.engine_rpm);
+        if (snap.coolant_temp !== null && snap.coolant_temp !== undefined) document.getElementById('val-coolant').textContent = snap.coolant_temp + '°C';
+        if (snap.trans_fluid_temp !== null && snap.trans_fluid_temp !== undefined) {
+          const t = snap.trans_fluid_temp;
+          document.getElementById('val-trans-temp').textContent = t + '°C';
+          const badge = document.getElementById('badge-trans-status');
+          if (t < 78.0) {
+            badge.className = 'badge';
+            badge.style.background = 'rgba(88, 166, 255, 0.2)';
+            badge.style.color = 'var(--accent)';
+            badge.style.border = '1px solid var(--accent)';
+            badge.textContent = `WARMING UP (${t}°C < 78°C) - NOT READY`;
+          } else if (t <= 82.0) {
+            badge.className = 'badge badge-ready pulse';
+            badge.style.background = 'rgba(46, 160, 67, 0.25)';
+            badge.style.color = '#3fb950';
+            badge.style.border = '1px solid #3fb950';
+            badge.textContent = `★ READY AT ${t}°C: MEASURE DIPSTICK (SPEC 54-65mm) ★`;
+          } else {
+            badge.className = 'badge';
+            badge.style.background = 'rgba(210, 153, 34, 0.2)';
+            badge.style.color = 'var(--warning)';
+            badge.style.border = '1px solid var(--warning)';
+            badge.textContent = `COOL DOWN (${t}°C > 82°C) - OVERHEAT`;
+          }
+        }
+        if (snap.rail_pressure !== null && snap.rail_pressure !== undefined) document.getElementById('val-rail').textContent = snap.rail_pressure.toFixed(1) + ' bar';
+        if (snap.boost_pressure !== null && snap.boost_pressure !== undefined) document.getElementById('val-boost').textContent = Math.round(snap.boost_pressure) + ' hPa';
+        if (snap.tcc_slip_rpm !== null && snap.tcc_slip_rpm !== undefined) document.getElementById('val-tcc').textContent = Math.round(snap.tcc_slip_rpm) + ' RPM';
+        if (snap.battery_voltage !== null && snap.battery_voltage !== undefined) document.getElementById('badge-voltage').textContent = snap.battery_voltage.toFixed(1) + 'V';
+
+        updateCylBar('val-cyl1', 'bar-cyl1', snap.inj_corr_cyl1);
+        updateCylBar('val-cyl2', 'bar-cyl2', snap.inj_corr_cyl2);
+        updateCylBar('val-cyl3', 'bar-cyl3', snap.inj_corr_cyl3);
+        updateCylBar('val-cyl4', 'bar-cyl4', snap.inj_corr_cyl4);
       } catch(err) {}
     };
 
@@ -248,16 +349,122 @@ pub const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
       if (snap.engine_rpm) document.getElementById('val-rpm').textContent = Math.round(snap.engine_rpm);
     }
 
-    async function sendVerifiedCoding(didHex, dataBytes) {
-      const did = parseInt(didHex.replace('0x', ''), 16);
-      const envelope = createCommandEnvelope('EDC16', 0x2E, did, dataBytes);
-      const res = await fetch('/api/v1/coding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ envelope })
-      });
-      return await res.json();
+    async function triggerQuickRoutine(routineIdHex, module, name) {
+      const logBox = document.getElementById('routine-logs');
+      logBox.innerHTML += `[SEND] Dispatching ${name} (${routineIdHex}) to ${module}...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+      const rId = parseInt(routineIdHex.replace('0x', ''), 16);
+      const payloadBytes = [1, (rId >> 8) & 0xFF, rId & 0xFF];
+      const envelope = createCommandEnvelope(module, 0x31, rId, payloadBytes);
+      try {
+        const res = await fetch('/api/v1/routine', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ envelope })
+        });
+        const data = await res.json();
+        if (data.success) {
+          logBox.innerHTML += `<span style="color: var(--success)">[SUCCESS] ${data.message} (Payload: ${data.status_hex})</span><br>`;
+        } else {
+          logBox.innerHTML += `<span style="color: var(--danger)">[REJECTED] ${data.message}</span><br>`;
+        }
+      } catch (e) {
+        logBox.innerHTML += `<span style="color: var(--danger)">[ERROR] ${e.message}</span><br>`;
+      }
+      logBox.scrollTop = logBox.scrollHeight;
     }
+
+    async function triggerCustomRoutine() {
+      const mod = document.getElementById('custom-mod').value.trim() || 'EDC16';
+      const rIdHex = document.getElementById('custom-routine-id').value.trim();
+      if (!rIdHex) { alert('Please enter Routine ID hex (e.g. 0xFF01)'); return; }
+      const subfn = parseInt(document.getElementById('custom-subfn').value.trim() || '1');
+      const opts = document.getElementById('custom-opts').value.trim();
+      const logBox = document.getElementById('routine-logs');
+      logBox.innerHTML += `[SEND] Executing custom routine ${rIdHex} on ${mod}...<br>`;
+      const rId = parseInt(rIdHex.replace('0x', ''), 16);
+      let optBytes = [];
+      if (opts) {
+        for (let i = 0; i < opts.length; i += 2) {
+          optBytes.push(parseInt(opts.substr(i, 2), 16) || 0);
+        }
+      }
+      const payloadBytes = [subfn, (rId >> 8) & 0xFF, rId & 0xFF, ...optBytes];
+      const envelope = createCommandEnvelope(mod, 0x31, rId, payloadBytes);
+      try {
+        const res = await fetch('/api/v1/routine', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ envelope })
+        });
+        const data = await res.json();
+        if (data.success) {
+          logBox.innerHTML += `<span style="color: var(--success)">[SUCCESS] ${data.message} (Resp: ${data.status_hex})</span><br>`;
+        } else {
+          logBox.innerHTML += `<span style="color: var(--danger)">[REJECTED] ${data.message}</span><br>`;
+        }
+      } catch (e) {
+        logBox.innerHTML += `<span style="color: var(--danger)">[ERROR] ${e.message}</span><br>`;
+      }
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    let isRecording = false;
+    async function toggleFlightRecorder() {
+      if (!isRecording) {
+        const filename = document.getElementById('rec-filename').value.trim() || undefined;
+        const res = await fetch('/api/v1/recorder/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        const status = await res.json();
+        updateRecorderUi(status);
+      } else {
+        const res = await fetch('/api/v1/recorder/stop', { method: 'POST' });
+        const status = await res.json();
+        updateRecorderUi(status);
+      }
+    }
+
+    function updateRecorderUi(st) {
+      isRecording = st.is_recording;
+      const badge = document.getElementById('rec-status-badge');
+      const btn = document.getElementById('btn-rec-toggle');
+      const path = document.getElementById('rec-file-path');
+      const rows = document.getElementById('rec-rows-count');
+      const elapsed = document.getElementById('rec-elapsed');
+      if (isRecording) {
+        badge.className = 'badge badge-recording pulse';
+        badge.style.background = 'rgba(248, 81, 73, 0.2)';
+        badge.style.color = 'var(--danger)';
+        badge.style.border = '1px solid var(--danger)';
+        badge.textContent = `REC (${st.elapsed_seconds}s)`;
+        btn.textContent = 'Stop Recording';
+        btn.className = 'btn btn-primary';
+      } else {
+        badge.className = 'badge';
+        badge.style.background = '#21262d';
+        badge.style.color = 'var(--text-muted)';
+        badge.style.border = '1px solid var(--border)';
+        badge.textContent = 'IDLE';
+        btn.textContent = 'Start Recording';
+        btn.className = 'btn btn-danger';
+      }
+      path.textContent = st.current_file ? st.current_file.split('/').pop() : 'None';
+      rows.textContent = st.records_count;
+      elapsed.textContent = st.elapsed_seconds + 's';
+    }
+
+    setInterval(async () => {
+      try {
+        const res = await fetch('/api/v1/recorder/status');
+        const st = await res.json();
+        if (st.is_recording || isRecording) {
+          updateRecorderUi(st);
+        }
+      } catch(e) {}
+    }, 1000);
 
     async function startSimulatedFlash() {
       const logBox = document.getElementById('flash-logs');

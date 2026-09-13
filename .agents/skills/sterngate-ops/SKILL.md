@@ -77,7 +77,37 @@ The technician's browser opens at `http://localhost:3000`, connected over an end
 
 ---
 
-## 5. Verification Checklist
+---
+
+## 5. Routine Diagnostics & Flight Recording
+
+### Triggering UDS Routines (Service 0x31) via CLI
+```bash
+# Prime fuel pump & rail bleed (0xFF01)
+sterngate diag routine --routine 0xFF01 --module EDC16
+
+# Reset zero-quantity injector adaptations (NMK, 0x0201)
+sterngate diag routine --routine 0x0201 --module EDC16
+
+# Trigger DPF service regeneration (0x0202)
+sterngate diag routine --routine 0x0202 --module EDC16
+```
+
+### Continuous Flight Telemetry Logging (REST API)
+```bash
+# Start 10-50Hz continuous flight recording
+curl -s -X POST http://localhost:8080/api/v1/recorder/start -H "Content-Type: application/json" -d '{"filename": "dyno_stage2.csv"}' | jq .
+
+# Query flight recorder status (rows captured, elapsed time)
+curl -s http://localhost:8080/api/v1/recorder/status | jq .
+
+# Stop flight recorder and flush CSV to disk
+curl -s -X POST http://localhost:8080/api/v1/recorder/stop | jq .
+```
+
+---
+
+## 6. Verification Checklist
 
 1. **Verify Binary Compiles**:
    ```bash
@@ -91,5 +121,6 @@ The technician's browser opens at `http://localhost:3000`, connected over an end
    ```bash
    curl -s http://localhost:8080/api/v1/telemetry | jq .
    curl -s http://localhost:8080/api/v1/dtc | jq .
+   curl -s http://localhost:8080/api/v1/recorder/status | jq .
    ```
 

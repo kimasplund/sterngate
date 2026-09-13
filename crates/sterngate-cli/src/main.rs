@@ -99,6 +99,18 @@ enum DiagCommands {
         #[arg(long, default_value = "EDC16")]
         module: String,
     },
+    /// Execute UDS Service 0x31 RoutineControl (actuators, adaptations, bleeds)
+    Routine {
+        /// Target ECU module (e.g. EDC16, EGS52)
+        #[arg(long, default_value = "EDC16")]
+        module: String,
+        /// Routine identifier hex (e.g. 0xFF01, 0x0201, 0x0202, 0x0203, 0x0205)
+        #[arg(long, default_value = "0xFF01")]
+        routine: String,
+        /// Routine sub-function (1=startRoutine, 2=stopRoutine, 3=requestResults)
+        #[arg(long, default_value_t = 1)]
+        sub_function: u8,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -178,6 +190,45 @@ async fn main() -> Result<()> {
                 DiagCommands::Clear { module } => {
                     info!("Clearing diagnostic fault memory on {}...", module);
                     println!("DTC memory cleared successfully.");
+                    return Ok(());
+                }
+                DiagCommands::Routine {
+                    module,
+                    routine,
+                    sub_function,
+                } => {
+                    let r_id = u16::from_str_radix(routine.trim_start_matches("0x"), 16)?;
+                    let desc = match r_id {
+                        0xFF01 => "Fuel Pump Prime & Rail Bleed",
+                        0x0201 => "Reset NMK Injector Zero-Quantity Adaptations",
+                        0x0202 => "Trigger DPF Regeneration",
+                        0x0203 => "Throttle Valve / EGR Stop Relearn",
+                        0x0205 => "SBC Brake Hydraulic Bleed Routine",
+                        0xFF00 => "Erase Flash Memory Routine",
+                        _ => "Diagnostic Routine",
+                    };
+                    info!(
+                        "Executing {} (0x{:04X}) on {} (sub-function: {})...",
+                        desc, r_id, module, sub_function
+                    );
+                    let mut iface = VirtualCanInterface::new();
+                    iface.open().await?;
+                    let (tx_id, rx_id) = if module.eq_ignore_ascii_case("EGS52") {
+                        (0x7E1, 0x7E9)
+                    } else {
+                        (0x7E0, 0x7E8)
+                    };
+                    let mut uds = sterngate_protocol::UdsClient::new(&mut iface, tx_id, rx_id);
+                    let resp = uds.routine_control(sub_function, r_id, &[]).await?;
+                    let resp_hex = resp
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    println!(
+                        "Routine 0x{:04X} ({}) executed successfully! Response: {}",
+                        r_id, desc, resp_hex
+                    );
                     return Ok(());
                 }
             },

@@ -11,6 +11,7 @@ pub struct AppState {
     pub flasher: Arc<FlashingWorker>,
     pub gate: Arc<TransactionGate>,
     pub telemetry_tx: broadcast::Sender<TelemetrySnapshot>,
+    pub recorder: Arc<crate::recorder::FlightRecorder>,
 }
 
 impl AppState {
@@ -26,6 +27,7 @@ impl AppState {
             flasher,
             gate: Arc::new(TransactionGate::new()),
             telemetry_tx: tx,
+            recorder: Arc::new(crate::recorder::FlightRecorder::default()),
         }
     }
 }

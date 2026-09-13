@@ -25,6 +25,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/flash/progress", get(get_flash_progress))
         .route("/api/v1/flash/stage", post(stage_flash))
         .route("/api/v1/coding", post(write_coding))
+        .route("/api/v1/routine", post(execute_routine))
+        .route("/api/v1/recorder/start", post(start_recorder))
+        .route("/api/v1/recorder/stop", post(stop_recorder))
+        .route("/api/v1/recorder/status", get(get_recorder_status))
         .with_state(state)
 }
 
@@ -32,13 +36,13 @@ async fn dashboard_handler() -> Html<&'static str> {
     Html(DASHBOARD_HTML)
 }
 
-async fn get_telemetry(State(state): State<Arc<AppState>>) -> Json<TelemetrySnapshot> {
+pub async fn sample_telemetry(state: &AppState) -> TelemetrySnapshot {
     if state.flasher.is_locked().await {
-        return Json(TelemetrySnapshot {
+        return TelemetrySnapshot {
             timestamp_ms: chrono::Utc::now().timestamp_millis() as u64,
             battery_voltage: 13.8,
             ..Default::default()
-        });
+        };
     }
 
     let mut iface = state.interface.lock().await;
@@ -95,6 +99,11 @@ async fn get_telemetry(State(state): State<Arc<AppState>>) -> Json<TelemetrySnap
     }
 
     let _ = state.telemetry_tx.send(snap.clone());
+    snap
+}
+
+async fn get_telemetry(State(state): State<Arc<AppState>>) -> Json<TelemetrySnapshot> {
+    let snap = sample_telemetry(&state).await;
     Json(snap)
 }
 
@@ -260,4 +269,189 @@ async fn write_coding(
             }),
         ),
     }
+}
+
+#[derive(Deserialize)]
+struct RoutinePayload {
+    envelope: Option<sterngate_core::CommandEnvelope>,
+    module: Option<String>,
+    routine_id_hex: Option<String>,
+    sub_function: Option<u8>,
+    option_record_hex: Option<String>,
+}
+
+#[derive(Serialize)]
+struct RoutineResponse {
+    success: bool,
+    command_id: String,
+    routine_id: String,
+    status_hex: String,
+    message: String,
+}
+
+async fn execute_routine(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<RoutinePayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(RoutineResponse {
+                success: false,
+                command_id: "".into(),
+                routine_id: "".into(),
+                status_hex: "".into(),
+                message: "API is locked during flash operation".into(),
+            }),
+        );
+    }
+
+    let envelope = if let Some(env) = payload.envelope {
+        env
+    } else {
+        let module = payload.module.unwrap_or_else(|| "EDC16".into());
+        let routine_id_hex = payload.routine_id_hex.unwrap_or_else(|| "0xFF01".into());
+        let routine_id =
+            u16::from_str_radix(routine_id_hex.trim_start_matches("0x"), 16).unwrap_or(0xFF01);
+        let sub_function = payload.sub_function.unwrap_or(0x01);
+        let opt_hex = payload.option_record_hex.unwrap_or_default();
+        let option_bytes: Result<Vec<u8>, _> = (0..opt_hex.len())
+            .step_by(2)
+            .map(|i| {
+                if i + 2 <= opt_hex.len() {
+                    u8::from_str_radix(&opt_hex[i..i + 2], 16)
+                } else {
+                    u8::from_str_radix(&opt_hex[i..], 16)
+                }
+            })
+            .collect();
+
+        let mut raw_bytes = vec![sub_function, (routine_id >> 8) as u8, routine_id as u8];
+        if let Ok(opts) = option_bytes {
+            raw_bytes.extend(opts);
+        }
+
+        sterngate_core::CommandEnvelope::new(&module, 0x31, Some(routine_id), raw_bytes)
+    };
+
+    // Strict Zero-Trust Verification Gate
+    let profile = state.profile.read().await;
+    if let Err(e) = state.gate.verify_and_authorize(&envelope, &profile).await {
+        tracing::warn!("Rejected unverified or corrupt routine command: {}", e);
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(RoutineResponse {
+                success: false,
+                command_id: envelope.command_id,
+                routine_id: format!("0x{:04X}", envelope.did.unwrap_or(0)),
+                status_hex: "".into(),
+                message: format!("Command verification gate failed: {}", e),
+            }),
+        );
+    }
+
+    let sub_fn = if !envelope.payload.is_empty() {
+        envelope.payload[0]
+    } else {
+        0x01
+    };
+    let routine_id = envelope.did.unwrap_or_else(|| {
+        if envelope.payload.len() >= 3 {
+            u16::from_be_bytes([envelope.payload[1], envelope.payload[2]])
+        } else {
+            0xFF01
+        }
+    });
+    let option_record = if envelope.payload.len() > 3 {
+        &envelope.payload[3..]
+    } else {
+        &[]
+    };
+
+    let (tx_id, rx_id) = if let Some(m) = profile.get_module(&envelope.target_module) {
+        (
+            m.tx_can_id().unwrap_or(0x7E0),
+            m.rx_can_id().unwrap_or(0x7E8),
+        )
+    } else if envelope.target_module.eq_ignore_ascii_case("EGS52") {
+        (0x7E1, 0x7E9)
+    } else {
+        (0x7E0, 0x7E8)
+    };
+
+    let mut iface = state.interface.lock().await;
+    let mut uds = UdsClient::new(iface.as_mut(), tx_id, rx_id);
+    match uds.routine_control(sub_fn, routine_id, option_record).await {
+        Ok(resp) => {
+            let resp_hex = resp
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let routine_desc = match routine_id {
+                0xFF01 => "Fuel Pump Prime & Rail Bleed",
+                0x0201 => "Reset NMK Injector Zero-Quantity Adaptations",
+                0x0202 => "Trigger DPF Regeneration",
+                0x0203 => "Throttle Valve / EGR Stop Relearn",
+                0x0205 => "SBC Brake Hydraulic Bleed Routine",
+                0xFF00 => "Erase Flash Memory Routine",
+                _ => "Diagnostic Routine Control",
+            };
+            (
+                StatusCode::OK,
+                Json(RoutineResponse {
+                    success: true,
+                    command_id: envelope.command_id,
+                    routine_id: format!("0x{:04X}", routine_id),
+                    status_hex: resp_hex,
+                    message: format!(
+                        "{} (0x{:04X}) completed successfully",
+                        routine_desc, routine_id
+                    ),
+                }),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RoutineResponse {
+                success: false,
+                command_id: envelope.command_id,
+                routine_id: format!("0x{:04X}", routine_id),
+                status_hex: "".into(),
+                message: format!("Failed to execute routine 0x{:04X}: {}", routine_id, e),
+            }),
+        ),
+    }
+}
+
+#[derive(Deserialize)]
+struct RecorderStartPayload {
+    filename: Option<String>,
+}
+
+async fn start_recorder(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<Option<RecorderStartPayload>>,
+) -> Json<crate::recorder::FlightRecorderStatus> {
+    let rx = state.telemetry_tx.subscribe();
+    let name = payload.and_then(|p| p.filename);
+    let status = match state.recorder.start(name, rx).await {
+        Ok(s) => s,
+        Err(_) => state.recorder.status().await,
+    };
+    Json(status)
+}
+
+async fn stop_recorder(
+    State(state): State<Arc<AppState>>,
+) -> Json<crate::recorder::FlightRecorderStatus> {
+    let status = state.recorder.stop().await;
+    Json(status)
+}
+
+async fn get_recorder_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<crate::recorder::FlightRecorderStatus> {
+    let status = state.recorder.status().await;
+    Json(status)
 }
