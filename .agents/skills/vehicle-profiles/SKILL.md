@@ -105,9 +105,19 @@ Once extracted into native Sterngate JSON, the legacy binary files are discarded
 
 ---
 
-## 3. Automotive ECU Catalog & Cross-Chassis Index
+---
 
-Sterngate includes an indexed canonical database of **990 unique automotive ECUs** (`data/ecu_catalog.json`) with diagnostic routing, CAN transmission/reception IDs, protocol classifications, and multi-chassis compatibility mappings.
+## 3. Automotive ECU Catalog & Modular Schemas
+
+Sterngate provides two formal JSON schemas for diagnostic definition:
+1. **Full Vehicle Pack Schema** (`profiles/schema/sterngate-profile.schema.json`): Encapsulates a complete multi-ECU chassis architecture (gateway, modules, parameters, scaling, and seed-key algorithms).
+2. **Modular ECU Definition Schema** (`profiles/schema/sterngate-ecu.schema.json`): Encapsulates an individual ECU module (e.g. `EGS52`, `EDC16`, `VGSNAG2`) with its diagnostic routing, physical & functional CAN arbitration IDs, supported DIDs, UDS Service 0x31 routines, variant coding layouts, and localized DTC definitions.
+
+### Compact Runtime Index (`data/ecu_catalog.json`)
+The canonical database contains **990 unique automotive ECUs** in a 21st-century compact format (exactly 1 line per ECU, 1,001 lines total, 170 KB):
+```json
+{"ecu_name": "EGS52", "protocol": "UDS", "tx_id": "0x7e1", "rx_id": "0x7e9", "func_id": "0x7df", "dtc_count": 114, "chassis": ["ML_W163", "SLK_R170", "SLK_R171", "C_Class_W202", "W203/C209", "W211/C219", "S_W220/CL_W215", "W221/C216", "SL_R230"]}
+```
 
 ### CLI Catalog Commands
 ```bash

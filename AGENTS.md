@@ -88,7 +88,9 @@ crates/
      * `sterngate --server --ticket <TICKET>`: Remote technician node.
      * `sterngate mcp`: Model Context Protocol server.
      * `sterngate mock`: Virtual simulation mode for zero-hardware testing.
-     * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities.
+     * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities (dtc, live, clear, routine).
+     * `sterngate ecu <subcommand>`: 990-ECU diagnostic catalog index (stats, search, inspect).
+     * `sterngate profile <subcommand>`: Vehicle profile management (list, inspect).
 
 ---
 

@@ -141,7 +141,39 @@ curl -s -X POST http://localhost:8080/api/v1/routine \
 
 ---
 
-## 7. Verification Checklist
+## 7. ECU Catalog & Diagnostic Routing
+
+Sterngate maintains a 21st-century compact diagnostic routing index of 990 canonical ECUs (`data/ecu_catalog.json`), mapping protocols (UDS/KWP2000), physical Tx/Rx CAN IDs, functional IDs, DTC counts, and multi-chassis platforms without requiring legacy binary files.
+
+### CLI Operations
+```bash
+# View summary statistics of the ECU catalog
+sterngate ecu stats
+
+# Search for ECUs by name or chassis platform
+sterngate ecu search EGS
+sterngate ecu search W211
+
+# Inspect detailed diagnostic routing for an ECU
+sterngate ecu inspect EGS52
+sterngate ecu inspect VGSNAG2
+```
+
+### REST API Operations
+```bash
+# Fetch catalog statistics
+curl -s http://localhost:8080/api/v1/ecu/stats | jq .
+
+# Search ECUs via REST query
+curl -s "http://localhost:8080/api/v1/ecu/search?q=EGS&limit=5" | jq .
+
+# Inspect single ECU definition
+curl -s http://localhost:8080/api/v1/ecu/inspect/EGS52 | jq .
+```
+
+---
+
+## 8. Verification Checklist
 
 1. **Verify Binary Compiles**:
    ```bash
@@ -157,6 +189,9 @@ curl -s -X POST http://localhost:8080/api/v1/routine \
    curl -s "http://localhost:8080/api/v1/dtc?lang=de" | jq .
    curl -s http://localhost:8080/api/v1/telemetry | jq .
    curl -s http://localhost:8080/api/v1/recorder/status | jq .
+   curl -s http://localhost:8080/api/v1/ecu/stats | jq .
+   curl -s "http://localhost:8080/api/v1/ecu/search?q=EGS52" | jq .
    ```
+
 
 
