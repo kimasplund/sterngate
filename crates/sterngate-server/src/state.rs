@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use sterngate_core::{CbfCatalog, TelemetrySnapshot, VehicleProfile};
+use sterngate_core::{EcuCatalog, TelemetrySnapshot, VehicleProfile};
 use sterngate_hal::VehicleInterface;
 use sterngate_protocol::{FlashingWorker, TransactionGate};
 use tokio::sync::{broadcast, Mutex, RwLock};
@@ -12,7 +12,7 @@ pub struct AppState {
     pub gate: Arc<TransactionGate>,
     pub telemetry_tx: broadcast::Sender<TelemetrySnapshot>,
     pub recorder: Arc<crate::recorder::FlightRecorder>,
-    pub catalog: Arc<Option<CbfCatalog>>,
+    pub catalog: Arc<Option<EcuCatalog>>,
 }
 
 impl AppState {
@@ -22,7 +22,7 @@ impl AppState {
         flasher: Arc<FlashingWorker>,
     ) -> Self {
         let (tx, _) = broadcast::channel(128);
-        let catalog = CbfCatalog::load_default().ok();
+        let catalog = EcuCatalog::load_default().ok();
         Self {
             interface: Arc::new(Mutex::new(interface)),
             profile: Arc::new(RwLock::new(profile)),
@@ -34,7 +34,7 @@ impl AppState {
         }
     }
 
-    pub fn with_catalog(mut self, catalog: Option<CbfCatalog>) -> Self {
+    pub fn with_catalog(mut self, catalog: Option<EcuCatalog>) -> Self {
         self.catalog = Arc::new(catalog);
         self
     }

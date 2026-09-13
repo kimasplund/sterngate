@@ -297,7 +297,7 @@ async function searchCbf() {
   const tbody = document.getElementById('cbf-results-table');
   tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">${i18n.t('cbf.searching')}</td></tr>`;
   try {
-    const res = await fetch(`/api/v1/cbf/search?q=${encodeURIComponent(q)}&limit=15`);
+    const res = await fetch(`/api/v1/ecu/search?q=${encodeURIComponent(q)}&limit=15`);
     const data = await res.json();
     if (!data.results || data.results.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--warning);">${i18n.t('cbf.no_matches')}</td></tr>`;
@@ -305,29 +305,29 @@ async function searchCbf() {
     }
     tbody.innerHTML = data.results.map(r => `
       <tr>
-        <td><b style="color: var(--accent);">${r.ecu_name}</b></td>
-        <td><span class="badge" style="background: rgba(188, 140, 255, 0.15); color: var(--purple); border: 1px solid var(--purple);">${r.protocol}</span></td>
+        <td><b>${r.ecu_name}</b></td>
+        <td><span class="badge ${r.protocol === 'UDS' ? 'badge-primary' : 'badge-offline'}">${r.protocol}</span></td>
         <td><code>${r.tx_id || 'N/A'} / ${r.rx_id || 'N/A'}</code></td>
-        <td>${r.date}</td>
-        <td>${r.total_copies} (${r.distinct_versions} ver)</td>
-        <td>${r.dtc_count}</td>
+        <td>${r.date || 'N/A'}</td>
+        <td>${r.total_copies || 1} copies (${r.distinct_versions || 1} ver)</td>
+        <td>${r.dtc_count || 0}</td>
         <td><button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="inspectCbf('${r.ecu_name}')">${i18n.t('cbf.btn_inspect')}</button></td>
       </tr>
     `).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" style="color: var(--danger); text-align: center;">Error searching catalog: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger);">${err.message}</td></tr>`;
   }
 }
 
 async function inspectCbf(ecu) {
   const modal = document.getElementById('cbf-inspect-modal');
-  const title = document.getElementById('inspect-title');
-  const content = document.getElementById('inspect-content');
+  const title = document.getElementById('cbf-inspect-title');
+  const content = document.getElementById('cbf-inspect-content');
   modal.style.display = 'block';
   title.textContent = `${i18n.t('cbf.inspect_title')} ${ecu}`;
   content.innerHTML = i18n.t('cbf.loading');
   try {
-    const res = await fetch(`/api/v1/cbf/inspect/${encodeURIComponent(ecu)}`);
+    const res = await fetch(`/api/v1/ecu/inspect/${encodeURIComponent(ecu)}`);
     const data = await res.json();
     const canon = data.canonical_version;
     const chassisList = data.all_chassis_supported ? data.all_chassis_supported.join(', ') : 'None';

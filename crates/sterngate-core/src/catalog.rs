@@ -6,17 +6,29 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CatalogMetadata {
     pub generated_at: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub total_ecus: usize,
+    #[serde(default)]
     pub total_cbf_files: usize,
     pub unique_ecus: usize,
+    #[serde(default)]
     pub unique_sha256_hashes: usize,
+    #[serde(default)]
     pub exact_duplicate_groups: usize,
+    #[serde(default)]
     pub redundant_file_copies: usize,
+    #[serde(default)]
+    pub multi_version_ecus: usize,
     #[serde(default)]
     pub processing_time_seconds: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CbfVersionInfo {
+pub struct EcuVersionInfo {
     pub sha256: String,
     pub date: String,
     pub iso_date: String,
@@ -33,8 +45,10 @@ pub struct CbfVersionInfo {
     pub primary_path: String,
 }
 
+pub type CbfVersionInfo = EcuVersionInfo;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CbfVersionHistoryEntry {
+pub struct EcuVersionHistoryEntry {
     pub sha256: String,
     pub size: u64,
     pub date: String,
@@ -54,16 +68,21 @@ pub struct CbfVersionHistoryEntry {
     pub chassis_list: Vec<String>,
 }
 
+pub type CbfVersionHistoryEntry = EcuVersionHistoryEntry;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CbfEcuEntry {
+pub struct EcuCatalogEntry {
     pub ecu_name: String,
-    pub canonical_version: CbfVersionInfo,
+    pub canonical_version: EcuVersionInfo,
+    #[serde(default)]
     pub total_copies_in_cbf: usize,
     pub distinct_versions_count: usize,
     pub all_chassis_supported: Vec<String>,
     #[serde(default)]
-    pub version_history: Vec<CbfVersionHistoryEntry>,
+    pub version_history: Vec<EcuVersionHistoryEntry>,
 }
+
+pub type CbfEcuEntry = EcuCatalogEntry;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EcuSearchResult {
@@ -80,25 +99,27 @@ pub struct EcuSearchResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CbfCatalog {
+pub struct EcuCatalog {
     pub metadata: CatalogMetadata,
-    pub ecus: BTreeMap<String, CbfEcuEntry>,
+    pub ecus: BTreeMap<String, EcuCatalogEntry>,
 }
 
-impl CbfCatalog {
+pub type CbfCatalog = EcuCatalog;
+
+impl EcuCatalog {
     /// Load catalog from a specific file path
     pub fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path_ref = path.as_ref();
         let content = std::fs::read_to_string(path_ref).map_err(|e| {
             SterngateError::ProfileError(format!(
-                "Failed to read CBF catalog at {}: {}",
+                "Failed to read ECU catalog at {}: {}",
                 path_ref.display(),
                 e
             ))
         })?;
         serde_json::from_str(&content).map_err(|e| {
             SterngateError::ProfileError(format!(
-                "Failed to parse CBF catalog JSON at {}: {}",
+                "Failed to parse ECU catalog JSON at {}: {}",
                 path_ref.display(),
                 e
             ))
@@ -107,6 +128,12 @@ impl CbfCatalog {
 
     /// Load catalog using standard lookup heuristics
     pub fn load_default() -> Result<Self> {
+        if let Ok(env_path) = std::env::var("STERNGATE_ECU_CATALOG") {
+            let p = PathBuf::from(env_path);
+            if p.exists() {
+                return Self::load_from_path(p);
+            }
+        }
         if let Ok(env_path) = std::env::var("STERNGATE_CBF_CATALOG") {
             let p = PathBuf::from(env_path);
             if p.exists() {
@@ -115,6 +142,9 @@ impl CbfCatalog {
         }
 
         let candidates = [
+            Path::new("data/ecu_catalog.json"),
+            Path::new("../../data/ecu_catalog.json"),
+            Path::new("../data/ecu_catalog.json"),
             Path::new("data/cbf_catalog.json"),
             Path::new("../../data/cbf_catalog.json"),
             Path::new("../data/cbf_catalog.json"),
@@ -127,7 +157,7 @@ impl CbfCatalog {
         }
 
         Err(SterngateError::ProfileError(
-            "CBF catalog not found in standard paths (data/cbf_catalog.json)".into(),
+            "ECU catalog not found in standard paths (data/ecu_catalog.json)".into(),
         ))
     }
 
@@ -137,7 +167,7 @@ impl CbfCatalog {
     }
 
     /// Retrieve an ECU by name (case-insensitive)
-    pub fn get_ecu(&self, ecu: &str) -> Option<&CbfEcuEntry> {
+    pub fn get_ecu(&self, ecu: &str) -> Option<&EcuCatalogEntry> {
         let upper = ecu.to_uppercase();
         self.ecus.get(&upper)
     }

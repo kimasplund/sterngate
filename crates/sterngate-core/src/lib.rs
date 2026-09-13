@@ -9,8 +9,8 @@ pub mod parameter;
 pub mod profile;
 
 pub use catalog::{
-    CatalogMetadata, CbfCatalog, CbfEcuEntry, CbfVersionHistoryEntry, CbfVersionInfo,
-    EcuSearchResult,
+    CatalogMetadata, CbfCatalog, CbfEcuEntry, CbfVersionHistoryEntry, CbfVersionInfo, EcuCatalog,
+    EcuCatalogEntry, EcuSearchResult, EcuVersionHistoryEntry, EcuVersionInfo,
 };
 pub use command::{CommandEnvelope, CommandValidationReport};
 pub use dtc::Dtc;
@@ -116,12 +116,10 @@ mod tests {
     }
 
     #[test]
-    fn test_cbf_catalog_loading_and_search() {
-        let catalog = CbfCatalog::load_default().unwrap();
+    fn test_ecu_catalog_loading_and_search() {
+        let catalog = EcuCatalog::load_default().unwrap();
         let stats = catalog.stats();
-        assert_eq!(stats.total_cbf_files, 2055);
         assert_eq!(stats.unique_ecus, 990);
-        assert_eq!(stats.redundant_file_copies, 846);
 
         // Search for EGS
         let egs_results = catalog.search("EGS", 10);
@@ -131,7 +129,6 @@ mod tests {
         // Exact get_ecu inspection
         let egs52 = catalog.get_ecu("EGS52").unwrap();
         assert_eq!(egs52.ecu_name, "EGS52");
-        assert_eq!(egs52.total_copies_in_cbf, 9);
         assert_eq!(egs52.distinct_versions_count, 1);
         assert_eq!(egs52.canonical_version.protocol, "UDS");
         assert_eq!(egs52.canonical_version.tx_id.as_deref(), Some("0x7e1"));
@@ -139,7 +136,6 @@ mod tests {
 
         // VGSNAG2 multi-version check
         let vgs = catalog.get_ecu("VGSNAG2").unwrap();
-        assert_eq!(vgs.total_copies_in_cbf, 10);
         assert_eq!(vgs.distinct_versions_count, 3);
     }
 

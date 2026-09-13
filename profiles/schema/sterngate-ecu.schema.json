@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sterngate Modular ECU Definition",
+  "description": "Standard declarative schema for single automotive ECU diagnostic definitions, replacing legacy proprietary binary formats (CBF, SMR-D, ODX).",
+  "type": "object",
+  "required": [
+    "ecu_id",
+    "name",
+    "target_oem",
+    "protocols",
+    "addressing"
+  ],
+  "properties": {
+    "ecu_id": {
+      "type": "string",
+      "description": "Canonical ECU qualifier or identifier (e.g. EGS52, EDC16C31, VGSNAG2, MED177, DQ250, DDE6)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Primary English name of the ECU"
+    },
+    "names": {
+      "type": "object",
+      "description": "Multilingual dictionary mapping ISO language codes (en, de, sv) to localized ECU names",
+      "additionalProperties": { "type": "string" }
+    },
+    "target_oem": {
+      "type": "string",
+      "description": "Vehicle manufacturer (e.g. Mercedes-Benz, BMW, VAG, Porsche, Volvo)"
+    },
+    "chassis_compatibility": {
+      "type": "array",
+      "description": "List of compatible vehicle chassis codes (e.g. ['W211', 'W203', 'W204'])",
+      "items": { "type": "string" }
+    },
+    "hardware_ids": {
+      "type": "array",
+      "description": "Known compatible Bosch/Continental/Siemens hardware part numbers",
+      "items": { "type": "string" }
+    },
+    "protocols": {
+      "type": "array",
+      "description": "Supported diagnostic protocol families",
+      "items": {
+        "type": "string",
+        "enum": ["UDS", "KWP2000", "ISO14230", "DoIP", "OBD2"]
+      }
+    },
+    "addressing": {
+      "type": "object",
+      "required": ["tx_id", "rx_id"],
+      "properties": {
+        "tx_id": { "type": "string", "description": "Diagnostic request CAN ID in hex (e.g. 0x7E0)" },
+        "rx_id": { "type": "string", "description": "Diagnostic response CAN ID in hex (e.g. 0x7E8)" },
+        "functional_id": { "type": "string", "description": "Functional broadcast ID in hex (e.g. 0x7DF)", "default": "0x7DF" },
+        "default_baudrate": { "type": "integer", "description": "CAN baud rate in bps (e.g. 500000)", "default": 500000 }
+      }
+    },
+    "seed_key_algo": {
+      "type": "string",
+      "description": "Security Access seed-key solver identifier (e.g. Daimler_Level1, Daimler_Level3, Daimler_Level0B, VAG_SA2)"
+    },
+    "timing": {
+      "type": "object",
+      "properties": {
+        "p2_client_ms": { "type": "integer", "default": 50 },
+        "p2_star_client_ms": { "type": "integer", "default": 5000 },
+        "s3_client_ms": { "type": "integer", "default": 2000 }
+      }
+    },
+    "parameters": {
+      "type": "array",
+      "description": "Diagnostic live sensor parameters and DIDs",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "service", "did", "byte_offset", "length", "scaling", "unit"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "names": {
+            "type": "object",
+            "description": "Localized parameter names by language code (en, de, sv)",
+            "additionalProperties": { "type": "string" }
+          },
+          "service": { "type": "integer", "description": "UDS/KWP service (e.g. 34 for ReadDataByLocalIdentifier / 0x22 for ReadDataByIdentifier)" },
+          "did": { "type": "string", "description": "Hex DID or record identifier (e.g. 0x2001)" },
+          "byte_offset": { "type": "integer" },
+          "length": { "type": "integer" },
+          "scaling": {
+            "type": "object",
+            "required": ["slope", "offset"],
+            "properties": {
+              "slope": { "type": "number" },
+              "offset": { "type": "number" }
+            }
+          },
+          "unit": { "type": "string" },
+          "min": { "type": "number" },
+          "max": { "type": "number" }
+        }
+      }
+    },
+    "routines": {
+      "type": "array",
+      "description": "Service 0x31 actuator and diagnostic routine controls",
+      "items": {
+        "type": "object",
+        "required": ["routine_id", "name"],
+        "properties": {
+          "routine_id": { "type": "string", "description": "Hex routine ID (e.g. 0xFF01)" },
+          "name": { "type": "string" },
+          "names": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "supported_subfunctions": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "requires_security": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "dtcs": {
+      "type": "array",
+      "description": "Known diagnostic fault trouble codes for this ECU",
+      "items": {
+        "type": "object",
+        "required": ["code", "description"],
+        "properties": {
+          "code": { "type": "string", "description": "Fault code string (e.g. P0100, 2047, 0x0100)" },
+          "description": { "type": "string" },
+          "descriptions": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

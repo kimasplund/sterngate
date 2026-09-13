@@ -75,12 +75,14 @@ Profiles reside in `profiles/<oem>/<model>_<engine>.json`. They define how Stern
 
 ---
 
-## 2. Reverse Engineering CBF Files to Sterngate JSON
+## 2. Ingesting Legacy Formats (CBF / ODX / SMR-D) to Native Sterngate JSON
 
-Sterngate includes an automated binary CBF extractor (`scripts/cbf_extractor.py`) to parse Daimler Caesar Binary Format files directly from the NAS archive (`smb://kims-nas.local/public/DTS Projects/`):
+Sterngate is completely independent of proprietary binary formats. Legacy OEM files (such as Daimler Caesar Binary Format `.CBF`, ODX, or SMR-D) on diagnostic dumps or network shares are strictly **one-way input sources**. 
 
-### Extraction Workflow
-1. Extract CBF files from the archive:
+Once extracted into native Sterngate JSON, the legacy binary files are discarded and are **never committed or required at runtime**.
+
+### One-Way Extraction Workflow
+1. Extract CBF files from the NAS data dump:
    ```bash
    python3 -c '
    import py7zr
@@ -88,7 +90,7 @@ Sterngate includes an automated binary CBF extractor (`scripts/cbf_extractor.py`
        z.extract(path="/tmp/cbf_extracted", targets=["Old_211_219/cbf/CR4.CBF", "Old_211_219/cbf/EGS52.CBF"])
    '
    ```
-2. Generate the Sterngate JSON profile:
+2. Generate the native Sterngate JSON profile:
    ```bash
    python3 scripts/cbf_extractor.py \
      --cbf /tmp/cbf_extracted/Old_211_219/cbf/CR4.CBF \
@@ -103,35 +105,22 @@ Sterngate includes an automated binary CBF extractor (`scripts/cbf_extractor.py`
 
 ---
 
-## 3. CBF Deduplication, Cataloging & Inspection
+## 3. Automotive ECU Catalog & Cross-Chassis Index
 
-Sterngate includes an automated deduplication analyzer (`scripts/cbf_dedup_analyzer.py`) that indexes all 2,055 Vediamo CBF files into a canonical catalog (`data/cbf_catalog.json`).
-
-### Catalog Statistics
-- **Total CBF files**: 2,055
-- **Unique ECUs**: 990
-- **Duplicate groups**: 412 (846 files or 41.2% are exact byte-for-byte duplicates across chassis folders)
-- **Multi-version ECUs**: 172 ECUs have multiple chronological revisions (e.g., `VGSNAG2` 7G-Tronic has 2016, 2017, and 2019 versions; `HERMES` telematics has 6 versions spanning 2016–2020)
+Sterngate includes an indexed canonical database of **990 unique automotive ECUs** (`data/ecu_catalog.json`) with diagnostic routing, CAN transmission/reception IDs, protocol classifications, and multi-chassis compatibility mappings.
 
 ### CLI Catalog Commands
 ```bash
-# Display overall CBF database and deduplication statistics
-sterngate cbf stats
+# Display overall ECU database statistics
+sterngate ecu stats
 
 # Search ECUs by name or chassis keyword
-sterngate cbf search EGS
-sterngate cbf search W211
+sterngate ecu search EGS
+sterngate ecu search W211
 
-# Detailed inspection of an ECU (canonical file, protocol, CAN IDs, DTC count, chassis list)
-sterngate cbf inspect VGSNAG2
-sterngate cbf inspect EDC16
-```
-
-### Re-analyzing or Updating the Catalog
-```bash
-python3 scripts/cbf_dedup_analyzer.py \
-  --cbf-dir data/cbf \
-  --output data/cbf_catalog.json
+# Detailed inspection of an ECU (protocol, CAN IDs, DTC count, chassis list)
+sterngate ecu inspect VGSNAG2
+sterngate ecu inspect EDC16
 ```
 
 ---

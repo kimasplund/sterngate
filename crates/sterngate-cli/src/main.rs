@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use sterngate_core::{lookup_routine_name, CbfCatalog, Dtc, Language, VehicleProfile};
+use sterngate_core::{lookup_routine_name, Dtc, EcuCatalog, Language, VehicleProfile};
 use sterngate_hal::{SocketCanInterface, VehicleInterface, VirtualCanInterface};
 use sterngate_mcp::McpServer;
 use sterngate_p2p::P2pNode;
@@ -87,10 +87,15 @@ enum Commands {
         #[command(subcommand)]
         action: ProfileCommands,
     },
-    /// Daimler CBF database inspection and deduplicated catalog
+    /// Automotive ECU database inspection and catalog
+    Ecu {
+        #[command(subcommand)]
+        action: EcuCommands,
+    },
+    /// Daimler CBF database inspection and deduplicated catalog (alias to 'ecu')
     Cbf {
         #[command(subcommand)]
-        action: CbfCommands,
+        action: EcuCommands,
     },
 }
 
@@ -137,12 +142,12 @@ enum ProfileCommands {
 }
 
 #[derive(Subcommand, Debug)]
-enum CbfCommands {
-    /// Show summary statistics of the Daimler CBF database and deduplication
+enum EcuCommands {
+    /// Show summary statistics of the Automotive ECU database and deduplication
     Stats,
     /// Search for ECUs by name or chassis keyword
     Search { query: String },
-    /// Inspect details of a specific ECU in the CBF catalog
+    /// Inspect details of a specific ECU in the catalog
     Inspect { ecu: String },
 }
 
@@ -321,48 +326,39 @@ async fn main() -> Result<()> {
                     return Ok(());
                 }
             },
-            Commands::Cbf { action } => {
-                let catalog = match CbfCatalog::load_default() {
+            Commands::Ecu { action } | Commands::Cbf { action } => {
+                let catalog = match EcuCatalog::load_default() {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!(
-                            "CBF catalog error: {}. Run scripts/cbf_dedup_analyzer.py first.",
-                            e
-                        );
+                        eprintln!("ECU catalog error: {}.", e);
                         return Ok(());
                     }
                 };
 
                 match action {
-                    CbfCommands::Stats => {
+                    EcuCommands::Stats => {
                         println!("============================================================");
-                        println!("  Daimler CBF Database & Deduplication Statistics");
+                        println!("  Automotive ECU Database Statistics");
                         println!("============================================================");
                         let meta = catalog.stats();
-                        println!(
-                            "  • Total CBF Files Scanned:           {}",
-                            meta.total_cbf_files
-                        );
                         println!(
                             "  • Unique ECU Types:                  {}",
                             meta.unique_ecus
                         );
-                        println!(
-                            "  • Unique Content Hashes:             {}",
-                            meta.unique_sha256_hashes
-                        );
-                        println!(
-                            "  • Redundant File Copies:             {} (41.2% duplicates)",
-                            meta.redundant_file_copies
-                        );
-                        println!(
-                            "  • Content-Identical Duplicate Groups: {}",
-                            meta.exact_duplicate_groups
-                        );
+                        if meta.total_cbf_files > 0 {
+                            println!(
+                                "  • Legacy Source Files Indexed:       {}",
+                                meta.total_cbf_files
+                            );
+                            println!(
+                                "  • Redundant Legacy Copies:           {} (41.2% duplicates)",
+                                meta.redundant_file_copies
+                            );
+                        }
                     }
-                    CbfCommands::Search { query } => {
+                    EcuCommands::Search { query } => {
                         println!("============================================================");
-                        println!("  Searching CBF Catalog for: '{}'", query);
+                        println!("  Searching ECU Catalog for: '{}'", query);
                         println!("============================================================");
                         let results = catalog.search(&query, 50);
                         for r in &results {
@@ -384,7 +380,7 @@ async fn main() -> Result<()> {
                         }
                         println!("\nFound {} matching ECU(s).", results.len());
                     }
-                    CbfCommands::Inspect { ecu } => {
+                    EcuCommands::Inspect { ecu } => {
                         if let Some(info) = catalog.get_ecu(&ecu) {
                             println!(
                                 "============================================================"
@@ -416,7 +412,7 @@ async fn main() -> Result<()> {
                             println!("    • Size:             {} bytes", canon.size_bytes);
                             println!("    • Presentations:    {}", canon.presentation_count);
                             println!("    • DTC Fault Codes:  {}", canon.dtc_count);
-                            println!("    • Primary Path:     data/cbf/{}", canon.primary_path);
+                            println!("    • Canonical Origin: {}", canon.primary_path);
                             println!(
                                 "\n  Supported Chassis Folders ({} total):",
                                 info.all_chassis_supported.len()

@@ -21,6 +21,9 @@ can_dump_*.log
 *.cff
 *.ori
 *.mod
+*.cbf
+*.CBF
+/data/cbf/
 !tests/fixtures/*.bin
 
 # Local environment and IDE settings

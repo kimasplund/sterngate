@@ -21,9 +21,9 @@ pub fn get_resources_list() -> Value {
             "mimeType": "application/json"
         },
         {
-            "uri": "sterngate://cbf/stats",
-            "name": "Daimler CBF Database Statistics",
-            "description": "Deduplication and indexing metrics for 2,055 Vediamo CBF files across 36 chassis.",
+            "uri": "sterngate://ecu/catalog",
+            "name": "Automotive ECU Catalog Statistics",
+            "description": "Indexing and protocol metrics for 990 unique automotive ECUs across multi-chassis architectures.",
             "mimeType": "application/json"
         }
     ])
@@ -56,14 +56,13 @@ pub fn read_resource(uri: &str) -> Result<Value, String> {
                 { "code": "sv", "name": "Svenska", "default": false }
             ]
         })),
-        "sterngate://cbf/stats" => {
-            if let Ok(catalog) = sterngate_core::CbfCatalog::load_default() {
+        "sterngate://ecu/catalog" | "sterngate://cbf/stats" => {
+            if let Ok(catalog) = sterngate_core::EcuCatalog::load_default() {
                 Ok(serde_json::to_value(catalog.stats()).unwrap())
             } else {
                 Ok(json!({
-                    "total_files": 2055,
-                    "unique_ecus": 990,
-                    "duplicate_groups": 412
+                    "total_ecus": 990,
+                    "unique_ecus": 990
                 }))
             }
         }

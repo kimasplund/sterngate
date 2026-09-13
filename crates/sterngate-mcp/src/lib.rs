@@ -57,6 +57,9 @@ mod tests {
             res.get("profile").unwrap().as_str().unwrap(),
             "mercedes_w211_om646_edc16"
         );
+
+        let cat_res = resources::read_resource("sterngate://ecu/catalog").unwrap();
+        assert_eq!(cat_res.get("unique_ecus").unwrap().as_u64().unwrap(), 990);
     }
 
     #[tokio::test]
@@ -95,9 +98,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mcp_search_cbf_catalog_tool() {
+    async fn test_mcp_search_ecu_catalog_tool() {
         let res =
-            tools::handle_tool_call("sterngate_search_cbf_catalog", &json!({"query": "EGS52"}))
+            tools::handle_tool_call("sterngate_search_ecu_catalog", &json!({"query": "EGS52"}))
                 .await
                 .unwrap();
         let matches = res.get("total_matches").unwrap().as_u64().unwrap();
@@ -166,10 +169,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_mcp_inspect_cbf_ecu_and_list_locales() {
+    async fn test_mcp_inspect_ecu_definition_and_list_locales() {
         // Inspect EGS52
         let ecu_res =
-            tools::handle_tool_call("sterngate_inspect_cbf_ecu", &json!({"ecu": "EGS52"}))
+            tools::handle_tool_call("sterngate_inspect_ecu_definition", &json!({"ecu": "EGS52"}))
                 .await
                 .unwrap();
         assert_eq!(ecu_res.get("ecu_name").unwrap().as_str().unwrap(), "EGS52");

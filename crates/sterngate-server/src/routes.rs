@@ -40,9 +40,12 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/recorder/start", post(start_recorder))
         .route("/api/v1/recorder/stop", post(stop_recorder))
         .route("/api/v1/recorder/status", get(get_recorder_status))
-        .route("/api/v1/cbf/stats", get(get_cbf_stats))
-        .route("/api/v1/cbf/search", get(search_cbf_catalog))
-        .route("/api/v1/cbf/inspect/{ecu}", get(inspect_cbf_ecu))
+        .route("/api/v1/ecu/stats", get(get_ecu_stats))
+        .route("/api/v1/ecu/search", get(search_ecu_catalog))
+        .route("/api/v1/ecu/inspect/{ecu}", get(inspect_ecu_definition))
+        .route("/api/v1/cbf/stats", get(get_ecu_stats))
+        .route("/api/v1/cbf/search", get(search_ecu_catalog))
+        .route("/api/v1/cbf/inspect/{ecu}", get(inspect_ecu_definition))
         .route("/api/v1/locales", get(get_available_locales))
         .with_state(state)
 }
@@ -497,12 +500,12 @@ async fn get_recorder_status(
 }
 
 #[derive(Deserialize)]
-struct CbfSearchQuery {
+struct EcuSearchQuery {
     q: Option<String>,
     limit: Option<usize>,
 }
 
-async fn get_cbf_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn get_ecu_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     if let Some(catalog) = state.catalog.as_ref() {
         (
             StatusCode::OK,
@@ -513,16 +516,16 @@ async fn get_cbf_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse 
         (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({
-                "error": "CBF catalog not loaded"
+                "error": "ECU catalog not loaded"
             })),
         )
             .into_response()
     }
 }
 
-async fn search_cbf_catalog(
+async fn search_ecu_catalog(
     State(state): State<Arc<AppState>>,
-    Query(query): Query<CbfSearchQuery>,
+    Query(query): Query<EcuSearchQuery>,
 ) -> impl IntoResponse {
     if let Some(catalog) = state.catalog.as_ref() {
         let q = query.q.unwrap_or_default();
@@ -541,14 +544,14 @@ async fn search_cbf_catalog(
         (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({
-                "error": "CBF catalog not loaded"
+                "error": "ECU catalog not loaded"
             })),
         )
             .into_response()
     }
 }
 
-async fn inspect_cbf_ecu(
+async fn inspect_ecu_definition(
     State(state): State<Arc<AppState>>,
     Path(ecu): Path<String>,
 ) -> impl IntoResponse {
@@ -559,7 +562,7 @@ async fn inspect_cbf_ecu(
             (
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({
-                    "error": format!("ECU '{}' not found in CBF catalog", ecu)
+                    "error": format!("ECU '{}' not found in ECU catalog", ecu)
                 })),
             )
                 .into_response()
@@ -568,7 +571,7 @@ async fn inspect_cbf_ecu(
         (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({
-                "error": "CBF catalog not loaded"
+                "error": "ECU catalog not loaded"
             })),
         )
             .into_response()

@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use sterngate_core::{
-    lookup_routine_name, CbfCatalog, Dtc, Language, TelemetrySnapshot, VehicleProfile,
+    lookup_routine_name, Dtc, EcuCatalog, Language, TelemetrySnapshot, VehicleProfile,
 };
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 
@@ -171,8 +171,8 @@ pub fn get_tools_list() -> Value {
             }
         },
         {
-            "name": "sterngate_search_cbf_catalog",
-            "description": "Search the deduplicated Daimler Vediamo CBF database (990 unique ECUs across 36 chassis) by ECU name (e.g. 'EGS52', 'CR3', 'MED177', 'VGSNAG2') or chassis family. Returns canonical latest version, arbitration CAN IDs, protocol, duplicate statistics, and cross-chassis compatibility.",
+            "name": "sterngate_search_ecu_catalog",
+            "description": "Search the canonical Automotive ECU catalog (990 unique ECUs across multiple vehicle architectures) by ECU name (e.g. 'EGS52', 'CR3', 'MED177', 'VGSNAG2', 'DQ250', 'DDE6') or chassis family. Returns canonical arbitration CAN IDs, protocol, and cross-chassis compatibility.",
             "inputSchema": {
                 "type": "object",
                 "required": ["query"],
@@ -190,8 +190,8 @@ pub fn get_tools_list() -> Value {
             }
         },
         {
-            "name": "sterngate_inspect_cbf_ecu",
-            "description": "Inspect detailed diagnostic routing, CAN transmission/reception IDs, protocol, fault code count, presentation count, and supported chassis for a specific ECU in the Daimler CBF catalog (e.g. 'EGS52', 'CR3', 'VGSNAG2').",
+            "name": "sterngate_inspect_ecu_definition",
+            "description": "Inspect detailed diagnostic routing, CAN transmission/reception IDs, protocol, fault code count, presentation count, and supported chassis for a specific ECU in the Sterngate ECU database (e.g. 'EGS52', 'CR3', 'VGSNAG2').",
             "inputSchema": {
                 "type": "object",
                 "required": ["ecu"],
@@ -486,7 +486,7 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 })),
             }
         }
-        "sterngate_search_cbf_catalog" => {
+        "sterngate_search_ecu_catalog" | "sterngate_search_cbf_catalog" => {
             let query = arguments
                 .get("query")
                 .and_then(|v| v.as_str())
@@ -496,8 +496,8 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 .and_then(|v| v.as_u64())
                 .unwrap_or(25) as usize;
 
-            let catalog = CbfCatalog::load_default()
-                .map_err(|e| format!("Failed to load CBF catalog: {}", e))?;
+            let catalog = EcuCatalog::load_default()
+                .map_err(|e| format!("Failed to load ECU catalog: {}", e))?;
             let results = catalog.search(query, limit);
 
             Ok(json!({
@@ -506,19 +506,19 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 "results": results
             }))
         }
-        "sterngate_inspect_cbf_ecu" => {
+        "sterngate_inspect_ecu_definition" | "sterngate_inspect_cbf_ecu" => {
             let ecu = arguments
                 .get("ecu")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| "Missing required parameter 'ecu'".to_string())?;
 
-            let catalog = CbfCatalog::load_default()
-                .map_err(|e| format!("Failed to load CBF catalog: {}", e))?;
+            let catalog = EcuCatalog::load_default()
+                .map_err(|e| format!("Failed to load ECU catalog: {}", e))?;
 
             if let Some(entry) = catalog.get_ecu(ecu) {
                 Ok(serde_json::to_value(entry).unwrap())
             } else {
-                Err(format!("ECU '{}' not found in CBF catalog", ecu))
+                Err(format!("ECU '{}' not found in ECU catalog", ecu))
             }
         }
         "sterngate_list_locales" => Ok(json!({

@@ -253,7 +253,7 @@ def main():
     multi_version_ecus = [e for e in clean_catalog.values() if e["distinct_versions_count"] > 1]
 
     # Save to JSON
-    output_catalog_path = "data/cbf_catalog.json"
+    output_catalog_path = "data/ecu_catalog.json"
     os.makedirs("data", exist_ok=True)
     with open(output_catalog_path, "w", encoding="utf-8") as fp:
         json.dump({
