@@ -16,6 +16,11 @@
         "required": ["name", "tx_id", "rx_id", "protocol"],
         "properties": {
           "name": { "type": "string" },
+          "names": {
+            "type": "object",
+            "description": "Localized module names by language code (e.g. en, de, sv)",
+            "additionalProperties": { "type": "string" }
+          },
           "tx_id": { "type": "string" },
           "rx_id": { "type": "string" },
           "protocol": { "type": "string", "enum": ["UDS", "KWP2000", "OBD2"] },
@@ -31,6 +36,11 @@
         "properties": {
           "id": { "type": "string" },
           "name": { "type": "string" },
+          "names": {
+            "type": "object",
+            "description": "Localized parameter names by language code (e.g. en, de, sv)",
+            "additionalProperties": { "type": "string" }
+          },
           "module": { "type": "string" },
           "service": { "type": "integer" },
           "did": { "type": "string" },

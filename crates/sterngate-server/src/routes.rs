@@ -154,9 +154,19 @@ async fn clear_dtcs(State(state): State<Arc<AppState>>) -> StatusCode {
     StatusCode::OK
 }
 
-async fn get_profile(State(state): State<Arc<AppState>>) -> Json<VehicleProfile> {
-    let prof = state.profile.read().await;
-    Json(prof.clone())
+async fn get_profile(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<DtcQuery>,
+) -> Json<VehicleProfile> {
+    let lang: Language = query
+        .lang
+        .as_deref()
+        .unwrap_or("en")
+        .parse()
+        .unwrap_or_default();
+    let mut prof = state.profile.read().await.clone();
+    prof.localize(lang);
+    Json(prof)
 }
 
 async fn get_flash_progress(State(state): State<Arc<AppState>>) -> Json<FlashProgress> {

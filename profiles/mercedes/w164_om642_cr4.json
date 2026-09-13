@@ -6,24 +6,34 @@
   "default_bitrate": 500000,
   "modules": {
     "CR4": {
-      "name": "Engine Control Unit (OM642 V6 CDI 4 / EDC16CP31)",
+      "name": "Engine Control Unit (OM642 CDI 4)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Engine Control Unit (OM642 CDI 4)",
+        "de": "Motorsteuergerät (OM642 CDI 4)",
+        "sv": "Motorstyrenhet (OM642 CDI 4)"
+      }
     },
     "VGSNAG2": {
       "name": "Fully Integrated Transmission Control (722.9 7G-Tronic)",
       "tx_id": "0x7E1",
       "rx_id": "0x7E9",
       "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Fully Integrated Transmission Control (722.9 7G-Tronic)",
+        "de": "Vollintegrierte Getriebesteuerung (722.9 7G-Tronic)",
+        "sv": "Helintegrerad transmissionsstyrning (722.9 7G-Tronic)"
+      }
     }
   },
   "parameters": [
     {
       "id": "engine_rpm",
-      "name": "Engine Speed (Motordrehzahl)",
+      "name": "Engine Speed",
       "module": "CR4",
       "service": 34,
       "did": "0x0100",
@@ -35,11 +45,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 5000.0
+      "max": 5000.0,
+      "names": {
+        "en": "Engine Speed",
+        "de": "Motordrehzahl",
+        "sv": "Motorvarvtal"
+      }
     },
     {
       "id": "coolant_temp",
-      "name": "Coolant Temperature (Kuehlmitteltemperatur)",
+      "name": "Engine Coolant Temperature",
       "module": "CR4",
       "service": 34,
       "did": "0x0105",
@@ -49,13 +64,18 @@
         "slope": 1.0,
         "offset": -40.0
       },
-      "unit": "\u00b0C",
+      "unit": "°C",
       "min": -40.0,
-      "max": 140.0
+      "max": 140.0,
+      "names": {
+        "en": "Engine Coolant Temperature",
+        "de": "Kühlmitteltemperatur",
+        "sv": "Kylarvätsketemperatur"
+      }
     },
     {
       "id": "rail_pressure",
-      "name": "Common Rail Pressure (Raildruck Istwert)",
+      "name": "Common Rail Fuel Pressure",
       "module": "CR4",
       "service": 34,
       "did": "0x200B",
@@ -67,11 +87,16 @@
       },
       "unit": "bar",
       "min": 0.0,
-      "max": 1800.0
+      "max": 1800.0,
+      "names": {
+        "en": "Common Rail Fuel Pressure",
+        "de": "Raildruck Istwert",
+        "sv": "Common Rail bränsletryck"
+      }
     },
     {
       "id": "boost_pressure",
-      "name": "Boost Pressure (Ladedruck Istwert)",
+      "name": "Boost Pressure",
       "module": "CR4",
       "service": 34,
       "did": "0x2010",
@@ -83,11 +108,16 @@
       },
       "unit": "hPa",
       "min": 500.0,
-      "max": 3000.0
+      "max": 3000.0,
+      "names": {
+        "en": "Boost Pressure",
+        "de": "Ladedruck Istwert",
+        "sv": "Laddtryck ärvärde"
+      }
     },
     {
       "id": "air_mass",
-      "name": "Air Mass Flow (Luftmasse Soll/Ist)",
+      "name": "Air Mass Flow",
       "module": "CR4",
       "service": 34,
       "did": "0x2015",
@@ -99,11 +129,16 @@
       },
       "unit": "mg/hub",
       "min": 0.0,
-      "max": 1200.0
+      "max": 1200.0,
+      "names": {
+        "en": "Air Mass Flow",
+        "de": "Luftmasse Soll/Ist",
+        "sv": "Luftmassflöde"
+      }
     },
     {
       "id": "inj_corr_cyl1",
-      "name": "Smooth Running Correction Cyl 1 (Laufruheregler Zyl 1)",
+      "name": "Smooth Running Correction Cyl 1",
       "module": "CR4",
       "service": 34,
       "did": "0x2021",
@@ -113,13 +148,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 1",
+        "de": "Laufruheregler Zylinder 1",
+        "sv": "Gångjämnhetsreglering cylinder 1"
+      }
     },
     {
       "id": "inj_corr_cyl2",
-      "name": "Smooth Running Correction Cyl 2 (Laufruheregler Zyl 2)",
+      "name": "Smooth Running Correction Cyl 2",
       "module": "CR4",
       "service": 34,
       "did": "0x2022",
@@ -129,13 +169,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 2",
+        "de": "Laufruheregler Zylinder 2",
+        "sv": "Gångjämnhetsreglering cylinder 2"
+      }
     },
     {
       "id": "inj_corr_cyl3",
-      "name": "Smooth Running Correction Cyl 3 (Laufruheregler Zyl 3)",
+      "name": "Smooth Running Correction Cyl 3",
       "module": "CR4",
       "service": 34,
       "did": "0x2023",
@@ -145,13 +190,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 3",
+        "de": "Laufruheregler Zylinder 3",
+        "sv": "Gångjämnhetsreglering cylinder 3"
+      }
     },
     {
       "id": "inj_corr_cyl4",
-      "name": "Smooth Running Correction Cyl 4 (Laufruheregler Zyl 4)",
+      "name": "Smooth Running Correction Cyl 4",
       "module": "CR4",
       "service": 34,
       "did": "0x2024",
@@ -161,13 +211,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 4",
+        "de": "Laufruheregler Zylinder 4",
+        "sv": "Gångjämnhetsreglering cylinder 4"
+      }
     },
     {
       "id": "inj_corr_cyl5",
-      "name": "Smooth Running Correction Cyl 5 (Laufruheregler Zyl 5)",
+      "name": "Smooth Running Correction Cyl 5",
       "module": "CR4",
       "service": 34,
       "did": "0x2025",
@@ -177,13 +232,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 5",
+        "de": "Laufruheregler Zylinder 5",
+        "sv": "Gångjämnhetsreglering cylinder 5"
+      }
     },
     {
       "id": "inj_corr_cyl6",
-      "name": "Smooth Running Correction Cyl 6 (Laufruheregler Zyl 6)",
+      "name": "Smooth Running Correction Cyl 6",
       "module": "CR4",
       "service": 34,
       "did": "0x2026",
@@ -193,13 +253,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 6",
+        "de": "Laufruheregler Zylinder 6",
+        "sv": "Gångjämnhetsreglering cylinder 6"
+      }
     },
     {
       "id": "trans_fluid_temp",
-      "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
+      "name": "Transmission Fluid Temperature",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2001",
@@ -209,13 +274,18 @@
         "slope": 1.0,
         "offset": -40.0
       },
-      "unit": "\u00b0C",
+      "unit": "°C",
       "min": -40.0,
-      "max": 150.0
+      "max": 150.0,
+      "names": {
+        "en": "Transmission Fluid Temperature",
+        "de": "Getriebeöltemperatur",
+        "sv": "Transmissionsoljetemperatur"
+      }
     },
     {
       "id": "tcc_slip_rpm",
-      "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
+      "name": "Torque Converter Clutch Slip",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2002",
@@ -227,11 +297,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 2000.0
+      "max": 2000.0,
+      "names": {
+        "en": "Torque Converter Clutch Slip",
+        "de": "Drehzahldifferenz KÜB",
+        "sv": "Momentomvandlarkoppling slirning"
+      }
     },
     {
       "id": "turbine_speed",
-      "name": "Turbine Speed n2 (Turbinendrehzahl)",
+      "name": "Turbine Speed n2",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2003",
@@ -243,11 +318,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Turbine Speed n2",
+        "de": "Turbinendrehzahl n2",
+        "sv": "Turbinvarvtal n2"
+      }
     },
     {
       "id": "output_speed",
-      "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
+      "name": "Output Shaft Speed n3",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2004",
@@ -259,7 +339,12 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Output Shaft Speed n3",
+        "de": "Abtriebsdrehzahl n3",
+        "sv": "Utgående axelvarvtal n3"
+      }
     }
   ]
 }

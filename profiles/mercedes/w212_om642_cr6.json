@@ -6,24 +6,34 @@
   "default_bitrate": 500000,
   "modules": {
     "CR6EU5": {
-      "name": "CR6EU5 Diagnostic Control Unit",
+      "name": "Engine Control Unit (OM642 CDI 6 EU5)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Engine Control Unit (OM642 CDI 6 EU5)",
+        "de": "Motorsteuergerät (OM642 CDI 6 EU5)",
+        "sv": "Motorstyrenhet (OM642 CDI 6 EU5)"
+      }
     },
     "VGSNAG2": {
       "name": "Fully Integrated Transmission Control (722.9 7G-Tronic)",
       "tx_id": "0x7E1",
       "rx_id": "0x7E9",
       "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Fully Integrated Transmission Control (722.9 7G-Tronic)",
+        "de": "Vollintegrierte Getriebesteuerung (722.9 7G-Tronic)",
+        "sv": "Helintegrerad transmissionsstyrning (722.9 7G-Tronic)"
+      }
     }
   },
   "parameters": [
     {
       "id": "trans_fluid_temp",
-      "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
+      "name": "Transmission Fluid Temperature",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2001",
@@ -33,13 +43,18 @@
         "slope": 1.0,
         "offset": -40.0
       },
-      "unit": "\u00b0C",
+      "unit": "°C",
       "min": -40.0,
-      "max": 150.0
+      "max": 150.0,
+      "names": {
+        "en": "Transmission Fluid Temperature",
+        "de": "Getriebeöltemperatur",
+        "sv": "Transmissionsoljetemperatur"
+      }
     },
     {
       "id": "tcc_slip_rpm",
-      "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
+      "name": "Torque Converter Clutch Slip",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2002",
@@ -51,11 +66,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 2000.0
+      "max": 2000.0,
+      "names": {
+        "en": "Torque Converter Clutch Slip",
+        "de": "Drehzahldifferenz KÜB",
+        "sv": "Momentomvandlarkoppling slirning"
+      }
     },
     {
       "id": "turbine_speed",
-      "name": "Turbine Speed n2 (Turbinendrehzahl)",
+      "name": "Turbine Speed n2",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2003",
@@ -67,11 +87,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Turbine Speed n2",
+        "de": "Turbinendrehzahl n2",
+        "sv": "Turbinvarvtal n2"
+      }
     },
     {
       "id": "output_speed",
-      "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
+      "name": "Output Shaft Speed n3",
       "module": "VGSNAG2",
       "service": 34,
       "did": "0x2004",
@@ -83,7 +108,12 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Output Shaft Speed n3",
+        "de": "Abtriebsdrehzahl n3",
+        "sv": "Utgående axelvarvtal n3"
+      }
     }
   ]
 }

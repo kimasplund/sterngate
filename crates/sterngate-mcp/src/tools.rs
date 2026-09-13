@@ -76,6 +76,11 @@ pub fn get_tools_list() -> Value {
                         "type": "string",
                         "description": "Target ECU module (e.g., 'EDC16', 'EGS52')",
                         "default": "EDC16"
+                    },
+                    "lang": {
+                        "type": "string",
+                        "description": "Language for parameter name ('en', 'de', 'sv')",
+                        "default": "en"
                     }
                 }
             }
@@ -267,17 +272,68 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 .get("parameter")
                 .and_then(|v| v.as_str())
                 .unwrap_or("trans_fluid_temp");
-            let (name, val, unit) = match param.to_lowercase().as_str() {
-                "trans_fluid_temp" | "0x2001" => ("Transmission Fluid Temperature", 80.0, "°C"),
-                "engine_rpm" | "0x0100" => ("Engine RPM", 820.0, "RPM"),
-                "coolant_temp" | "0x0105" => ("Coolant Temperature", 88.0, "°C"),
-                "rail_pressure" | "0x200b" => ("Common Rail Pressure", 320.0, "bar"),
-                "boost_pressure" | "0x2010" => ("Boost Pressure (MAP)", 1040.0, "hPa"),
-                _ => ("Generic Parameter", 0.0, "raw"),
+            let lang: Language = arguments
+                .get("lang")
+                .and_then(|v| v.as_str())
+                .unwrap_or("en")
+                .parse()
+                .unwrap_or_default();
+            let (name_en, val, unit, name_de, name_sv) = match param.to_lowercase().as_str() {
+                "trans_fluid_temp" | "0x2001" => (
+                    "Transmission Fluid Temperature",
+                    80.0,
+                    "°C",
+                    "Getriebeöltemperatur",
+                    "Transmissionsoljetemperatur",
+                ),
+                "engine_rpm" | "0x0100" => {
+                    ("Engine RPM", 820.0, "RPM", "Motordrehzahl", "Motorvarvtal")
+                }
+                "coolant_temp" | "0x0105" => (
+                    "Coolant Temperature",
+                    88.0,
+                    "°C",
+                    "Kühlmitteltemperatur",
+                    "Kylarvätsketemperatur",
+                ),
+                "rail_pressure" | "0x200b" => (
+                    "Common Rail Pressure",
+                    320.0,
+                    "bar",
+                    "Raildruck",
+                    "Railtryck",
+                ),
+                "boost_pressure" | "0x2010" => (
+                    "Boost Pressure (MAP)",
+                    1040.0,
+                    "hPa",
+                    "Ladedruck",
+                    "Laddtryck",
+                ),
+                "tcc_slip_rpm" => (
+                    "Torque Converter Clutch Slip",
+                    16.0,
+                    "RPM",
+                    "Drehzahldifferenz KÜB",
+                    "Momentomvandlarkoppling slirning",
+                ),
+                _ => (
+                    "Generic Parameter",
+                    0.0,
+                    "raw",
+                    "Generischer Parameter",
+                    "Generisk parameter",
+                ),
+            };
+            let localized_name = match lang {
+                Language::De => name_de,
+                Language::Sv => name_sv,
+                Language::En => name_en,
             };
             Ok(json!({
                 "parameter": param,
-                "name": name,
+                "name": localized_name,
+                "language": lang.to_string(),
                 "value": val,
                 "unit": unit,
                 "status": "Valid",

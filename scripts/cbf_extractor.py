@@ -17,6 +17,11 @@ import struct
 import argparse
 from typing import Dict, List, Any, Optional
 
+try:
+    from localize_profiles import PARAM_TRANSLATIONS, MODULE_TRANSLATIONS
+except ImportError:
+    from scripts.localize_profiles import PARAM_TRANSLATIONS, MODULE_TRANSLATIONS
+
 STANDARD_CAN_ROUTING = {
     # Engine ECUs
     "CR3": {"name": "Engine Control Unit (OM646 CDI 3 / EDC16C2)", "tx_id": "0x7E0", "rx_id": "0x7E8", "protocol": "UDS", "algo": "Daimler_Level1"},
@@ -190,405 +195,78 @@ class CbfParser:
         ecu = self.ecu_name
         params = []
         
+        def p(pid, service, did, offset, length, slope, off, unit, pmin, pmax):
+            info = PARAM_TRANSLATIONS.get(pid, {
+                "en": pid.replace("_", " ").title(),
+                "de": pid.replace("_", " ").title(),
+                "sv": pid.replace("_", " ").title()
+            })
+            return {
+                "id": pid,
+                "name": info["en"],
+                "names": info,
+                "module": ecu,
+                "service": service,
+                "did": did,
+                "byte_offset": offset,
+                "length": length,
+                "scaling": {"slope": slope, "offset": off},
+                "unit": unit,
+                "min": pmin,
+                "max": pmax
+            }
+        
         # Engine-specific profile parameters
         if any(k in ecu for k in ["CR3", "CR4", "CR5", "CRD"]):
             params.extend([
-                {
-                    "id": "engine_rpm",
-                    "name": "Engine Speed (Motordrehzahl)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0100",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.25, "offset": 0.0},
-                    "unit": "RPM",
-                    "min": 0.0,
-                    "max": 5000.0
-                },
-                {
-                    "id": "coolant_temp",
-                    "name": "Coolant Temperature (Kuehlmitteltemperatur)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0105",
-                    "byte_offset": 3,
-                    "length": 1,
-                    "scaling": {"slope": 1.0, "offset": -40.0},
-                    "unit": "°C",
-                    "min": -40.0,
-                    "max": 140.0
-                },
-                {
-                    "id": "rail_pressure",
-                    "name": "Common Rail Pressure (Raildruck Istwert)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x200B",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "bar",
-                    "min": 0.0,
-                    "max": 1800.0
-                },
-                {
-                    "id": "boost_pressure",
-                    "name": "Boost Pressure (Ladedruck Istwert)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2010",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 1.0, "offset": 0.0},
-                    "unit": "hPa",
-                    "min": 500.0,
-                    "max": 3000.0
-                },
-                {
-                    "id": "air_mass",
-                    "name": "Air Mass Flow (Luftmasse Soll/Ist)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2015",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "mg/hub",
-                    "min": 0.0,
-                    "max": 1200.0
-                },
-                {
-                    "id": "inj_corr_cyl1",
-                    "name": "Smooth Running Correction Cyl 1 (Laufruheregler Zyl 1)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2021",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.01, "offset": -5.0},
-                    "unit": "mm³/stroke",
-                    "min": -5.0,
-                    "max": 5.0
-                },
-                {
-                    "id": "inj_corr_cyl2",
-                    "name": "Smooth Running Correction Cyl 2 (Laufruheregler Zyl 2)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2022",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.01, "offset": -5.0},
-                    "unit": "mm³/stroke",
-                    "min": -5.0,
-                    "max": 5.0
-                },
-                {
-                    "id": "inj_corr_cyl3",
-                    "name": "Smooth Running Correction Cyl 3 (Laufruheregler Zyl 3)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2023",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.01, "offset": -5.0},
-                    "unit": "mm³/stroke",
-                    "min": -5.0,
-                    "max": 5.0
-                },
-                {
-                    "id": "inj_corr_cyl4",
-                    "name": "Smooth Running Correction Cyl 4 (Laufruheregler Zyl 4)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2024",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.01, "offset": -5.0},
-                    "unit": "mm³/stroke",
-                    "min": -5.0,
-                    "max": 5.0
-                }
+                p("engine_rpm", 0x22, "0x0100", 3, 2, 0.25, 0.0, "RPM", 0.0, 5000.0),
+                p("coolant_temp", 0x22, "0x0105", 3, 1, 1.0, -40.0, "°C", -40.0, 140.0),
+                p("rail_pressure", 0x22, "0x200B", 3, 2, 0.1, 0.0, "bar", 0.0, 1800.0),
+                p("boost_pressure", 0x22, "0x2010", 3, 2, 1.0, 0.0, "hPa", 500.0, 3000.0),
+                p("air_mass", 0x22, "0x2015", 3, 2, 0.1, 0.0, "mg/hub", 0.0, 1200.0),
+                p("inj_corr_cyl1", 0x22, "0x2021", 3, 2, 0.01, -5.0, "mm³/stroke", -5.0, 5.0),
+                p("inj_corr_cyl2", 0x22, "0x2022", 3, 2, 0.01, -5.0, "mm³/stroke", -5.0, 5.0),
+                p("inj_corr_cyl3", 0x22, "0x2023", 3, 2, 0.01, -5.0, "mm³/stroke", -5.0, 5.0),
+                p("inj_corr_cyl4", 0x22, "0x2024", 3, 2, 0.01, -5.0, "mm³/stroke", -5.0, 5.0),
             ])
             if "CR4" in ecu or "CR5" in ecu:
                 params.extend([
-                    {
-                        "id": "inj_corr_cyl5",
-                        "name": "Smooth Running Correction Cyl 5 (Laufruheregler Zyl 5)",
-                        "module": ecu,
-                        "service": 0x22,
-                        "did": "0x2025",
-                        "byte_offset": 3,
-                        "length": 2,
-                        "scaling": {"slope": 0.01, "offset": -5.0},
-                        "unit": "mm³/stroke",
-                        "min": -5.0,
-                        "max": 5.0
-                    },
-                    {
-                        "id": "inj_corr_cyl6",
-                        "name": "Smooth Running Correction Cyl 6 (Laufruheregler Zyl 6)",
-                        "module": ecu,
-                        "service": 0x22,
-                        "did": "0x2026",
-                        "byte_offset": 3,
-                        "length": 2,
-                        "scaling": {"slope": 0.01, "offset": -5.0},
-                        "unit": "mm³/stroke",
-                        "min": -5.0,
-                        "max": 5.0
-                    }
+                    p("inj_corr_cyl5", 0x22, "0x2025", 3, 2, 0.01, -5.0, "mm³/stroke", -5.0, 5.0),
+                    p("inj_corr_cyl6", 0x22, "0x2026", 3, 2, 0.01, -5.0, "mm³/stroke", -5.0, 5.0),
                 ])
 
         elif any(k in ecu for k in ["ME28", "ME97", "MED177"]):
             params.extend([
-                {
-                    "id": "engine_rpm",
-                    "name": "Engine Speed (Motordrehzahl)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0100",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.25, "offset": 0.0},
-                    "unit": "RPM",
-                    "min": 0.0,
-                    "max": 7000.0
-                },
-                {
-                    "id": "coolant_temp",
-                    "name": "Coolant Temperature (Kuehlmitteltemperatur)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0105",
-                    "byte_offset": 3,
-                    "length": 1,
-                    "scaling": {"slope": 1.0, "offset": -40.0},
-                    "unit": "°C",
-                    "min": -40.0,
-                    "max": 140.0
-                },
-                {
-                    "id": "throttle_angle",
-                    "name": "Throttle Valve Angle (Drosselklappenwinkel)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0111",
-                    "byte_offset": 3,
-                    "length": 1,
-                    "scaling": {"slope": 0.392, "offset": 0.0},
-                    "unit": "%",
-                    "min": 0.0,
-                    "max": 100.0
-                },
-                {
-                    "id": "mass_air_flow",
-                    "name": "Mass Air Flow MAF (Luftmasse kg/h)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0110",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "kg/h",
-                    "min": 0.0,
-                    "max": 600.0
-                },
-                {
-                    "id": "lambda_b1s1",
-                    "name": "Lambda Upstream O2 Voltage Bank 1",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0114",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.001, "offset": 0.0},
-                    "unit": "V",
-                    "min": 0.0,
-                    "max": 1.2
-                },
-                {
-                    "id": "lambda_b2s1",
-                    "name": "Lambda Upstream O2 Voltage Bank 2",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x0115",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.001, "offset": 0.0},
-                    "unit": "V",
-                    "min": 0.0,
-                    "max": 1.2
-                }
+                p("engine_rpm", 0x22, "0x0100", 3, 2, 0.25, 0.0, "RPM", 0.0, 7000.0),
+                p("coolant_temp", 0x22, "0x0105", 3, 1, 1.0, -40.0, "°C", -40.0, 140.0),
+                p("throttle_angle", 0x22, "0x0111", 3, 1, 0.392, 0.0, "%", 0.0, 100.0),
+                p("mass_air_flow", 0x22, "0x0110", 3, 2, 0.1, 0.0, "kg/h", 0.0, 600.0),
+                p("lambda_b1s1", 0x22, "0x0114", 3, 2, 0.001, 0.0, "V", 0.0, 1.2),
+                p("lambda_b2s1", 0x22, "0x0115", 3, 2, 0.001, 0.0, "V", 0.0, 1.2),
             ])
 
         elif any(k in ecu for k in ["EGS52", "EGS53", "VGS"]):
             params.extend([
-                {
-                    "id": "trans_fluid_temp",
-                    "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2001",
-                    "byte_offset": 3,
-                    "length": 1,
-                    "scaling": {"slope": 1.0, "offset": -40.0},
-                    "unit": "°C",
-                    "min": -40.0,
-                    "max": 150.0
-                },
-                {
-                    "id": "tcc_slip_rpm",
-                    "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2002",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 1.0, "offset": 0.0},
-                    "unit": "RPM",
-                    "min": 0.0,
-                    "max": 2000.0
-                },
-                {
-                    "id": "turbine_speed",
-                    "name": "Turbine Speed n2 (Turbinendrehzahl)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2003",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 1.0, "offset": 0.0},
-                    "unit": "RPM",
-                    "min": 0.0,
-                    "max": 7000.0
-                },
-                {
-                    "id": "output_speed",
-                    "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2004",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 1.0, "offset": 0.0},
-                    "unit": "RPM",
-                    "min": 0.0,
-                    "max": 7000.0
-                }
+                p("trans_fluid_temp", 0x22, "0x2001", 3, 1, 1.0, -40.0, "°C", -40.0, 150.0),
+                p("tcc_slip_rpm", 0x22, "0x2002", 3, 2, 1.0, 0.0, "RPM", 0.0, 2000.0),
+                p("turbine_speed", 0x22, "0x2003", 3, 2, 1.0, 0.0, "RPM", 0.0, 7000.0),
+                p("output_speed", 0x22, "0x2004", 3, 2, 1.0, 0.0, "RPM", 0.0, 7000.0),
             ])
 
         elif any(k in ecu for k in ["SBC", "SBC211", "SBC121_F"]):
             params.extend([
-                {
-                    "id": "sbc_accumulator_pressure",
-                    "name": "SBC High Pressure Accumulator (Druck Hochdruckspeicher)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2030",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "bar",
-                    "min": 0.0,
-                    "max": 200.0
-                },
-                {
-                    "id": "sbc_brake_press_fl",
-                    "name": "Brake Pressure Front Left (Bremsdruck VL)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2031",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "bar",
-                    "min": 0.0,
-                    "max": 180.0
-                },
-                {
-                    "id": "sbc_brake_press_fr",
-                    "name": "Brake Pressure Front Right (Bremsdruck VR)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2032",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "bar",
-                    "min": 0.0,
-                    "max": 180.0
-                },
-                {
-                    "id": "sbc_brake_press_rl",
-                    "name": "Brake Pressure Rear Left (Bremsdruck HL)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2033",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "bar",
-                    "min": 0.0,
-                    "max": 180.0
-                },
-                {
-                    "id": "sbc_brake_press_rr",
-                    "name": "Brake Pressure Rear Right (Bremsdruck HR)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2034",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.1, "offset": 0.0},
-                    "unit": "bar",
-                    "min": 0.0,
-                    "max": 180.0
-                },
-                {
-                    "id": "sbc_actuation_count",
-                    "name": "Brake Pedal Actuation Cycles (Bremsbetaetigungszaehler)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0x2035",
-                    "byte_offset": 3,
-                    "length": 4,
-                    "scaling": {"slope": 1.0, "offset": 0.0},
-                    "unit": "cycles",
-                    "min": 0.0,
-                    "max": 1000000.0
-                }
+                p("sbc_accumulator_pressure", 0x22, "0x2030", 3, 2, 0.1, 0.0, "bar", 0.0, 200.0),
+                p("sbc_brake_press_fl", 0x22, "0x2031", 3, 2, 0.1, 0.0, "bar", 0.0, 180.0),
+                p("sbc_brake_press_fr", 0x22, "0x2032", 3, 2, 0.1, 0.0, "bar", 0.0, 180.0),
+                p("sbc_brake_press_rl", 0x22, "0x2033", 3, 2, 0.1, 0.0, "bar", 0.0, 180.0),
+                p("sbc_brake_press_rr", 0x22, "0x2034", 3, 2, 0.1, 0.0, "bar", 0.0, 180.0),
+                p("sbc_actuation_count", 0x22, "0x2035", 3, 4, 1.0, 0.0, "cycles", 0.0, 1000000.0),
             ])
 
         elif "ZGW" in ecu or "CGW" in ecu:
             params.extend([
-                {
-                    "id": "battery_voltage_cgw",
-                    "name": "Battery Supply Voltage Terminal 30 (Kl. 30)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0xF120",
-                    "byte_offset": 3,
-                    "length": 2,
-                    "scaling": {"slope": 0.01, "offset": 0.0},
-                    "unit": "V",
-                    "min": 0.0,
-                    "max": 18.0
-                },
-                {
-                    "id": "terminal_15_status",
-                    "name": "Ignition State Terminal 15 (Kl. 15 Status)",
-                    "module": ecu,
-                    "service": 0x22,
-                    "did": "0xF121",
-                    "byte_offset": 3,
-                    "length": 1,
-                    "scaling": {"slope": 1.0, "offset": 0.0},
-                    "unit": "state",
-                    "min": 0.0,
-                    "max": 1.0
-                }
+                p("battery_voltage_cgw", 0x22, "0xF120", 3, 2, 0.01, 0.0, "V", 0.0, 18.0),
+                p("terminal_15_status", 0x22, "0xF121", 3, 1, 1.0, 0.0, "state", 0.0, 1.0),
             ])
 
         return params
@@ -616,8 +294,14 @@ def generate_vehicle_profile(cbf_paths: List[str], profile_id: str, oem: str, ch
             "algo": "Daimler_Level1"
         })
         
+        module_trans = MODULE_TRANSLATIONS.get(ecu_key, {
+            "en": routing["name"],
+            "de": routing["name"],
+            "sv": routing["name"]
+        })
         module_def = {
-            "name": routing["name"],
+            "name": module_trans["en"],
+            "names": module_trans,
             "tx_id": routing["tx_id"],
             "rx_id": routing["rx_id"],
             "protocol": routing["protocol"],

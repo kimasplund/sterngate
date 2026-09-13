@@ -139,6 +139,30 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("Kraftstoffpumpe"));
+
+        // German Parameter
+        let res_param_de = tools::handle_tool_call(
+            "sterngate_read_parameter",
+            &json!({"parameter": "trans_fluid_temp", "lang": "de"}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            res_param_de.get("name").unwrap().as_str().unwrap(),
+            "Getriebeöltemperatur"
+        );
+
+        // Swedish Parameter
+        let res_param_sv = tools::handle_tool_call(
+            "sterngate_read_parameter",
+            &json!({"parameter": "tcc_slip_rpm", "lang": "sv"}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            res_param_sv.get("name").unwrap().as_str().unwrap(),
+            "Momentomvandlarkoppling slirning"
+        );
     }
 
     #[tokio::test]

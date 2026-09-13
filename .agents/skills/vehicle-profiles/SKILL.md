@@ -24,6 +24,11 @@ Profiles reside in `profiles/<oem>/<model>_<engine>.json`. They define how Stern
   "modules": {
     "EDC16": {
       "name": "Engine Control Unit (Bosch EDC16C31/CP31)",
+      "names": {
+        "en": "Engine Control Unit (Bosch EDC16C31/CP31)",
+        "de": "Motorsteuergerät (Bosch EDC16C31/CP31)",
+        "sv": "Motorstyrenhet (Bosch EDC16C31/CP31)"
+      },
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "UDS",
@@ -31,6 +36,11 @@ Profiles reside in `profiles/<oem>/<model>_<engine>.json`. They define how Stern
     },
     "EGS52": {
       "name": "Electronic Transmission Control (722.6)",
+      "names": {
+        "en": "Electronic Transmission Control (722.6)",
+        "de": "Elektronische Getriebesteuerung (722.6)",
+        "sv": "Elektronisk transmissionsstyrning (722.6)"
+      },
       "tx_id": "0x7E1",
       "rx_id": "0x7E9",
       "protocol": "KWP2000",
@@ -41,6 +51,11 @@ Profiles reside in `profiles/<oem>/<model>_<engine>.json`. They define how Stern
     {
       "id": "trans_oil_temp",
       "name": "Transmission Fluid Temperature",
+      "names": {
+        "en": "Transmission Fluid Temperature",
+        "de": "Getriebeöltemperatur",
+        "sv": "Transmissionsoljetemperatur"
+      },
       "module": "EGS52",
       "service": 34,
       "did": "0x2001",

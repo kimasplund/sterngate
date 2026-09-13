@@ -6,24 +6,34 @@
   "default_bitrate": 500000,
   "modules": {
     "ME28": {
-      "name": "Engine Control Unit (M112/M113 V6/V8 Gasoline / ME 2.8)",
+      "name": "Engine Control Unit (Bosch ME 2.8 Gasoline)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "KWP2000",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Engine Control Unit (Bosch ME 2.8 Gasoline)",
+        "de": "Motorsteuergerät (Bosch ME 2.8 Benzin)",
+        "sv": "Motorstyrenhet (Bosch ME 2.8 bensin)"
+      }
     },
     "EGS52": {
-      "name": "Electronic Transmission Control (722.6 5-Speed / NAG1)",
+      "name": "Electronic Transmission Control (722.6 / NAG1)",
       "tx_id": "0x7E1",
       "rx_id": "0x7E9",
       "protocol": "KWP2000",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Electronic Transmission Control (722.6 / NAG1)",
+        "de": "Elektronische Getriebesteuerung (722.6 / NAG1)",
+        "sv": "Elektronisk transmissionsstyrning (722.6 / NAG1)"
+      }
     }
   },
   "parameters": [
     {
       "id": "engine_rpm",
-      "name": "Engine Speed (Motordrehzahl)",
+      "name": "Engine Speed",
       "module": "ME28",
       "service": 34,
       "did": "0x0100",
@@ -35,11 +45,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Engine Speed",
+        "de": "Motordrehzahl",
+        "sv": "Motorvarvtal"
+      }
     },
     {
       "id": "coolant_temp",
-      "name": "Coolant Temperature (Kuehlmitteltemperatur)",
+      "name": "Engine Coolant Temperature",
       "module": "ME28",
       "service": 34,
       "did": "0x0105",
@@ -49,13 +64,18 @@
         "slope": 1.0,
         "offset": -40.0
       },
-      "unit": "\u00b0C",
+      "unit": "°C",
       "min": -40.0,
-      "max": 140.0
+      "max": 140.0,
+      "names": {
+        "en": "Engine Coolant Temperature",
+        "de": "Kühlmitteltemperatur",
+        "sv": "Kylarvätsketemperatur"
+      }
     },
     {
       "id": "throttle_angle",
-      "name": "Throttle Valve Angle (Drosselklappenwinkel)",
+      "name": "Throttle Valve Angle",
       "module": "ME28",
       "service": 34,
       "did": "0x0111",
@@ -67,11 +87,16 @@
       },
       "unit": "%",
       "min": 0.0,
-      "max": 100.0
+      "max": 100.0,
+      "names": {
+        "en": "Throttle Valve Angle",
+        "de": "Drosselklappenwinkel",
+        "sv": "Gasspjällsvinkel"
+      }
     },
     {
       "id": "mass_air_flow",
-      "name": "Mass Air Flow MAF (Luftmasse kg/h)",
+      "name": "Mass Air Flow (MAF)",
       "module": "ME28",
       "service": 34,
       "did": "0x0110",
@@ -83,7 +108,12 @@
       },
       "unit": "kg/h",
       "min": 0.0,
-      "max": 600.0
+      "max": 600.0,
+      "names": {
+        "en": "Mass Air Flow (MAF)",
+        "de": "Luftmassenmesser (LMM)",
+        "sv": "Luftmassemätare (LMM)"
+      }
     },
     {
       "id": "lambda_b1s1",
@@ -99,7 +129,12 @@
       },
       "unit": "V",
       "min": 0.0,
-      "max": 1.2
+      "max": 1.2,
+      "names": {
+        "en": "Lambda Upstream O2 Voltage Bank 1",
+        "de": "Lambdaspannung Bank 1 vor Kat",
+        "sv": "Lambdaspänning bank 1 före katalysator"
+      }
     },
     {
       "id": "lambda_b2s1",
@@ -115,11 +150,16 @@
       },
       "unit": "V",
       "min": 0.0,
-      "max": 1.2
+      "max": 1.2,
+      "names": {
+        "en": "Lambda Upstream O2 Voltage Bank 2",
+        "de": "Lambdaspannung Bank 2 vor Kat",
+        "sv": "Lambdaspänning bank 2 före katalysator"
+      }
     },
     {
       "id": "trans_fluid_temp",
-      "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
+      "name": "Transmission Fluid Temperature",
       "module": "EGS52",
       "service": 34,
       "did": "0x2001",
@@ -129,13 +169,18 @@
         "slope": 1.0,
         "offset": -40.0
       },
-      "unit": "\u00b0C",
+      "unit": "°C",
       "min": -40.0,
-      "max": 150.0
+      "max": 150.0,
+      "names": {
+        "en": "Transmission Fluid Temperature",
+        "de": "Getriebeöltemperatur",
+        "sv": "Transmissionsoljetemperatur"
+      }
     },
     {
       "id": "tcc_slip_rpm",
-      "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
+      "name": "Torque Converter Clutch Slip",
       "module": "EGS52",
       "service": 34,
       "did": "0x2002",
@@ -147,11 +192,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 2000.0
+      "max": 2000.0,
+      "names": {
+        "en": "Torque Converter Clutch Slip",
+        "de": "Drehzahldifferenz KÜB",
+        "sv": "Momentomvandlarkoppling slirning"
+      }
     },
     {
       "id": "turbine_speed",
-      "name": "Turbine Speed n2 (Turbinendrehzahl)",
+      "name": "Turbine Speed n2",
       "module": "EGS52",
       "service": 34,
       "did": "0x2003",
@@ -163,11 +213,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Turbine Speed n2",
+        "de": "Turbinendrehzahl n2",
+        "sv": "Turbinvarvtal n2"
+      }
     },
     {
       "id": "output_speed",
-      "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
+      "name": "Output Shaft Speed n3",
       "module": "EGS52",
       "service": 34,
       "did": "0x2004",
@@ -179,7 +234,12 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Output Shaft Speed n3",
+        "de": "Abtriebsdrehzahl n3",
+        "sv": "Utgående axelvarvtal n3"
+      }
     }
   ]
 }

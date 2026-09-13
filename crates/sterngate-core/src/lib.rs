@@ -51,6 +51,7 @@ mod tests {
         let param = ParameterDef {
             id: "trans_temp".into(),
             name: "Transmission Fluid Temp".into(),
+            names: std::collections::HashMap::new(),
             module: "EGS52".into(),
             service: 0x22,
             did: "0x2001".into(),
@@ -176,5 +177,36 @@ mod tests {
         assert_eq!(dtc_sv.description, "Luftmassemätare (LMM) Strömkretsfel");
         let routine_sv = lookup_routine_name(0xFF01, Language::Sv);
         assert_eq!(routine_sv, "Bränslepump grundning och urluftning");
+    }
+
+    #[test]
+    fn test_profile_multilingual_parameters_and_modules() {
+        let mut prof =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w203_om646_cr3.json").unwrap();
+
+        let tcc = prof.find_parameter("tcc_slip_rpm").unwrap();
+        assert_eq!(tcc.name, "Torque Converter Clutch Slip");
+        assert_eq!(tcc.localized_name(Language::De), "Drehzahldifferenz KÜB");
+        assert_eq!(
+            tcc.localized_name(Language::Sv),
+            "Momentomvandlarkoppling slirning"
+        );
+
+        let egs = prof.get_module("EGS52").unwrap();
+        assert_eq!(
+            egs.localized_name(Language::De),
+            "Elektronische Getriebesteuerung (722.6 / NAG1)"
+        );
+
+        // In-place localization test
+        prof.localize(Language::De);
+        let tcc_localized = prof.find_parameter("tcc_slip_rpm").unwrap();
+        assert_eq!(tcc_localized.name, "Drehzahldifferenz KÜB");
+
+        let egs_localized = prof.get_module("EGS52").unwrap();
+        assert_eq!(
+            egs_localized.name,
+            "Elektronische Getriebesteuerung (722.6 / NAG1)"
+        );
     }
 }

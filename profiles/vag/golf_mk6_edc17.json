@@ -6,33 +6,51 @@
   "default_bitrate": 500000,
   "modules": {
     "EDC17": {
-      "name": "Engine Control Unit (Bosch EDC17C46 2.0 TDI)",
+      "name": "Engine Control Unit (Bosch EDC17)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "UDS",
-      "seed_key_algo": "VAG_UDS_Level1"
+      "seed_key_algo": "VAG_UDS_Level1",
+      "names": {
+        "en": "Engine Control Unit (Bosch EDC17)",
+        "de": "Motorsteuergerät (Bosch EDC17)",
+        "sv": "Motorstyrenhet (Bosch EDC17)"
+      }
     },
     "DSG_DQ250": {
       "name": "Direct Shift Gearbox 6-Speed (DQ250)",
       "tx_id": "0x7E1",
       "rx_id": "0x7E9",
       "protocol": "UDS",
-      "seed_key_algo": "VAG_UDS_Level1"
+      "seed_key_algo": "VAG_UDS_Level1",
+      "names": {
+        "en": "Direct Shift Gearbox 6-Speed (DQ250)",
+        "de": "Direktschaltgetriebe 6-Gang (DQ250)",
+        "sv": "Direktväxellåda 6-växlad (DQ250)"
+      }
     }
   },
   "parameters": [
     {
       "id": "engine_rpm",
-      "name": "Engine RPM",
+      "name": "Engine Speed",
       "module": "EDC17",
       "service": 34,
       "did": "0xF40C",
       "byte_offset": 3,
       "length": 2,
-      "scaling": { "slope": 0.25, "offset": 0.0 },
+      "scaling": {
+        "slope": 0.25,
+        "offset": 0.0
+      },
       "unit": "RPM",
       "min": 0.0,
-      "max": 5500.0
+      "max": 5500.0,
+      "names": {
+        "en": "Engine Speed",
+        "de": "Motordrehzahl",
+        "sv": "Motorvarvtal"
+      }
     },
     {
       "id": "dsg_clutch_temp",
@@ -42,11 +60,18 @@
       "did": "0x1A05",
       "byte_offset": 3,
       "length": 1,
-      "scaling": { "slope": 1.0, "offset": -40.0 },
+      "scaling": {
+        "slope": 1.0,
+        "offset": -40.0
+      },
       "unit": "°C",
       "min": -40.0,
-      "max": 160.0
+      "max": 160.0,
+      "names": {
+        "en": "DSG Dual Clutch Oil Temperature",
+        "de": "DSG Doppelkupplung Öltemperatur",
+        "sv": "DSG dubbelkopplingsoljetemperatur"
+      }
     }
   ]
 }
-

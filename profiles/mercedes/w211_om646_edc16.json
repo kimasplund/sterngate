@@ -6,45 +6,70 @@
   "default_bitrate": 500000,
   "modules": {
     "EDC16": {
-      "name": "Engine Control Unit (OM646 CDI 3 / EDC16C2)",
+      "name": "Engine Control Unit (Bosch EDC16)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Engine Control Unit (Bosch EDC16)",
+        "de": "Motorsteuergerät (Bosch EDC16)",
+        "sv": "Motorstyrenhet (Bosch EDC16)"
+      }
     },
     "CR3": {
-      "name": "Engine Control Unit (OM646 CDI 3 / EDC16C2)",
+      "name": "Engine Control Unit (OM646 CDI 3)",
       "tx_id": "0x7E0",
       "rx_id": "0x7E8",
       "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Engine Control Unit (OM646 CDI 3)",
+        "de": "Motorsteuergerät (OM646 CDI 3)",
+        "sv": "Motorstyrenhet (OM646 CDI 3)"
+      }
     },
     "EGS52": {
-      "name": "Electronic Transmission Control (722.6 5-Speed / NAG1)",
+      "name": "Electronic Transmission Control (722.6 / NAG1)",
       "tx_id": "0x7E1",
       "rx_id": "0x7E9",
       "protocol": "KWP2000",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Electronic Transmission Control (722.6 / NAG1)",
+        "de": "Elektronische Getriebesteuerung (722.6 / NAG1)",
+        "sv": "Elektronisk transmissionsstyrning (722.6 / NAG1)"
+      }
     },
     "SBC211": {
-      "name": "Sensotronic Brake Control (SBC W211/W219)",
+      "name": "Sensotronic Brake Control (SBC)",
       "tx_id": "0x7E2",
       "rx_id": "0x7EA",
       "protocol": "KWP2000",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Sensotronic Brake Control (SBC)",
+        "de": "Sensotronic-Bremsregelung (SBC)",
+        "sv": "Sensotronic bromsreglering (SBC)"
+      }
     },
     "ZGW211": {
-      "name": "Central Gateway (N93)",
+      "name": "Central Gateway (ZGW N93)",
       "tx_id": "0x7DF",
       "rx_id": "0x7E8",
       "protocol": "UDS",
-      "seed_key_algo": "Daimler_Level1"
+      "seed_key_algo": "Daimler_Level1",
+      "names": {
+        "en": "Central Gateway (ZGW N93)",
+        "de": "Zentrales Gateway (ZGW N93)",
+        "sv": "Central gateway (ZGW N93)"
+      }
     }
   },
   "parameters": [
     {
       "id": "engine_rpm",
-      "name": "Engine Speed (Motordrehzahl)",
+      "name": "Engine Speed",
       "module": "EDC16",
       "service": 34,
       "did": "0x0100",
@@ -56,11 +81,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 5000.0
+      "max": 5000.0,
+      "names": {
+        "en": "Engine Speed",
+        "de": "Motordrehzahl",
+        "sv": "Motorvarvtal"
+      }
     },
     {
       "id": "coolant_temp",
-      "name": "Coolant Temperature (Kuehlmitteltemperatur)",
+      "name": "Engine Coolant Temperature",
       "module": "EDC16",
       "service": 34,
       "did": "0x0105",
@@ -70,13 +100,18 @@
         "slope": 1.0,
         "offset": -40.0
       },
-      "unit": "\u00b0C",
+      "unit": "°C",
       "min": -40.0,
-      "max": 140.0
+      "max": 140.0,
+      "names": {
+        "en": "Engine Coolant Temperature",
+        "de": "Kühlmitteltemperatur",
+        "sv": "Kylarvätsketemperatur"
+      }
     },
     {
       "id": "rail_pressure",
-      "name": "Common Rail Pressure (Raildruck Istwert)",
+      "name": "Common Rail Fuel Pressure",
       "module": "EDC16",
       "service": 34,
       "did": "0x200B",
@@ -88,11 +123,16 @@
       },
       "unit": "bar",
       "min": 0.0,
-      "max": 1800.0
+      "max": 1800.0,
+      "names": {
+        "en": "Common Rail Fuel Pressure",
+        "de": "Raildruck Istwert",
+        "sv": "Common Rail bränsletryck"
+      }
     },
     {
       "id": "boost_pressure",
-      "name": "Boost Pressure (Ladedruck Istwert)",
+      "name": "Boost Pressure",
       "module": "EDC16",
       "service": 34,
       "did": "0x2010",
@@ -104,11 +144,16 @@
       },
       "unit": "hPa",
       "min": 500.0,
-      "max": 3000.0
+      "max": 3000.0,
+      "names": {
+        "en": "Boost Pressure",
+        "de": "Ladedruck Istwert",
+        "sv": "Laddtryck ärvärde"
+      }
     },
     {
       "id": "air_mass",
-      "name": "Air Mass Flow (Luftmasse Soll/Ist)",
+      "name": "Air Mass Flow",
       "module": "EDC16",
       "service": 34,
       "did": "0x2015",
@@ -120,11 +165,16 @@
       },
       "unit": "mg/hub",
       "min": 0.0,
-      "max": 1200.0
+      "max": 1200.0,
+      "names": {
+        "en": "Air Mass Flow",
+        "de": "Luftmasse Soll/Ist",
+        "sv": "Luftmassflöde"
+      }
     },
     {
       "id": "inj_corr_cyl1",
-      "name": "Smooth Running Correction Cyl 1 (Laufruheregler Zyl 1)",
+      "name": "Smooth Running Correction Cyl 1",
       "module": "EDC16",
       "service": 34,
       "did": "0x2021",
@@ -134,13 +184,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 1",
+        "de": "Laufruheregler Zylinder 1",
+        "sv": "Gångjämnhetsreglering cylinder 1"
+      }
     },
     {
       "id": "inj_corr_cyl2",
-      "name": "Smooth Running Correction Cyl 2 (Laufruheregler Zyl 2)",
+      "name": "Smooth Running Correction Cyl 2",
       "module": "EDC16",
       "service": 34,
       "did": "0x2022",
@@ -150,13 +205,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 2",
+        "de": "Laufruheregler Zylinder 2",
+        "sv": "Gångjämnhetsreglering cylinder 2"
+      }
     },
     {
       "id": "inj_corr_cyl3",
-      "name": "Smooth Running Correction Cyl 3 (Laufruheregler Zyl 3)",
+      "name": "Smooth Running Correction Cyl 3",
       "module": "EDC16",
       "service": 34,
       "did": "0x2023",
@@ -166,13 +226,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 3",
+        "de": "Laufruheregler Zylinder 3",
+        "sv": "Gångjämnhetsreglering cylinder 3"
+      }
     },
     {
       "id": "inj_corr_cyl4",
-      "name": "Smooth Running Correction Cyl 4 (Laufruheregler Zyl 4)",
+      "name": "Smooth Running Correction Cyl 4",
       "module": "EDC16",
       "service": 34,
       "did": "0x2024",
@@ -182,13 +247,18 @@
         "slope": 0.01,
         "offset": -5.0
       },
-      "unit": "mm\u00b3/stroke",
+      "unit": "mm³/stroke",
       "min": -5.0,
-      "max": 5.0
+      "max": 5.0,
+      "names": {
+        "en": "Smooth Running Correction Cyl 4",
+        "de": "Laufruheregler Zylinder 4",
+        "sv": "Gångjämnhetsreglering cylinder 4"
+      }
     },
     {
       "id": "trans_fluid_temp",
-      "name": "Transmission Fluid Temperature (Getriebeoeltemperatur)",
+      "name": "Transmission Fluid Temperature",
       "module": "EGS52",
       "service": 34,
       "did": "0x2001",
@@ -198,13 +268,18 @@
         "slope": 1.0,
         "offset": -40.0
       },
-      "unit": "\u00b0C",
+      "unit": "°C",
       "min": -40.0,
-      "max": 150.0
+      "max": 150.0,
+      "names": {
+        "en": "Transmission Fluid Temperature",
+        "de": "Getriebeöltemperatur",
+        "sv": "Transmissionsoljetemperatur"
+      }
     },
     {
       "id": "tcc_slip_rpm",
-      "name": "Torque Converter Clutch Slip (Drehzahldifferenz Kueb)",
+      "name": "Torque Converter Clutch Slip",
       "module": "EGS52",
       "service": 34,
       "did": "0x2002",
@@ -216,11 +291,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 2000.0
+      "max": 2000.0,
+      "names": {
+        "en": "Torque Converter Clutch Slip",
+        "de": "Drehzahldifferenz KÜB",
+        "sv": "Momentomvandlarkoppling slirning"
+      }
     },
     {
       "id": "turbine_speed",
-      "name": "Turbine Speed n2 (Turbinendrehzahl)",
+      "name": "Turbine Speed n2",
       "module": "EGS52",
       "service": 34,
       "did": "0x2003",
@@ -232,11 +312,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Turbine Speed n2",
+        "de": "Turbinendrehzahl n2",
+        "sv": "Turbinvarvtal n2"
+      }
     },
     {
       "id": "output_speed",
-      "name": "Output Shaft Speed n3 (Abtriebsdrehzahl)",
+      "name": "Output Shaft Speed n3",
       "module": "EGS52",
       "service": 34,
       "did": "0x2004",
@@ -248,11 +333,16 @@
       },
       "unit": "RPM",
       "min": 0.0,
-      "max": 7000.0
+      "max": 7000.0,
+      "names": {
+        "en": "Output Shaft Speed n3",
+        "de": "Abtriebsdrehzahl n3",
+        "sv": "Utgående axelvarvtal n3"
+      }
     },
     {
       "id": "sbc_accumulator_pressure",
-      "name": "SBC High Pressure Accumulator (Druck Hochdruckspeicher)",
+      "name": "SBC High Pressure Accumulator",
       "module": "SBC211",
       "service": 34,
       "did": "0x2030",
@@ -264,11 +354,16 @@
       },
       "unit": "bar",
       "min": 0.0,
-      "max": 200.0
+      "max": 200.0,
+      "names": {
+        "en": "SBC High Pressure Accumulator",
+        "de": "Druck Hochdruckspeicher (SBC)",
+        "sv": "SBC högtrycksackumulator"
+      }
     },
     {
       "id": "sbc_brake_press_fl",
-      "name": "Brake Pressure Front Left (Bremsdruck VL)",
+      "name": "Brake Pressure Front Left",
       "module": "SBC211",
       "service": 34,
       "did": "0x2031",
@@ -280,11 +375,16 @@
       },
       "unit": "bar",
       "min": 0.0,
-      "max": 180.0
+      "max": 180.0,
+      "names": {
+        "en": "Brake Pressure Front Left",
+        "de": "Bremsdruck vorne links",
+        "sv": "Bromstryck vänster fram"
+      }
     },
     {
       "id": "sbc_brake_press_fr",
-      "name": "Brake Pressure Front Right (Bremsdruck VR)",
+      "name": "Brake Pressure Front Right",
       "module": "SBC211",
       "service": 34,
       "did": "0x2032",
@@ -296,11 +396,16 @@
       },
       "unit": "bar",
       "min": 0.0,
-      "max": 180.0
+      "max": 180.0,
+      "names": {
+        "en": "Brake Pressure Front Right",
+        "de": "Bremsdruck vorne rechts",
+        "sv": "Bromstryck höger fram"
+      }
     },
     {
       "id": "sbc_brake_press_rl",
-      "name": "Brake Pressure Rear Left (Bremsdruck HL)",
+      "name": "Brake Pressure Rear Left",
       "module": "SBC211",
       "service": 34,
       "did": "0x2033",
@@ -312,11 +417,16 @@
       },
       "unit": "bar",
       "min": 0.0,
-      "max": 180.0
+      "max": 180.0,
+      "names": {
+        "en": "Brake Pressure Rear Left",
+        "de": "Bremsdruck hinten links",
+        "sv": "Bromstryck vänster bak"
+      }
     },
     {
       "id": "sbc_brake_press_rr",
-      "name": "Brake Pressure Rear Right (Bremsdruck HR)",
+      "name": "Brake Pressure Rear Right",
       "module": "SBC211",
       "service": 34,
       "did": "0x2034",
@@ -328,11 +438,16 @@
       },
       "unit": "bar",
       "min": 0.0,
-      "max": 180.0
+      "max": 180.0,
+      "names": {
+        "en": "Brake Pressure Rear Right",
+        "de": "Bremsdruck hinten rechts",
+        "sv": "Bromstryck höger bak"
+      }
     },
     {
       "id": "sbc_actuation_count",
-      "name": "Brake Pedal Actuation Cycles (Bremsbetaetigungszaehler)",
+      "name": "Brake Pedal Actuation Cycles",
       "module": "SBC211",
       "service": 34,
       "did": "0x2035",
@@ -344,11 +459,16 @@
       },
       "unit": "cycles",
       "min": 0.0,
-      "max": 1000000.0
+      "max": 1000000.0,
+      "names": {
+        "en": "Brake Pedal Actuation Cycles",
+        "de": "Bremsbetätigungszähler (SBC)",
+        "sv": "Bromspedal aktiveringsräknare (SBC)"
+      }
     },
     {
       "id": "battery_voltage_cgw",
-      "name": "Battery Supply Voltage Terminal 30 (Kl. 30)",
+      "name": "Battery Supply Voltage Terminal 30",
       "module": "ZGW211",
       "service": 34,
       "did": "0xF120",
@@ -360,11 +480,16 @@
       },
       "unit": "V",
       "min": 0.0,
-      "max": 18.0
+      "max": 18.0,
+      "names": {
+        "en": "Battery Supply Voltage Terminal 30",
+        "de": "Batteriespannung Klemme 30",
+        "sv": "Batterispänning Klämma 30"
+      }
     },
     {
       "id": "terminal_15_status",
-      "name": "Ignition State Terminal 15 (Kl. 15 Status)",
+      "name": "Ignition State Terminal 15",
       "module": "ZGW211",
       "service": 34,
       "did": "0xF121",
@@ -376,7 +501,12 @@
       },
       "unit": "state",
       "min": 0.0,
-      "max": 1.0
+      "max": 1.0,
+      "names": {
+        "en": "Ignition State Terminal 15",
+        "de": "Zündungsstatus Klemme 15",
+        "sv": "Tändningsstatus klämma 15"
+      }
     }
   ]
 }

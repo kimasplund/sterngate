@@ -50,7 +50,7 @@ Or when running the compiled release binary:
 | `sterngate_read_telemetry` | `interface` (opt) | Returns a real-time snapshot of engine, transmission, and chassis values (RPM, ATF temp, rail pressure, boost, cylinder balance). |
 | `sterngate_read_dtc` | `module` (opt), `lang` (opt: `en`, `de`, `sv`) | Reads active and stored Diagnostic Trouble Codes (DTCs) with localized descriptions (English, authentic German, Swedish). |
 | `sterngate_clear_dtc` | `module` (opt) | Clears DTC fault memory on the target module or entire gateway via Service 0x14. |
-| `sterngate_read_parameter` | `parameter` (opt), `module` (opt) | Reads a specific sensor parameter (e.g. `Transmission Fluid Temp`, `0x2001`, `rail_pressure`). |
+| `sterngate_read_parameter` | `parameter` (opt), `module` (opt), `lang` (opt: `en`, `de`, `sv`) | Reads a specific sensor parameter (e.g. `Transmission Fluid Temp`, `0x2001`, `rail_pressure`, `tcc_slip_rpm`) with localized naming. |
 | `sterngate_inspect_ecu` | `module` (opt) | Fetches hardware ID, software revision, calibration ID, protocol, and VIN. |
 | `sterngate_trigger_routine` | `routine_id`, `module`, `sub_function`, `lang` (opt) | Triggers UDS Service 0x31 actuator/diagnostic routines (fuel prime `0xFF01`, NMK reset `0x0201`, DPF regen `0x0202`) with zero-trust safety verification and localized feedback. |
 | `sterngate_control_flight_recorder` | `action` (`start`/`stop`/`status`), `filename` (opt) | Controls high-frequency continuous CSV telemetry flight recording for track/tow/dyno logging. |

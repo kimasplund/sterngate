@@ -16,6 +16,8 @@ pub struct ScalingDef {
 pub struct ParameterDef {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub names: HashMap<String, String>,
     pub module: String,
     pub service: u8,
     pub did: String,
@@ -30,6 +32,13 @@ pub struct ParameterDef {
 }
 
 impl ParameterDef {
+    pub fn localized_name(&self, lang: crate::i18n::Language) -> &str {
+        if let Some(loc) = self.names.get(&lang.to_string()) {
+            loc.as_str()
+        } else {
+            &self.name
+        }
+    }
     pub fn parse_raw(&self, payload: &[u8]) -> Result<ParameterValue> {
         let did_u16 = u16::from_str_radix(self.did.trim_start_matches("0x"), 16).map_err(|e| {
             SterngateError::ParameterParseError {
@@ -102,6 +111,8 @@ impl ParameterDef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModuleDef {
     pub name: String,
+    #[serde(default)]
+    pub names: HashMap<String, String>,
     pub tx_id: String,
     pub rx_id: String,
     pub protocol: String,
@@ -110,6 +121,14 @@ pub struct ModuleDef {
 }
 
 impl ModuleDef {
+    pub fn localized_name(&self, lang: crate::i18n::Language) -> &str {
+        if let Some(loc) = self.names.get(&lang.to_string()) {
+            loc.as_str()
+        } else {
+            &self.name
+        }
+    }
+
     pub fn tx_can_id(&self) -> Result<u32> {
         u32::from_str_radix(self.tx_id.trim_start_matches("0x"), 16).map_err(|e| {
             SterngateError::ProfileError(format!("Invalid tx_id {}: {}", self.tx_id, e))
@@ -197,5 +216,20 @@ impl VehicleProfile {
             .into_iter()
             .filter_map(|p| Self::load_from_file(p).ok())
             .collect()
+    }
+
+    /// In-place localization of parameter and module names
+    pub fn localize(&mut self, lang: crate::i18n::Language) {
+        let lang_code = lang.to_string();
+        for param in &mut self.parameters {
+            if let Some(loc) = param.names.get(&lang_code) {
+                param.name = loc.clone();
+            }
+        }
+        for module in self.modules.values_mut() {
+            if let Some(loc) = module.names.get(&lang_code) {
+                module.name = loc.clone();
+            }
+        }
     }
 }

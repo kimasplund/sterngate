@@ -271,4 +271,51 @@ mod tests {
             msg
         );
     }
+
+    #[tokio::test]
+    async fn test_profile_localization_endpoint() {
+        let mut iface = Box::new(VirtualCanInterface::new());
+        let _ = iface.open().await;
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher));
+
+        // 1. GET /api/v1/profile?lang=de
+        let req = Request::builder()
+            .uri("/api/v1/profile?lang=de")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let prof_de: VehicleProfile = serde_json::from_slice(&body_bytes).unwrap();
+        let tcc_de = prof_de
+            .parameters
+            .iter()
+            .find(|p| p.id == "tcc_slip_rpm")
+            .unwrap();
+        assert_eq!(tcc_de.name, "Drehzahldifferenz KÜB");
+
+        // 2. GET /api/v1/profile?lang=sv
+        let req = Request::builder()
+            .uri("/api/v1/profile?lang=sv")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let prof_sv: VehicleProfile = serde_json::from_slice(&body_bytes).unwrap();
+        let tcc_sv = prof_sv
+            .parameters
+            .iter()
+            .find(|p| p.id == "tcc_slip_rpm")
+            .unwrap();
+        assert_eq!(tcc_sv.name, "Momentomvandlarkoppling slirning");
+    }
 }
