@@ -1,13 +1,19 @@
+pub mod analytics;
 pub mod catalog;
 pub mod command;
 pub mod dtc;
 pub mod error;
 pub mod flash;
 pub mod frame;
+pub mod garage;
 pub mod i18n;
 pub mod parameter;
 pub mod profile;
 
+pub use analytics::{
+    DriveBenchmark, DriveComparison, DriveSample, DriveSummary, SuspensionHealthReport,
+    SuspensionLeakDetector, SuspensionSample, SuspensionStatus,
+};
 pub use catalog::{
     CatalogMetadata, CbfCatalog, CbfEcuEntry, CbfVersionInfo, EcuCatalog, EcuCatalogEntry,
     EcuSearchResult, EcuVersionInfo,
@@ -17,6 +23,7 @@ pub use dtc::Dtc;
 pub use error::{Result, SterngateError};
 pub use flash::{FlashPackageManifest, FlashProgress, FlashState, PreFlightReport};
 pub use frame::CanFrame;
+pub use garage::{DecodedVin, GitCommitInfo, VehicleEcuSnapshot, VehicleGarage, VehicleRecord};
 pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
@@ -208,5 +215,157 @@ mod tests {
             egs_localized.name,
             "Elektronische Getriebesteuerung (722.6 / NAG1)"
         );
+    }
+
+    #[test]
+    fn test_vin_decoding_s211() {
+        // User's OM646 S211 Estate (E 220 T CDI)
+        let s211_vin = DecodedVin::decode("WDB2112061A892341");
+        assert_eq!(s211_vin.manufacturer, "Mercedes-Benz");
+        assert_eq!(s211_vin.body_style, "Estate / T-Modell (S211)");
+        assert_eq!(s211_vin.model_name, "E 220 T CDI");
+        assert!(s211_vin.engine.contains("OM646"));
+
+        // W211 Sedan (E 320 CDI V6)
+        let w211_vin = DecodedVin::decode("WDB2110221A123456");
+        assert_eq!(w211_vin.body_style, "Sedan / Saloon (W211)");
+        assert_eq!(w211_vin.model_name, "E 320 CDI V6");
+    }
+
+    #[test]
+    fn test_suspension_leak_detection() {
+        let mut detector = SuspensionLeakDetector::new();
+        // Simulate stationary drop over 1 hour
+        detector.add_sample(SuspensionSample {
+            timestamp_ms: 1000,
+            left_rear_height_mm: 120.0,
+            right_rear_height_mm: 120.0,
+            compressor_active: false,
+            compressor_run_duration_s: 0.0,
+            ..Default::default()
+        });
+        // 1 hour later: left dropped by 12mm (severe leak), compressor had to run 65s
+        detector.add_sample(SuspensionSample {
+            timestamp_ms: 1000 + 3_600_000,
+            left_rear_height_mm: 108.0,
+            right_rear_height_mm: 119.5,
+            compressor_active: true,
+            compressor_run_duration_s: 65.0,
+            ..Default::default()
+        });
+
+        let report = detector.evaluate();
+        assert_eq!(report.status, SuspensionStatus::CriticalLeak);
+        assert!(report.height_drop_rate_mm_per_hour >= 10.0);
+        assert!(report.max_compressor_continuous_run_s > 60.0);
+        assert!(!report.recommendations.is_empty());
+    }
+
+    #[test]
+    fn test_drive_benchmark_and_comparison() {
+        let mut b_run1 = DriveBenchmark::new();
+        // Run 1: High slip, 7.8 L/100km
+        b_run1.add_sample(DriveSample {
+            timestamp_ms: 1000,
+            speed_kmh: 100.0,
+            engine_rpm: 2000.0,
+            injection_mass_mg_str: 35.0,
+            boost_pressure_hpa: 1400.0,
+            rail_pressure_bar: 1100.0,
+            coolant_temp_c: 75.0,
+            tcc_slip_rpm: 45.0,
+            gear: 5,
+        });
+        b_run1.add_sample(DriveSample {
+            timestamp_ms: 61000,
+            speed_kmh: 100.0,
+            engine_rpm: 2000.0,
+            injection_mass_mg_str: 35.0,
+            boost_pressure_hpa: 1400.0,
+            rail_pressure_bar: 1100.0,
+            coolant_temp_c: 82.0,
+            tcc_slip_rpm: 42.0,
+            gear: 5,
+        });
+        let sum1 = b_run1.summarize();
+        assert!(sum1.average_consumption_l_per_100km > 0.0);
+
+        let mut b_run2 = DriveBenchmark::new();
+        // Run 2: After TCC solenoid & thermostat change -> lower slip, 7.1 L/100km, 88°C
+        b_run2.add_sample(DriveSample {
+            timestamp_ms: 1000,
+            speed_kmh: 100.0,
+            engine_rpm: 1950.0,
+            injection_mass_mg_str: 31.0,
+            boost_pressure_hpa: 1400.0,
+            rail_pressure_bar: 1100.0,
+            coolant_temp_c: 88.0,
+            tcc_slip_rpm: 8.0,
+            gear: 5,
+        });
+        b_run2.add_sample(DriveSample {
+            timestamp_ms: 61000,
+            speed_kmh: 100.0,
+            engine_rpm: 1950.0,
+            injection_mass_mg_str: 31.0,
+            boost_pressure_hpa: 1400.0,
+            rail_pressure_bar: 1100.0,
+            coolant_temp_c: 88.0,
+            tcc_slip_rpm: 7.0,
+            gear: 5,
+        });
+        let sum2 = b_run2.summarize();
+
+        let cmp = DriveBenchmark::compare(&sum1, &sum2, "Baseline", "New Solenoid");
+        assert!(cmp.consumption_delta_l_per_100km < 0.0);
+        assert!(cmp.tcc_slip_delta_rpm < 0.0);
+        assert!(cmp.verdict.contains("Beneficial"));
+    }
+
+    #[test]
+    fn test_vehicle_garage_lifecycle() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("sterngate_test_garage_{}", std::process::id()));
+        let garage = VehicleGarage::new(&temp_dir);
+
+        let vin_str = "WDB2112061A999888";
+        let rec = VehicleRecord {
+            vin: vin_str.to_string(),
+            decoded: DecodedVin::decode(vin_str),
+            first_scanned: "2026-09-13T22:00:00Z".into(),
+            last_scanned: "2026-09-13T22:00:00Z".into(),
+            scan_count: 1,
+            odometer_km: Some(250100),
+            battery_voltage: Some(12.6),
+            detected_modules: Default::default(),
+            notes: vec!["Initial diagnostic scan".into()],
+        };
+
+        let path = garage.save_vehicle(&rec, Some("Initial scan")).unwrap();
+        assert!(path.exists());
+
+        let loaded = garage.load_vehicle(vin_str).unwrap().unwrap();
+        assert_eq!(loaded.vin, vin_str);
+        assert_eq!(loaded.decoded.model_name, "E 220 T CDI");
+
+        let list = garage.list_vehicles().unwrap();
+        assert!(list.iter().any(|v| v.vin == vin_str));
+
+        // Test saving coding and git commit
+        garage
+            .save_coding(
+                vin_str,
+                "EDC16",
+                "0102030405",
+                None,
+                "Baseline EDC16 coding",
+            )
+            .unwrap();
+
+        let history = garage.get_history(vin_str).unwrap();
+        assert!(!history.is_empty());
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_dir).ok();
     }
 }

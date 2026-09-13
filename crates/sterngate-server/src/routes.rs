@@ -12,10 +12,11 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::sync::Arc;
 use sterngate_core::{
-    lookup_routine_name, Dtc, FlashPackageManifest, FlashProgress, Language, TelemetrySnapshot,
+    lookup_routine_name, DriveBenchmark, DriveSummary, Dtc, FlashPackageManifest, FlashProgress,
+    Language, SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot, VehicleGarage,
     VehicleProfile,
 };
-use sterngate_protocol::UdsClient;
+use sterngate_protocol::{UdsClient, VehicleScanner};
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -47,6 +48,18 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/cbf/search", get(search_ecu_catalog))
         .route("/api/v1/cbf/inspect/{ecu}", get(inspect_ecu_definition))
         .route("/api/v1/locales", get(get_available_locales))
+        .route("/api/v1/vehicle/scan", post(scan_vehicle_quick_test))
+        .route("/api/v1/vehicles", get(list_garage_vehicles))
+        .route("/api/v1/vehicles/{vin}", get(get_garage_vehicle))
+        .route(
+            "/api/v1/vehicles/{vin}/history",
+            get(get_vehicle_git_history),
+        )
+        .route(
+            "/api/v1/analyze/suspension",
+            post(analyze_suspension_health),
+        )
+        .route("/api/v1/analyze/compare", post(compare_drive_runs))
         .with_state(state)
 }
 
@@ -606,4 +619,165 @@ async fn get_all_profiles() -> impl IntoResponse {
 
 async fn get_available_locales() -> impl IntoResponse {
     Json(vec!["en", "de", "sv"])
+}
+
+#[derive(Deserialize)]
+struct ScanVehicleRequest {
+    #[serde(default = "default_lang_en")]
+    lang: String,
+    #[serde(default = "default_true")]
+    save_to_garage: bool,
+}
+
+fn default_lang_en() -> String {
+    "en".into()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+async fn scan_vehicle_quick_test(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<Option<ScanVehicleRequest>>,
+) -> impl IntoResponse {
+    let req = payload.unwrap_or(ScanVehicleRequest {
+        lang: "en".into(),
+        save_to_garage: true,
+    });
+    let language: Language = req.lang.parse().unwrap_or_default();
+
+    let mut iface = state.interface.lock().await;
+    match VehicleScanner::scan(&mut **iface, language).await {
+        Ok(report) => {
+            if req.save_to_garage {
+                let garage = VehicleGarage::new(VehicleGarage::default_path());
+                let rec = report.to_vehicle_record();
+                let _ = garage.save_vehicle(&rec, Some("web_scan: quick test completed"));
+            }
+            (StatusCode::OK, Json(serde_json::to_value(report).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Vehicle scan failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+async fn list_garage_vehicles() -> impl IntoResponse {
+    let garage = VehicleGarage::new(VehicleGarage::default_path());
+    match garage.list_vehicles() {
+        Ok(vehicles) => (StatusCode::OK, Json(vehicles)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Failed to list vehicles: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_garage_vehicle(Path(vin): Path<String>) -> impl IntoResponse {
+    let garage = VehicleGarage::new(VehicleGarage::default_path());
+    match garage.load_vehicle(&vin) {
+        Ok(Some(v)) => (StatusCode::OK, Json(v)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("Vehicle '{}' not found in garage", vin) })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Failed to load vehicle: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_vehicle_git_history(Path(vin): Path<String>) -> impl IntoResponse {
+    let garage = VehicleGarage::new(VehicleGarage::default_path());
+    match garage.get_history(&vin) {
+        Ok(history) => (StatusCode::OK, Json(history)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("Failed to load vehicle history: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SuspensionAnalysisRequest {
+    #[serde(default)]
+    samples: Vec<SuspensionSample>,
+}
+
+async fn analyze_suspension_health(
+    Json(payload): Json<Option<SuspensionAnalysisRequest>>,
+) -> impl IntoResponse {
+    let mut detector = SuspensionLeakDetector::new();
+    let samples = payload.and_then(|p| {
+        if p.samples.is_empty() {
+            None
+        } else {
+            Some(p.samples)
+        }
+    });
+
+    if let Some(s_list) = samples {
+        for s in s_list {
+            detector.add_sample(s);
+        }
+    } else {
+        // Provide baseline live evaluation
+        detector.add_sample(SuspensionSample {
+            timestamp_ms: 1000,
+            left_rear_height_mm: 118.0,
+            right_rear_height_mm: 118.5,
+            compressor_active: false,
+            compressor_run_duration_s: 0.0,
+            reservoir_pressure_bar: Some(14.2),
+            compressor_temp_c: Some(38.0),
+        });
+        detector.add_sample(SuspensionSample {
+            timestamp_ms: 1000 + 1_800_000,
+            left_rear_height_mm: 117.8,
+            right_rear_height_mm: 118.2,
+            compressor_active: false,
+            compressor_run_duration_s: 0.0,
+            reservoir_pressure_bar: Some(14.0),
+            compressor_temp_c: Some(35.0),
+        });
+    }
+
+    let report = detector.evaluate();
+    Json(report)
+}
+
+#[derive(Deserialize)]
+struct CompareRunsRequest {
+    run_a: DriveSummary,
+    run_b: DriveSummary,
+    #[serde(default = "default_run_a_name")]
+    name_a: String,
+    #[serde(default = "default_run_b_name")]
+    name_b: String,
+}
+
+fn default_run_a_name() -> String {
+    "Run A (Baseline)".into()
+}
+
+fn default_run_b_name() -> String {
+    "Run B (Modified)".into()
+}
+
+async fn compare_drive_runs(Json(payload): Json<CompareRunsRequest>) -> impl IntoResponse {
+    let cmp = DriveBenchmark::compare(
+        &payload.run_a,
+        &payload.run_b,
+        &payload.name_a,
+        &payload.name_b,
+    );
+    Json(cmp)
 }

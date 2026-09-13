@@ -2,6 +2,7 @@ pub mod flasher;
 pub mod gate;
 pub mod isotp;
 pub mod kwp2000;
+pub mod scanner;
 pub mod seedkey;
 pub mod uds;
 
@@ -9,12 +10,14 @@ pub use flasher::FlashingWorker;
 pub use gate::TransactionGate;
 pub use isotp::IsoTpChannel;
 pub use kwp2000::KwpClient;
+pub use scanner::{ModuleScanResult, VehicleDiagnosticReport, VehicleScanner};
 pub use seedkey::{DaimlerSeedKey, DaimlerSolver, SeedKeySolver};
 pub use uds::UdsClient;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sterngate_core::Language;
     use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 
     #[test]
@@ -132,5 +135,27 @@ mod tests {
         assert_eq!(resp[2], 0xFF); // Routine ID high
         assert_eq!(resp[3], 0x01); // Routine ID low
         assert_eq!(resp[4], 0x00); // Status OK
+    }
+
+    #[tokio::test]
+    async fn test_vehicle_scanner_quick_test() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        let report = VehicleScanner::scan(&mut sim, Language::En).await.unwrap();
+        assert!(!report.vin.is_empty());
+        assert_eq!(report.decoded.manufacturer, "Mercedes-Benz");
+        assert_eq!(report.decoded.model_name, "E 220 T CDI");
+        assert!(report.modules_responding >= 4);
+
+        // Verify Markdown rendering
+        let md = report.to_markdown(Language::En);
+        assert!(md.contains("E 220 T CDI"));
+        assert!(md.contains("VIN"));
+
+        // Verify conversion to VehicleRecord
+        let rec = report.to_vehicle_record();
+        assert_eq!(rec.vin, report.vin);
+        assert!(!rec.detected_modules.is_empty());
     }
 }

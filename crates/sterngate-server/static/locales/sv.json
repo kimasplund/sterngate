@@ -101,6 +101,21 @@
     "inspect_title": "Styrenhetsdiagnosdefinition:",
     "btn_close": "✕ Stäng",
     "loading": "Läser in inspektionsmetadata..."
+  },
+  "garage": {
+    "title": "Fordons-snabbtest & Git-baserat Garage",
+    "desc": "Omfattande fordonsdiagnos över alla gateway-styrenheter. Avkodar chassi/motordata och upprätthåller en atomär Git-versionshistorik för alla variantkodningar och adaptionslägen.",
+    "btn_quick_scan": "⚡ Fordons-snabbtest",
+    "btn_scan": "⚡ Fråga styrenheter (Snabbtest)",
+    "btn_history": "📜 Visa Git-historik",
+    "btn_suspension": "🎈 S211 Luftfjädring Läckagetest",
+    "btn_compare": "📈 A/B Körjämförelse Benchmark",
+    "col_vin": "VIN (Chassinummer):",
+    "col_model": "Modell:",
+    "col_chassis": "Karosskod:",
+    "col_engine": "Drivlina:",
+    "col_voltage": "Batteri / Generator:",
+    "col_modules": "Svarande styrenheter:"
   }
 }
 

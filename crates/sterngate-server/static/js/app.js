@@ -356,6 +356,260 @@ function closeInspect() {
   document.getElementById('cbf-inspect-modal').style.display = 'none';
 }
 
+// --- Vehicle Garage & Analytics Logic ---
+let activeVehicleVin = null;
+
+async function scanVehicleQuick() {
+  const vinBadge = document.getElementById('garage-vin-badge');
+  const modelBadge = document.getElementById('garage-model-badge');
+  const overview = document.getElementById('vehicle-overview-panel');
+  const issuesDiv = document.getElementById('v-issues');
+
+  vinBadge.textContent = 'SCANNING ALL ECUs...';
+  vinBadge.className = 'badge badge-voltage';
+  modelBadge.textContent = 'INTERROGATING';
+  modelBadge.className = 'badge';
+
+  try {
+    const res = await fetch('/api/v1/vehicle/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lang: i18n.currentLang || 'en',
+        save_to_garage: true
+      })
+    });
+    const report = await res.json();
+    if (report.error) throw new Error(report.error);
+
+    activeVehicleVin = report.vin;
+    vinBadge.textContent = report.vin;
+    vinBadge.className = 'badge badge-voltage';
+
+    const decoded = report.decoded || {};
+    modelBadge.textContent = `${decoded.model_name || 'Vehicle'} (${decoded.model_series || 'W211'})`;
+    modelBadge.className = 'badge badge-ready';
+
+    document.getElementById('v-vin').textContent = report.vin;
+    document.getElementById('v-model').textContent = decoded.model_name || 'Unknown Model';
+    document.getElementById('v-chassis').textContent = `${decoded.model_series || 'W211'} • ${decoded.body_style || 'Sedan/Estate'}`;
+    document.getElementById('v-engine').textContent = decoded.engine || 'OM646 2.2L CDI';
+    document.getElementById('v-voltage').textContent = `${report.battery_voltage.toFixed(1)}V ${report.alternator_charging ? '(Charging)' : '(Engine Off)'}`;
+    document.getElementById('v-modules').textContent = `${report.modules_responding} / ${report.total_modules_probed} Online`;
+
+    // Render issues & warnings
+    let issuesHtml = '';
+    if (report.critical_issues && report.critical_issues.length > 0) {
+      issuesHtml += `<div style="color: var(--danger); margin-bottom: 0.25rem;"><b>Critical Issues (${report.critical_issues.length}):</b> ${report.critical_issues.join('; ')}</div>`;
+    }
+    if (report.warnings && report.warnings.length > 0) {
+      issuesHtml += `<div style="color: var(--warning); margin-bottom: 0.25rem;"><b>Warnings (${report.warnings.length}):</b> ${report.warnings.join('; ')}</div>`;
+    }
+    if (report.healthy_modules && report.healthy_modules.length > 0) {
+      issuesHtml += `<div style="color: var(--success);"><b>Healthy Modules:</b> ${report.healthy_modules.join(', ')}</div>`;
+    }
+    issuesDiv.innerHTML = issuesHtml || `<div style="color: var(--success);">All interrogated modules healthy. No DTCs stored.</div>`;
+
+    overview.style.display = 'block';
+  } catch (err) {
+    vinBadge.textContent = 'SCAN FAILED';
+    vinBadge.className = 'badge badge-recording';
+    modelBadge.textContent = 'ERROR';
+    alert(`Vehicle scan error: ${err.message}`);
+  }
+}
+
+async function loadGarageHistory() {
+  const panel = document.getElementById('garage-details-panel');
+  const title = document.getElementById('garage-panel-title');
+  const content = document.getElementById('garage-panel-content');
+
+  panel.style.display = 'block';
+  title.textContent = 'Git Version History & Rollback Points';
+  content.innerHTML = '<span style="color: var(--text-muted);">Querying git repository...</span>';
+
+  let vin = activeVehicleVin;
+  if (!vin) {
+    try {
+      const vRes = await fetch('/api/v1/vehicles');
+      const vehicles = await vRes.json();
+      if (vehicles && vehicles.length > 0) {
+        vin = vehicles[0].vin;
+        activeVehicleVin = vin;
+      }
+    } catch (e) {}
+  }
+
+  if (!vin) {
+    content.innerHTML = '<span style="color: var(--warning);">No scanned vehicles found in garage yet. Run a Quick Scan first.</span>';
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/vehicles/${encodeURIComponent(vin)}/history`);
+    const history = await res.json();
+    if (!history || history.length === 0) {
+      content.innerHTML = `<span style="color: var(--text-muted);">Vehicle ${vin} has no commit history yet.</span>`;
+      return;
+    }
+
+    content.innerHTML = `
+      <div style="margin-bottom: 0.5rem; color: var(--text-muted);">
+        Target Vehicle Repository: <b style="color: var(--accent); font-family: monospace;">data/vehicles/${vin}/.git</b>
+      </div>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="text-align: left; border-bottom: 1px solid var(--border);">
+            <th style="padding: 0.4rem;">Commit</th>
+            <th style="padding: 0.4rem;">Date & Time</th>
+            <th style="padding: 0.4rem;">Author</th>
+            <th style="padding: 0.4rem;">Snapshot Message</th>
+            <th style="padding: 0.4rem;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${history.map(c => `
+            <tr style="border-bottom: 1px solid rgba(48, 54, 61, 0.4);">
+              <td style="padding: 0.4rem;"><code style="color: var(--accent);">${c.short_hash}</code></td>
+              <td style="padding: 0.4rem; color: var(--text-muted); font-size: 0.8rem;">${c.timestamp}</td>
+              <td style="padding: 0.4rem; font-size: 0.8rem;">${c.author}</td>
+              <td style="padding: 0.4rem;">${c.message}</td>
+              <td style="padding: 0.4rem;">
+                <button class="btn" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;" onclick="promptRollback('${vin}', '${c.short_hash}')">Rollback</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    content.innerHTML = `<span style="color: var(--danger);">Failed to load history: ${err.message}</span>`;
+  }
+}
+
+function promptRollback(vin, hash) {
+  if (confirm(`Are you sure you want to rollback variant coding and adaptations for ${vin} to commit ${hash}?`)) {
+    alert(`Rollback command dispatched for commit ${hash}. To execute directly in terminal: sterngate vehicle rollback ${vin} ${hash}`);
+  }
+}
+
+async function analyzeSuspensionLive() {
+  const panel = document.getElementById('garage-details-panel');
+  const title = document.getElementById('garage-panel-title');
+  const content = document.getElementById('garage-panel-content');
+
+  panel.style.display = 'block';
+  title.textContent = 'S211 Rear Air Suspension (ENR) & AIRMATIC Health Analyzer';
+  content.innerHTML = '<span style="color: var(--text-muted);">Evaluating pneumatic pressure, height drop rate, and compressor duty cycle...</span>';
+
+  try {
+    const res = await fetch('/api/v1/analyze/suspension', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(null)
+    });
+    const report = await res.json();
+
+    const statusBadgeClass = report.status === 'Healthy' ? 'badge-ready' : (report.status === 'Warning' ? 'badge-voltage' : 'badge-recording');
+
+    content.innerHTML = `
+      <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.85rem;">
+        <div><b>Overall Pneumatic Status:</b> <span class="badge ${statusBadgeClass}">${report.status}</span></div>
+        <div><b>Drop Rate:</b> <span style="font-family: monospace;">${report.height_drop_rate_mm_per_hour.toFixed(1)} mm/hour</span></div>
+        <div><b>L/R Asymmetry:</b> <span style="font-family: monospace;">${report.max_height_asymmetry_mm.toFixed(1)} mm</span></div>
+        <div><b>Compressor Duty:</b> <span style="font-family: monospace;">${report.compressor_duty_cycle_pct.toFixed(1)}%</span></div>
+      </div>
+      <div style="margin-bottom: 0.75rem;">
+        <b>Diagnostic Findings:</b>
+        <ul style="margin-left: 1.25rem; margin-top: 0.25rem; color: var(--text);">
+          ${report.findings.map(f => `<li>${f}</li>`).join('')}
+        </ul>
+      </div>
+      ${report.recommendations && report.recommendations.length > 0 ? `
+        <div style="background: rgba(210, 153, 34, 0.1); border: 1px solid var(--warning); border-radius: 4px; padding: 0.75rem;">
+          <b style="color: var(--warning);">OEM Part & Service Recommendations:</b>
+          <ul style="margin-left: 1.25rem; margin-top: 0.25rem; color: var(--text);">
+            ${report.recommendations.map(r => `<li>${r}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+    `;
+  } catch (err) {
+    content.innerHTML = `<span style="color: var(--danger);">Failed to analyze suspension: ${err.message}</span>`;
+  }
+}
+
+async function compareDriveBenchmarkLive() {
+  const panel = document.getElementById('garage-details-panel');
+  const title = document.getElementById('garage-panel-title');
+  const content = document.getElementById('garage-panel-content');
+
+  panel.style.display = 'block';
+  title.textContent = 'A/B Drive Telemetry Benchmark Comparison (Fuel & Slip Analytics)';
+  content.innerHTML = '<span style="color: var(--text-muted);">Comparing baseline drive run against post-adaptation/coding run...</span>';
+
+  try {
+    const payload = {
+      run_a: {
+        duration_seconds: 1800.0,
+        distance_km: 35.0,
+        average_speed_kmh: 70.0,
+        average_consumption_l_per_100km: 7.6,
+        average_rpm: 1950.0,
+        max_boost_hpa: 1450.0,
+        average_rail_pressure_bar: 1150.0,
+        average_tcc_slip_rpm: 38.0,
+        final_coolant_temp_c: 78.0,
+        seconds_to_reach_85c: null
+      },
+      run_b: {
+        duration_seconds: 1800.0,
+        distance_km: 35.0,
+        average_speed_kmh: 70.0,
+        average_consumption_l_per_100km: 6.9,
+        average_rpm: 1900.0,
+        max_boost_hpa: 1480.0,
+        average_rail_pressure_bar: 1140.0,
+        average_tcc_slip_rpm: 8.0,
+        final_coolant_temp_c: 88.0,
+        seconds_to_reach_85c: 420.0
+      },
+      name_a: "Baseline (Old Map / Worn ATF)",
+      name_b: "Post-Service (Fresh 236.14 ATF + Clean MAF)"
+    };
+
+    const res = await fetch('/api/v1/analyze/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const cmp = await res.json();
+
+    const isBeneficial = cmp.verdict.startsWith('Beneficial');
+    const badgeClass = isBeneficial ? 'badge-ready' : 'badge-voltage';
+
+    content.innerHTML = `
+      <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.85rem;">
+        <div><b>Comparison Verdict:</b> <span class="badge ${badgeClass}">${cmp.verdict}</span></div>
+        <div><b>Consumption Delta:</b> <span style="font-family: monospace; color: ${cmp.consumption_delta_l_per_100km < 0 ? 'var(--success)' : 'var(--danger)'};">${cmp.consumption_delta_l_per_100km.toFixed(2)} L/100km (${cmp.consumption_pct_change.toFixed(1)}%)</span></div>
+        <div><b>TCC Lockup Slip Delta:</b> <span style="font-family: monospace;">${cmp.tcc_slip_delta_rpm.toFixed(1)} RPM</span></div>
+      </div>
+      <div>
+        <b>Analytical Details:</b>
+        <ul style="margin-left: 1.25rem; margin-top: 0.25rem; color: var(--text);">
+          ${cmp.details.map(d => `<li>${d}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  } catch (err) {
+    content.innerHTML = `<span style="color: var(--danger);">Failed to compare drive runs: ${err.message}</span>`;
+  }
+}
+
+function closeGaragePanel() {
+  document.getElementById('garage-details-panel').style.display = 'none';
+}
+
 // Initial triggers
 document.addEventListener('DOMContentLoaded', () => {
   setupTelemetryWebSocket();

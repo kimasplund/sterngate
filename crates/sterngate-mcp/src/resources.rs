@@ -25,6 +25,12 @@ pub fn get_resources_list() -> Value {
             "name": "Automotive ECU Catalog Statistics",
             "description": "Indexing and protocol metrics for 990 unique automotive ECUs across multi-chassis architectures.",
             "mimeType": "application/json"
+        },
+        {
+            "uri": "sterngate://garage/vehicles",
+            "name": "Vehicle Garage Database",
+            "description": "List of tracked vehicles with decoded VINs, installed ECUs, and Git configuration history.",
+            "mimeType": "application/json"
         }
     ])
 }
@@ -64,6 +70,16 @@ pub fn read_resource(uri: &str) -> Result<Value, String> {
                     "total_ecus": 990,
                     "unique_ecus": 990
                 }))
+            }
+        }
+        "sterngate://garage/vehicles" => {
+            let garage = sterngate_core::VehicleGarage::default();
+            match garage.list_vehicles() {
+                Ok(vehicles) => Ok(json!({
+                    "total_vehicles": vehicles.len(),
+                    "vehicles": vehicles
+                })),
+                Err(e) => Err(format!("Failed to list vehicles from garage: {}", e)),
             }
         }
         _ => Err(format!("Resource not found: {}", uri)),

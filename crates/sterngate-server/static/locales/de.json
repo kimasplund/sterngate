@@ -101,6 +101,21 @@
     "inspect_title": "Steuergeräte-Diagnosedefinition:",
     "btn_close": "✕ Schließen",
     "loading": "Inspektionsmetadaten werden geladen..."
+  },
+  "garage": {
+    "title": "Fahrzeug-Schnelltest & Git-basierte Garage",
+    "desc": "Umfassende Fahrzeugdiagnose über alle Gateway-Steuergeräte. Entschlüsselt Fahrgestell-/Motordaten und führt eine atomare Git-Versionshistorie aller Variantenkodierungen und Adaptationsstände.",
+    "btn_quick_scan": "⚡ Fahrzeug-Kurztest",
+    "btn_scan": "⚡ Steuergeräte abfragen (Kurztest)",
+    "btn_history": "📜 Git-Historie anzeigen",
+    "btn_suspension": "🎈 S211 Luftfederungs-Dichtheitsprüfung",
+    "btn_compare": "📈 A/B Fahrvergleichs-Benchmark",
+    "col_vin": "FIN (VIN):",
+    "col_model": "Modell:",
+    "col_chassis": "Baureihe / Karosserie:",
+    "col_engine": "Antriebsstrang:",
+    "col_voltage": "Batterie / Generator:",
+    "col_modules": "Antwortende Steuergeräte:"
   }
 }
 

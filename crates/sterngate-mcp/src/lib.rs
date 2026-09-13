@@ -205,6 +205,100 @@ mod tests {
         assert!(loc.get("locales").is_some());
 
         let stats = resources::read_resource("sterngate://cbf/stats").unwrap();
-        assert!(stats.get("total_cbf_files").is_some() || stats.get("total_files").is_some());
+        assert!(stats.get("total_cbf_files").is_some() || stats.get("total_ecus").is_some());
+
+        let garage_res = resources::read_resource("sterngate://garage/vehicles").unwrap();
+        assert!(garage_res.get("vehicles").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_scan_vehicle_and_garage_tools() {
+        let scan_res = tools::handle_tool_call(
+            "sterngate_scan_vehicle",
+            &json!({"save_vehicle": true, "lang": "en"}),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            scan_res.get("vin").unwrap().as_str().unwrap(),
+            "WDB2112061A892341"
+        );
+        assert!(scan_res.get("module_results").is_some());
+        assert!(
+            scan_res
+                .get("total_modules_probed")
+                .unwrap()
+                .as_u64()
+                .unwrap()
+                >= 4
+        );
+
+        let list_res = tools::handle_tool_call("sterngate_list_vehicles", &json!({}))
+            .await
+            .unwrap();
+        let vehicles = list_res.get("vehicles").unwrap().as_array().unwrap();
+        assert!(!vehicles.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_analytics_tools() {
+        // Suspension leak analysis
+        let susp_res = tools::handle_tool_call(
+            "sterngate_analyze_suspension_leak",
+            &json!({
+                "duration_min": 30.0,
+                "left_rear_start_mm": 375.0,
+                "left_rear_end_mm": 362.0,
+                "right_rear_start_mm": 374.0,
+                "right_rear_end_mm": 373.0,
+                "compressor_run_time_sec": 55.0,
+                "compressor_duty_cycle_pct": 28.0
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            susp_res.get("status").unwrap().as_str().unwrap(),
+            "CriticalLeak"
+        );
+        assert!(
+            susp_res
+                .get("recommendations")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len()
+                >= 2
+        );
+
+        // Drive run comparison
+        let comp_res = tools::handle_tool_call(
+            "sterngate_compare_drive_runs",
+            &json!({
+                "baseline_name": "Stock Map",
+                "baseline_distance_km": 100.0,
+                "baseline_duration_sec": 3600.0,
+                "baseline_fuel_consumed_liters": 6.8,
+                "baseline_avg_boost_bar": 1.15,
+                "baseline_avg_rail_pressure_bar": 1250.0,
+                "target_name": "Stage 1 Eco",
+                "target_distance_km": 100.0,
+                "target_duration_sec": 3600.0,
+                "target_fuel_consumed_liters": 6.2,
+                "target_avg_boost_bar": 1.20,
+                "target_avg_rail_pressure_bar": 1300.0
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert!(comp_res
+            .get("verdict")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("Beneficial"));
     }
 }

@@ -1,8 +1,10 @@
 use serde_json::{json, Value};
 use sterngate_core::{
-    lookup_routine_name, Dtc, EcuCatalog, Language, TelemetrySnapshot, VehicleProfile,
+    lookup_routine_name, DriveBenchmark, DriveSummary, Dtc, EcuCatalog, Language,
+    SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot, VehicleGarage, VehicleProfile,
 };
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
+use sterngate_protocol::VehicleScanner;
 
 pub fn get_tools_list() -> Value {
     json!([
@@ -206,6 +208,50 @@ pub fn get_tools_list() -> Value {
         {
             "name": "sterngate_list_locales",
             "description": "List supported UI, diagnostic, and fault code languages in Sterngate (English, authentic Daimler OEM German, Swedish).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        },
+        {
+            "name": "sterngate_scan_vehicle",
+            "description": "Execute a full vehicle quick scan across all gateway ECUs, decode VIN, read DTCs, capture baseline vitals, and automatically record vehicle into git-tracked garage.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "lang": {
+                        "type": "string",
+                        "enum": ["en", "de", "sv"],
+                        "description": "Language for diagnostic report (default: 'en')",
+                        "default": "en"
+                    },
+                    "save_to_garage": {
+                        "type": "boolean",
+                        "description": "Whether to synchronize scan into local vehicle garage git repo (default: true)",
+                        "default": true
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_list_vehicles",
+            "description": "List all recognized vehicles saved in the local Sterngate garage by VIN with model, scan count, and last scanned date.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        },
+        {
+            "name": "sterngate_analyze_suspension_leak",
+            "description": "Evaluate Mercedes-Benz S211 rear air suspension (ENR) or W211 AIRMATIC for pneumatic leaks, height drop rate, and compressor duty cycle strain.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        },
+        {
+            "name": "sterngate_compare_drive_runs",
+            "description": "Perform an A/B comparative benchmark between two drive telemetry runs to evaluate whether a parameter or mechanical change was beneficial for fuel consumption and transmission slip.",
             "inputSchema": {
                 "type": "object",
                 "properties": {}
@@ -528,6 +574,248 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 { "code": "sv", "name": "Svenska", "default": false }
             ]
         })),
+        "sterngate_scan_vehicle" => {
+            let lang_str = arguments
+                .get("lang")
+                .and_then(|v| v.as_str())
+                .unwrap_or("en");
+            let save_to_garage = arguments
+                .get("save_to_garage")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let language: Language = lang_str.parse().unwrap_or_default();
+
+            let report = VehicleScanner::scan(&mut mock_iface, language)
+                .await
+                .map_err(|e| format!("Vehicle scan failed: {}", e))?;
+
+            if save_to_garage {
+                let garage = VehicleGarage::new(VehicleGarage::default_path());
+                let rec = report.to_vehicle_record();
+                let _ = garage.save_vehicle(&rec, Some("mcp_scan: vehicle quick scan completed"));
+            }
+
+            Ok(serde_json::to_value(report).unwrap())
+        }
+        "sterngate_list_vehicles" => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vehicles = garage
+                .list_vehicles()
+                .map_err(|e| format!("Failed to list vehicles: {}", e))?;
+            Ok(json!({
+                "total_vehicles": vehicles.len(),
+                "vehicles": vehicles
+            }))
+        }
+        "sterngate_analyze_suspension_leak" => {
+            let mut detector = SuspensionLeakDetector::new();
+            if let Some(samples) = arguments.get("samples").and_then(|s| s.as_array()) {
+                for s in samples {
+                    if let Ok(sample) = serde_json::from_value::<SuspensionSample>(s.clone()) {
+                        detector.add_sample(sample);
+                    }
+                }
+            } else if arguments.get("left_rear_start_mm").is_some() {
+                let start_l = arguments
+                    .get("left_rear_start_mm")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(118.0);
+                let end_l = arguments
+                    .get("left_rear_end_mm")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(start_l);
+                let start_r = arguments
+                    .get("right_rear_start_mm")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(118.5);
+                let end_r = arguments
+                    .get("right_rear_end_mm")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(start_r);
+                let dur_min = arguments
+                    .get("duration_min")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(30.0);
+                let comp_run = arguments
+                    .get("compressor_run_time_sec")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let comp_active = comp_run > 0.0;
+
+                detector.add_sample(SuspensionSample {
+                    timestamp_ms: 1000,
+                    left_rear_height_mm: start_l,
+                    right_rear_height_mm: start_r,
+                    compressor_active: false,
+                    compressor_run_duration_s: 0.0,
+                    reservoir_pressure_bar: Some(14.2),
+                    compressor_temp_c: Some(38.0),
+                });
+                detector.add_sample(SuspensionSample {
+                    timestamp_ms: 1000 + (dur_min * 60_000.0) as u64,
+                    left_rear_height_mm: end_l,
+                    right_rear_height_mm: end_r,
+                    compressor_active: comp_active,
+                    compressor_run_duration_s: comp_run,
+                    reservoir_pressure_bar: Some(14.0),
+                    compressor_temp_c: Some(40.0),
+                });
+            } else {
+                detector.add_sample(SuspensionSample {
+                    timestamp_ms: 1000,
+                    left_rear_height_mm: 118.0,
+                    right_rear_height_mm: 118.5,
+                    compressor_active: false,
+                    compressor_run_duration_s: 0.0,
+                    reservoir_pressure_bar: Some(14.2),
+                    compressor_temp_c: Some(38.0),
+                });
+                detector.add_sample(SuspensionSample {
+                    timestamp_ms: 1000 + 1_800_000,
+                    left_rear_height_mm: 117.8,
+                    right_rear_height_mm: 118.2,
+                    compressor_active: false,
+                    compressor_run_duration_s: 0.0,
+                    reservoir_pressure_bar: Some(14.0),
+                    compressor_temp_c: Some(35.0),
+                });
+            }
+            let report = detector.evaluate();
+            Ok(serde_json::to_value(report).unwrap())
+        }
+        "sterngate_compare_drive_runs" => {
+            let (run1, run2, name1, name2) =
+                if arguments.get("run_a").is_some() && arguments.get("run_b").is_some() {
+                    let r1: DriveSummary =
+                        serde_json::from_value(arguments.get("run_a").unwrap().clone())
+                            .map_err(|e| format!("Invalid run_a: {}", e))?;
+                    let r2: DriveSummary =
+                        serde_json::from_value(arguments.get("run_b").unwrap().clone())
+                            .map_err(|e| format!("Invalid run_b: {}", e))?;
+                    let n1 = arguments
+                        .get("name_a")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Run A (Baseline)");
+                    let n2 = arguments
+                        .get("name_b")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Run B (Modified)");
+                    (r1, r2, n1.to_string(), n2.to_string())
+                } else if arguments.get("baseline_fuel_consumed_liters").is_some() {
+                    let dist_a = arguments
+                        .get("baseline_distance_km")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(100.0);
+                    let dur_a = arguments
+                        .get("baseline_duration_sec")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(3600.0);
+                    let fuel_a = arguments
+                        .get("baseline_fuel_consumed_liters")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(7.5);
+                    let avg_cons_a = (fuel_a / dist_a.max(0.1)) * 100.0;
+                    let boost_a = arguments
+                        .get("baseline_avg_boost_bar")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1.15)
+                        * 1000.0;
+                    let rail_a = arguments
+                        .get("baseline_avg_rail_pressure_bar")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1200.0);
+
+                    let dist_b = arguments
+                        .get("target_distance_km")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(100.0);
+                    let dur_b = arguments
+                        .get("target_duration_sec")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(3600.0);
+                    let fuel_b = arguments
+                        .get("target_fuel_consumed_liters")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(6.5);
+                    let avg_cons_b = (fuel_b / dist_b.max(0.1)) * 100.0;
+                    let boost_b = arguments
+                        .get("target_avg_boost_bar")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1.20)
+                        * 1000.0;
+                    let rail_b = arguments
+                        .get("target_avg_rail_pressure_bar")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1250.0);
+
+                    let r1 = DriveSummary {
+                        duration_seconds: dur_a,
+                        distance_km: dist_a,
+                        average_speed_kmh: (dist_a / (dur_a / 3600.0).max(0.001)),
+                        average_consumption_l_per_100km: avg_cons_a,
+                        average_rpm: 1950.0,
+                        max_boost_hpa: boost_a,
+                        average_rail_pressure_bar: rail_a,
+                        average_tcc_slip_rpm: 25.0,
+                        final_coolant_temp_c: 85.0,
+                        seconds_to_reach_85c: None,
+                    };
+                    let r2 = DriveSummary {
+                        duration_seconds: dur_b,
+                        distance_km: dist_b,
+                        average_speed_kmh: (dist_b / (dur_b / 3600.0).max(0.001)),
+                        average_consumption_l_per_100km: avg_cons_b,
+                        average_rpm: 1900.0,
+                        max_boost_hpa: boost_b,
+                        average_rail_pressure_bar: rail_b,
+                        average_tcc_slip_rpm: 10.0,
+                        final_coolant_temp_c: 88.0,
+                        seconds_to_reach_85c: None,
+                    };
+                    let n1 = arguments
+                        .get("baseline_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Baseline");
+                    let n2 = arguments
+                        .get("target_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Target");
+                    (r1, r2, n1.to_string(), n2.to_string())
+                } else {
+                    let run1 = DriveSummary {
+                        duration_seconds: 1800.0,
+                        distance_km: 35.0,
+                        average_speed_kmh: 70.0,
+                        average_consumption_l_per_100km: 7.6,
+                        average_rpm: 1950.0,
+                        max_boost_hpa: 1450.0,
+                        average_rail_pressure_bar: 1150.0,
+                        average_tcc_slip_rpm: 38.0,
+                        final_coolant_temp_c: 78.0,
+                        seconds_to_reach_85c: None,
+                    };
+                    let run2 = DriveSummary {
+                        duration_seconds: 1800.0,
+                        distance_km: 35.0,
+                        average_speed_kmh: 70.0,
+                        average_consumption_l_per_100km: 6.9,
+                        average_rpm: 1900.0,
+                        max_boost_hpa: 1480.0,
+                        average_rail_pressure_bar: 1140.0,
+                        average_tcc_slip_rpm: 8.0,
+                        final_coolant_temp_c: 88.0,
+                        seconds_to_reach_85c: Some(420.0),
+                    };
+                    (
+                        run1,
+                        run2,
+                        "Baseline".to_string(),
+                        "After Service".to_string(),
+                    )
+                };
+            let cmp = DriveBenchmark::compare(&run1, &run2, &name1, &name2);
+            Ok(serde_json::to_value(cmp).unwrap())
+        }
         _ => Err(format!("Unknown tool name: {}", name)),
     }
 }

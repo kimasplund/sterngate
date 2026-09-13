@@ -75,6 +75,48 @@
       </div>
     </div>
 
+    <!-- Vehicle Quick Scan & Git Garage -->
+    <div class="card" style="grid-column: span 2;">
+      <div class="card-title">
+        <span data-i18n="garage.title">Vehicle Quick Scan & Git-Tracked Garage</span>
+        <div class="badges">
+          <span id="garage-vin-badge" class="badge badge-voltage">VIN: NOT SCANNED</span>
+          <span id="garage-model-badge" class="badge badge-ready">READY</span>
+        </div>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem;" data-i18n="garage.desc">
+        Comprehensive vehicle interrogation across all gateway ECUs. Decodes chassis/engine specs and maintains an atomic Git version history of all variant coding and adaptation states.
+      </div>
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.85rem; flex-wrap: wrap;">
+        <button class="btn btn-primary" onclick="scanVehicleQuick()" data-i18n="garage.btn_scan">⚡ Interrogate Vehicle (Quick Scan)</button>
+        <button class="btn" onclick="loadGarageHistory()" data-i18n="garage.btn_history">📜 View Git History</button>
+        <button class="btn" onclick="analyzeSuspensionLive()" data-i18n="garage.btn_suspension">🎈 S211 Air Suspension Leak Test</button>
+        <button class="btn" onclick="compareDriveBenchmarkLive()" data-i18n="garage.btn_compare">📈 A/B Drive Benchmark</button>
+      </div>
+
+      <!-- Vehicle Overview Grid -->
+      <div id="vehicle-overview-panel" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
+          <div><b data-i18n="garage.col_vin">VIN:</b> <span id="v-vin" style="font-family: monospace; color: var(--accent);">--</span></div>
+          <div><b data-i18n="garage.col_model">Model:</b> <span id="v-model">--</span></div>
+          <div><b data-i18n="garage.col_chassis">Chassis / Body:</b> <span id="v-chassis">--</span></div>
+          <div><b data-i18n="garage.col_engine">Powertrain:</b> <span id="v-engine">--</span></div>
+          <div><b data-i18n="garage.col_voltage">Battery / Alternator:</b> <span id="v-voltage">--</span></div>
+          <div><b data-i18n="garage.col_modules">Modules Responding:</b> <span id="v-modules">--</span></div>
+        </div>
+        <div id="v-issues" style="font-size: 0.85rem; line-height: 1.5; margin-top: 0.5rem;"></div>
+      </div>
+
+      <!-- Git History & Analytics Modal Panel -->
+      <div id="garage-details-panel" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h4 id="garage-panel-title" style="color: var(--accent);">Git Configuration History</h4>
+          <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeGaragePanel()">✕ Close</button>
+        </div>
+        <div id="garage-panel-content" style="font-size: 0.85rem; line-height: 1.6;"></div>
+      </div>
+    </div>
+
     <!-- Smooth Running Cylinder Balancing -->
     <div class="card">
       <div class="card-title" data-i18n="cylinders.title">Cylinder Smooth Running</div>

@@ -173,7 +173,101 @@ curl -s http://localhost:8080/api/v1/ecu/inspect/EGS52 | jq .
 
 ---
 
-## 8. Verification Checklist
+## 8. Vehicle Quick Scan & Comprehensive Health Reports
+
+Sterngate can perform an automated diagnostic quick scan across all gateway ECUs (`EDC16`, `EGS52`, `SBC`, `ENR`, `CGW`), decode the vehicle's VIN (identifying chassis like S211 Estate and OM646 engines), query hardware/software part numbers, read fault codes, and generate an issue report.
+
+### CLI Quick Scan
+```bash
+# Interrogate all vehicle ECUs and print human-readable summary
+sterngate diag scan
+
+# Scan and output formatted Markdown diagnostic report
+sterngate diag scan --report
+
+# Scan and automatically synchronize vehicle into Git garage
+sterngate diag scan --save-vehicle --lang de
+```
+
+### REST API Quick Scan
+```bash
+curl -s -X POST http://localhost:8080/api/v1/vehicle/scan \
+  -H "Content-Type: application/json" \
+  -d '{"lang": "en", "save_to_garage": true}' | jq .
+```
+
+---
+
+## 9. Per-Car Git Versioned Garage & Rollbacks
+
+Sterngate manages an autonomous Git repository for every connected vehicle under `data/vehicles/<VIN>/`. Every quick scan, variant coding session, and adaptation reset creates an atomic Git commit preserving the exact hexadecimal bytes (`coding/<MODULE>.coding.hex`) and human-readable parameter configurations.
+
+### CLI Garage Management
+```bash
+# List all tracked vehicles in the garage
+sterngate vehicle list
+
+# Inspect hardware, installed ECUs, and last scan data for a vehicle
+sterngate vehicle inspect WDB2112061A892341
+
+# View Git commit history for a vehicle
+sterngate vehicle history WDB2112061A892341
+
+# Atomically roll back variant coding to a previous commit
+sterngate vehicle rollback WDB2112061A892341 82c43e2
+```
+
+### REST API Garage Endpoints
+```bash
+# List all tracked vehicles
+curl -s http://localhost:8080/api/v1/vehicles | jq .
+
+# Inspect vehicle record
+curl -s http://localhost:8080/api/v1/vehicles/WDB2112061A892341 | jq .
+
+# View Git commit history
+curl -s http://localhost:8080/api/v1/vehicles/WDB2112061A892341/history | jq .
+```
+
+---
+
+## 10. Predictive Suspension & Drive Analytics
+
+### S211 Rear Air Suspension (ENR) & AIRMATIC Leak Detection
+Detects pneumatic leaks on the Mercedes S211 Estate / W211 AIRMATIC before compressor burnout by evaluating:
+- Stationary height drop rate ($> 10\text{ mm/h}$ critical leak)
+- Left vs. Right rear asymmetry ($> 20\text{ mm}$ sensor calibration issue)
+- Continuous compressor runtime ($> 45\text{s}$ warning / $> 60\text{s}$ thermal cutout risk)
+- Duty cycle ($> 25\%$ strain warning)
+
+```bash
+# Evaluate pneumatic suspension health
+sterngate analyze suspension
+
+# REST API call
+curl -s -X POST http://localhost:8080/api/v1/analyze/suspension \
+  -H "Content-Type: application/json" -d '{}' | jq .
+```
+
+### In-Flight Drive Telemetry & A/B Benchmark Comparison
+Computes real-time instant diesel fuel rate ($L/h$) and consumption ($L/100\text{km}$) using OM646 4-stroke displacement mathematics. Compares Baseline vs. Modified runs to determine if parameter or hardware changes were beneficial:
+
+```bash
+# Run A/B comparative benchmark between two drive telemetry runs
+sterngate analyze compare
+
+# REST API call
+curl -s -X POST http://localhost:8080/api/v1/analyze/compare \
+  -H "Content-Type: application/json" \
+  -d '{
+    "run_a": {"duration_seconds": 1800, "distance_km": 35, "average_speed_kmh": 70, "average_consumption_l_per_100km": 7.6, "average_rpm": 1950, "max_boost_hpa": 1450, "average_rail_pressure_bar": 1150, "average_tcc_slip_rpm": 38, "final_coolant_temp_c": 78, "seconds_to_reach_85c": null},
+    "run_b": {"duration_seconds": 1800, "distance_km": 35, "average_speed_kmh": 70, "average_consumption_l_per_100km": 6.9, "average_rpm": 1900, "max_boost_hpa": 1480, "average_rail_pressure_bar": 1140, "average_tcc_slip_rpm": 8, "final_coolant_temp_c": 88, "seconds_to_reach_85c": 420}
+  }' | jq .
+```
+
+---
+
+## 11. Verification Checklist
 
 1. **Verify Binary Compiles**:
    ```bash
@@ -188,9 +282,9 @@ curl -s http://localhost:8080/api/v1/ecu/inspect/EGS52 | jq .
    curl -s http://localhost:8080/api/v1/locales | jq .
    curl -s "http://localhost:8080/api/v1/dtc?lang=de" | jq .
    curl -s http://localhost:8080/api/v1/telemetry | jq .
-   curl -s http://localhost:8080/api/v1/recorder/status | jq .
-   curl -s http://localhost:8080/api/v1/ecu/stats | jq .
-   curl -s "http://localhost:8080/api/v1/ecu/search?q=EGS52" | jq .
+   curl -s http://localhost:8080/api/v1/vehicle/scan | jq .
+   curl -s http://localhost:8080/api/v1/vehicles | jq .
+   curl -s http://localhost:8080/api/v1/analyze/suspension | jq .
    ```
 
 

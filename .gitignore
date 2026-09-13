@@ -24,6 +24,9 @@ can_dump_*.log
 *.cbf
 *.CBF
 /data/cbf/
+/data/vehicles/
+/data/reports/
+crates/*/data/
 !tests/fixtures/*.bin
 
 # Local environment and IDE settings

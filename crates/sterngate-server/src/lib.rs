@@ -326,4 +326,113 @@ mod tests {
             .unwrap();
         assert_eq!(tcc_sv.name, "Momentomvandlarkoppling slirning");
     }
+
+    #[tokio::test]
+    async fn test_server_vehicle_scan_garage_and_analytics_endpoints() {
+        let mut iface = Box::new(VirtualCanInterface::new());
+        let _ = iface.open().await;
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher));
+
+        // 1. POST /api/v1/vehicle/scan
+        let scan_payload = json!({
+            "lang": "en",
+            "save_to_garage": true
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/vehicle/scan")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&scan_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        let vin = report["vin"].as_str().unwrap();
+        assert_eq!(vin, "WDB2112061A892341");
+        assert!(report["decoded"]["body_style"]
+            .as_str()
+            .unwrap()
+            .contains("S211"));
+        assert_eq!(
+            report["decoded"]["model_name"].as_str().unwrap(),
+            "E 220 T CDI"
+        );
+
+        // 2. GET /api/v1/vehicles
+        let req = Request::builder()
+            .uri("/api/v1/vehicles")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 3. GET /api/v1/vehicles/{vin}
+        let req = Request::builder()
+            .uri(format!("/api/v1/vehicles/{}", vin))
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 4. GET /api/v1/vehicles/{vin}/history
+        let req = Request::builder()
+            .uri(format!("/api/v1/vehicles/{}/history", vin))
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 5. POST /api/v1/analyze/suspension
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/analyze/suspension")
+            .header("Content-Type", "application/json")
+            .body(Body::from(b"{}".to_vec()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 6. POST /api/v1/analyze/compare
+        let comp_payload = json!({
+            "run_a": {
+                "duration_seconds": 1800.0,
+                "distance_km": 35.0,
+                "average_speed_kmh": 70.0,
+                "average_consumption_l_per_100km": 7.6,
+                "average_rpm": 1950.0,
+                "max_boost_hpa": 1450.0,
+                "average_rail_pressure_bar": 1150.0,
+                "average_tcc_slip_rpm": 38.0,
+                "final_coolant_temp_c": 78.0,
+                "seconds_to_reach_85c": null
+            },
+            "run_b": {
+                "duration_seconds": 1800.0,
+                "distance_km": 35.0,
+                "average_speed_kmh": 70.0,
+                "average_consumption_l_per_100km": 6.9,
+                "average_rpm": 1900.0,
+                "max_boost_hpa": 1480.0,
+                "average_rail_pressure_bar": 1140.0,
+                "average_tcc_slip_rpm": 8.0,
+                "final_coolant_temp_c": 88.0,
+                "seconds_to_reach_85c": 420.0
+            }
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/analyze/compare")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&comp_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
 }

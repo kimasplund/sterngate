@@ -16,4 +16,5 @@ chrono = { workspace = true }
 crc32fast = { workspace = true }
 sha2 = { workspace = true }
 anyhow = { workspace = true }
+serde = { workspace = true }
 
