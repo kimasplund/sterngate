@@ -107,7 +107,41 @@ curl -s -X POST http://localhost:8080/api/v1/recorder/stop | jq .
 
 ---
 
-## 6. Verification Checklist
+## 6. Multilingual Diagnostics & i18n
+
+Sterngate supports multilingual operation across the Web UI, REST API, and CLI (`en`, `de`, `sv`).
+- German (`de`) provides authentic Daimler OEM terminology (*Getriebeöltemperatur*, *Nullmengenkalibrierung*, *Wandlerüberbrückungskupplung*).
+- English (`en`) is the default international automotive standard.
+- Swedish (`sv`) provides full Scandinavian regional support.
+
+### Multilingual CLI Commands
+```bash
+# Read DTCs in German or Swedish
+sterngate diag dtc --module EDC16 --lang de
+sterngate diag dtc --module EDC16 --lang sv
+
+# Execute UDS Routine with localized feedback
+sterngate diag routine --routine 0xFF01 --module EDC16 --lang de
+sterngate diag routine --routine 0x0201 --module EDC16 --lang sv
+```
+
+### Multilingual REST API
+```bash
+# Fetch available UI and diagnostic locales
+curl -s http://localhost:8080/api/v1/locales | jq .
+
+# Fetch DTCs in German
+curl -s "http://localhost:8080/api/v1/dtc?lang=de" | jq .
+
+# Execute routine with localized completion response
+curl -s -X POST http://localhost:8080/api/v1/routine \
+  -H "Content-Type: application/json" \
+  -d '{"module": "EDC16", "routine_id_hex": "0xFF01", "sub_function": 1, "lang": "de"}' | jq .
+```
+
+---
+
+## 7. Verification Checklist
 
 1. **Verify Binary Compiles**:
    ```bash
@@ -119,8 +153,10 @@ curl -s -X POST http://localhost:8080/api/v1/recorder/stop | jq .
    ```
 3. **Verify API Endpoints**:
    ```bash
+   curl -s http://localhost:8080/api/v1/locales | jq .
+   curl -s "http://localhost:8080/api/v1/dtc?lang=de" | jq .
    curl -s http://localhost:8080/api/v1/telemetry | jq .
-   curl -s http://localhost:8080/api/v1/dtc | jq .
    curl -s http://localhost:8080/api/v1/recorder/status | jq .
    ```
+
 
