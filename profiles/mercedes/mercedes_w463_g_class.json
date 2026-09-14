@@ -110,8 +110,8 @@
       "name": "Reprogramming Attempt Counter",
       "names": {
         "en": "Reprogramming Attempt Counter",
-        "de": "Reprogramming Attempt Counter",
-        "sv": "Reprogramming Attempt Counter"
+        "de": "Umprogrammierungs-Versuchszähler",
+        "sv": "Omprogrammeringsförsöksräknare"
       },
       "module": "ESP464",
       "service": 34,
@@ -129,8 +129,8 @@
       "name": "Diagnostic Trace Memory",
       "names": {
         "en": "Diagnostic Trace Memory",
-        "de": "Diagnostic Trace Memory",
-        "sv": "Diagnostic Trace Memory"
+        "de": "Diagnose-Ablaufverfolgungsspeicher",
+        "sv": "Diagnostiskt spårningsminne"
       },
       "module": "ESP464",
       "service": 34,
@@ -148,8 +148,8 @@
       "name": "Used EVC Config",
       "names": {
         "en": "Used EVC Config",
-        "de": "Used EVC Config",
-        "sv": "Used EVC Config"
+        "de": "Verwendete EVC-Konfiguration",
+        "sv": "Använd EVC-konfiguration"
       },
       "module": "ESP464",
       "service": 34,
@@ -167,8 +167,8 @@
       "name": "Reprogramming Resume Information",
       "names": {
         "en": "Reprogramming Resume Information",
-        "de": "Reprogramming Resume Information",
-        "sv": "Reprogramming Resume Information"
+        "de": "Umprogrammierungs-Fortsetzungsinformation",
+        "sv": "Omprogrammeringsåterupptagningsinformation"
       },
       "module": "ESP464",
       "service": 34,
@@ -186,8 +186,8 @@
       "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
       "names": {
         "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
-        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
-        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+        "de": "ISO 10681-2 Bandbreitensteuerungsparameter anpassen",
+        "sv": "Justera ISO 10681-2 bandbreddskontrollparametrar"
       },
       "module": "ESP464",
       "service": 34,
@@ -205,8 +205,8 @@
       "name": "Activate SAR Data Storage",
       "names": {
         "en": "Activate SAR Data Storage",
-        "de": "Activate SAR Data Storage",
-        "sv": "Activate SAR Data Storage"
+        "de": "SAR-Datenspeicherung aktivieren",
+        "sv": "Aktivera SAR-datalagring"
       },
       "module": "ESP464",
       "service": 34,
@@ -224,8 +224,8 @@
       "name": "SAR Trigger Counter",
       "names": {
         "en": "SAR Trigger Counter",
-        "de": "SAR Trigger Counter",
-        "sv": "SAR Trigger Counter"
+        "de": "SAR-Auslösezähler",
+        "sv": "SAR-utlösarräknare"
       },
       "module": "ESP464",
       "service": 34,
@@ -243,8 +243,8 @@
       "name": "Number of SAR Write Cycles",
       "names": {
         "en": "Number of SAR Write Cycles",
-        "de": "Number of SAR Write Cycles",
-        "sv": "Number of SAR Write Cycles"
+        "de": "Anzahl der SAR-Schreibzyklen",
+        "sv": "Antal SAR-skrivcykler"
       },
       "module": "ESP464",
       "service": 34,
@@ -262,8 +262,8 @@
       "name": "Reprogramming Attempt Counter",
       "names": {
         "en": "Reprogramming Attempt Counter",
-        "de": "Reprogramming Attempt Counter",
-        "sv": "Reprogramming Attempt Counter"
+        "de": "Umprogrammierungs-Versuchszähler",
+        "sv": "Omprogrammeringsförsöksräknare"
       },
       "module": "ESP465",
       "service": 34,
@@ -281,8 +281,8 @@
       "name": "Diagnostic Trace Memory",
       "names": {
         "en": "Diagnostic Trace Memory",
-        "de": "Diagnostic Trace Memory",
-        "sv": "Diagnostic Trace Memory"
+        "de": "Diagnose-Ablaufverfolgungsspeicher",
+        "sv": "Diagnostiskt spårningsminne"
       },
       "module": "ESP465",
       "service": 34,
@@ -300,8 +300,8 @@
       "name": "Used EVC Config",
       "names": {
         "en": "Used EVC Config",
-        "de": "Used EVC Config",
-        "sv": "Used EVC Config"
+        "de": "Verwendete EVC-Konfiguration",
+        "sv": "Använd EVC-konfiguration"
       },
       "module": "ESP465",
       "service": 34,
@@ -319,8 +319,8 @@
       "name": "Reprogramming Resume Information",
       "names": {
         "en": "Reprogramming Resume Information",
-        "de": "Reprogramming Resume Information",
-        "sv": "Reprogramming Resume Information"
+        "de": "Umprogrammierungs-Fortsetzungsinformation",
+        "sv": "Omprogrammeringsåterupptagningsinformation"
       },
       "module": "ESP465",
       "service": 34,
@@ -338,8 +338,8 @@
       "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
       "names": {
         "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
-        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
-        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+        "de": "ISO 10681-2 Bandbreitensteuerungsparameter anpassen",
+        "sv": "Justera ISO 10681-2 bandbreddskontrollparametrar"
       },
       "module": "ESP465",
       "service": 34,
@@ -357,8 +357,8 @@
       "name": "Activate SAR Data Storage",
       "names": {
         "en": "Activate SAR Data Storage",
-        "de": "Activate SAR Data Storage",
-        "sv": "Activate SAR Data Storage"
+        "de": "SAR-Datenspeicherung aktivieren",
+        "sv": "Aktivera SAR-datalagring"
       },
       "module": "ESP465",
       "service": 34,
@@ -376,8 +376,8 @@
       "name": "SAR Trigger Counter",
       "names": {
         "en": "SAR Trigger Counter",
-        "de": "SAR Trigger Counter",
-        "sv": "SAR Trigger Counter"
+        "de": "SAR-Auslösezähler",
+        "sv": "SAR-utlösarräknare"
       },
       "module": "ESP465",
       "service": 34,
@@ -395,8 +395,8 @@
       "name": "Number of SAR Write Cycles",
       "names": {
         "en": "Number of SAR Write Cycles",
-        "de": "Number of SAR Write Cycles",
-        "sv": "Number of SAR Write Cycles"
+        "de": "Anzahl der SAR-Schreibzyklen",
+        "sv": "Antal SAR-skrivcykler"
       },
       "module": "ESP465",
       "service": 34,

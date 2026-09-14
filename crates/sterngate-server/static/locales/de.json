@@ -142,6 +142,19 @@
     "tuning": "Kennfeld-Studio & Tuning"
   },
   "modal": {
+    "title": "Sicherheits-Sperrbestätigung",
+    "badge_danger": "HOHES RISIKO / DESTRUKTIV",
+    "preflight_title": "Hardware-Sicherheitsverriegelungen vor dem Start",
+    "voltage_req": "Systemspannungsanforderung:",
+    "voltage_live": "Gemessene Bordnetzspannung:",
+    "ignition_req": "Klemme 15 (Zündung EIN, Motor AUS)",
+    "ignition_sub": "Der Motor darf während des Vorgangs nicht laufen.",
+    "backup_req": "Automatischer Git-Konfigurationsschnappschuss",
+    "backup_sub": "Status wird vor dem Schreibvorgang in der Garage gesichert.",
+    "pass": "BESTANDEN ✓",
+    "ready": "BEREIT ✓",
+    "type_confirm": "Geben Sie BESTAETIGEN ein, um die Ausführung freizuschalten:",
+    "placeholder_keyword": "Bestätigungswort eingeben...",
     "btn_cancel": "Abbrechen",
     "btn_confirm": "Prozedur ausführen"
   },
@@ -158,6 +171,33 @@
     "title": "🏛️ Lokaler Kalibrierungs-Tresor & Firmware-Explorer",
     "desc": "Durchsucht lokalen Speicher (.bin, .rom, .cff, .smr-f, .fls) ohne Internet-Upload. Vergleicht Bosch HW/SW-Nummern mit verbundenen Steuergeräten und erkennt Software-Updates.",
     "btn_scan": "🔍 Lokalen Tresor scannen"
+  },
+  "tuning": {
+    "title": "ROM-Binär- & Signatur-Analyse",
+    "desc": "Bosch EDC16 / EDC17 Flash-Speicher-Dumps (.bin, .ori) hochladen oder analysieren.",
+    "btn_load_rom": "📂 ROM-Binärdatei laden (.bin/.ori)",
+    "btn_load_sample": "⚡ Simuliertes EDC16-ROM laden",
+    "file_status_none": "Kein ROM geladen. Datei auswählen oder simuliertes EDC16 CP31 ROM laden.",
+    "ecu_signatures": "Steuergeräte-Signaturen",
+    "part_number": "Teilenummer:",
+    "crc32": "CRC32:",
+    "checksums_title": "Bosch MPC5xx Prüfsummen",
+    "awaiting_scan": "Warte auf ROM-Scan...",
+    "btn_fix_checksums": "🛠️ Alle Bosch-Prüfsummen direkt korrigieren",
+    "one_click_title": "1-Klick Sicheres Kennfeld-Tuning (.sgmod)",
+    "one_click_desc": "Kompakte (~2 KB), selbstheilende .sgmod-Pakete mit Reed-Solomon-FEC erzeugen.",
+    "btn_stage1": "🚀 Stage 1 Kennfeld erzeugen (+18% Drehmoment, +120mbar Ladedruck, +50bar Rail)",
+    "btn_stage2": "🏁 Stage 2 Race Kennfeld erzeugen (+25% Drehmoment, DPF/AGR-Delete, DTC Off)",
+    "dtc_kill_title": "🎯 Fehlercode-Unterdrückung (P-Code Kill)",
+    "dtc_kill_ph": "z.B. P0401, P2002, P0100",
+    "btn_dtc_kill": "DTCs löschen",
+    "quick_presets": "Schnellvorlagen:",
+    "detected_maps": "Erkannte Kennfelder",
+    "no_maps": "Noch keine Kennfelder erkannt. Laden Sie eine ROM-Datei, um die Mustererkennung zu starten.",
+    "modify": "Anpassen:",
+    "reset": "Zurücksetzen",
+    "generated_mod": "✓ Erstelltes Community-Mod-Paket (.sgmod)",
+    "btn_flash_mod": "⚡ 1-Klick Mod auf Fahrzeug flashen"
   }
 }
 

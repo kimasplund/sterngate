@@ -20,6 +20,65 @@ DTC_OUT = "data/dtc_database_mb.json"
 ECU_CATALOG_FILE = "data/ecu_catalog.json"
 PROFILES_OUT = "profiles/mercedes"
 
+DID_TRANSLATIONS = {
+    "Reprogramming Attempt Counter": {
+        "de": "Umprogrammierungs-Versuchszähler",
+        "sv": "Omprogrammeringsförsöksräknare"
+    },
+    "Diagnostic Trace Memory": {
+        "de": "Diagnose-Ablaufverfolgungsspeicher",
+        "sv": "Diagnostiskt spårningsminne"
+    },
+    "Reprogramming Resume Information": {
+        "de": "Umprogrammierungs-Fortsetzungsinformation",
+        "sv": "Omprogrammeringsåterupptagningsinformation"
+    },
+    "Vehicle Odometer in Low Resolution": {
+        "de": "Fahrzeug-Kilometerstand (geringe Auflösung)",
+        "sv": "Vägmätare (låg upplösning)"
+    },
+    "Usage Histogram": {
+        "de": "Nutzungs-Histogramm",
+        "sv": "Användningshistogram"
+    },
+    "Activate SAR Data Storage": {
+        "de": "SAR-Datenspeicherung aktivieren",
+        "sv": "Aktivera SAR-datalagring"
+    },
+    "Adjust ISO 15765 2 Block Size and STmin Parameter": {
+        "de": "ISO 15765-2 Blockgröße und STmin anpassen",
+        "sv": "Justera ISO 15765-2 blockstorlek och STmin"
+    },
+    "Adjust ISO 10681 2 Bandwidth Control Parameters": {
+        "de": "ISO 10681-2 Bandbreitensteuerungsparameter anpassen",
+        "sv": "Justera ISO 10681-2 bandbreddskontrollparametrar"
+    },
+    "SAR Trigger Counter": {
+        "de": "SAR-Auslösezähler",
+        "sv": "SAR-utlösarräknare"
+    },
+    "Number of SAR Write Cycles": {
+        "de": "Anzahl der SAR-Schreibzyklen",
+        "sv": "Antal SAR-skrivcykler"
+    },
+    "Global Time Sync Measured Values": {
+        "de": "Globale Zeitsynchronisations-Messwerte",
+        "sv": "Globala tidssynkroniseringsmätvärden"
+    },
+    "Used EVC Config": {
+        "de": "Verwendete EVC-Konfiguration",
+        "sv": "Använd EVC-konfiguration"
+    },
+    "Read Used EVC Config": {
+        "de": "Verwendete EVC-Konfiguration lesen",
+        "sv": "Läs använd EVC-konfiguration"
+    },
+    "Read Stored EVC Configuration": {
+        "de": "Gespeicherte EVC-Konfiguration lesen",
+        "sv": "Läs sparad EVC-konfiguration"
+    }
+}
+
 def clean_text(t):
     if not t: return ""
     t = t.replace("\r", " ").replace("\n", " ").strip()
@@ -277,13 +336,14 @@ def main():
                 # Add DIDs from this ECU
                 for d in match_meta["dids"][:8]: # top 8 diagnostic DIDs per module
                     param_id = f"{ecu_key.lower()}_{d['did'].replace('0x', '').lower()}"
+                    d_trans = DID_TRANSLATIONS.get(d["name"], {})
                     parameters.append({
                         "id": param_id,
                         "name": d["name"],
                         "names": {
                             "en": d["name"],
-                            "de": d["name"],
-                            "sv": d["name"]
+                            "de": d_trans.get("de", d["name"]),
+                            "sv": d_trans.get("sv", d["name"])
                         },
                         "module": ecu_key,
                         "service": 34, # 0x22 ReadDataByIdentifier

@@ -817,47 +817,47 @@
       <div class="card">
         <div class="card-header">
           <span>📦</span>
-          <span>ROM Binary & Signature Analysis</span>
+          <span data-i18n="tuning.title">ROM Binary & Signature Analysis</span>
         </div>
-        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;" data-i18n="tuning.desc">
           Upload or inspect Bosch EDC16 / EDC17 flash memory dumps (.bin, .ori).
         </div>
 
         <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem;">
           <input type="file" id="tuning-file-input" style="display: none;" onchange="handleTuningFileUpload(event)">
-          <button class="btn btn-primary" onclick="document.getElementById('tuning-file-input').click()">
+          <button class="btn btn-primary" onclick="document.getElementById('tuning-file-input').click()" data-i18n="tuning.btn_load_rom">
             📂 Load ROM Binary (.bin/.ori)
           </button>
-          <button class="btn" onclick="loadSampleEdc16Rom()">
+          <button class="btn" onclick="loadSampleEdc16Rom()" data-i18n="tuning.btn_load_sample">
             ⚡ Load Simulated EDC16 ROM
           </button>
         </div>
 
-        <div id="tuning-file-status" style="font-size: 0.8rem; color: var(--accent); margin-bottom: 0.8rem;">
+        <div id="tuning-file-status" style="font-size: 0.8rem; color: var(--accent); margin-bottom: 0.8rem;" data-i18n="tuning.file_status_none">
           No ROM loaded. Select a file or load simulated EDC16 CP31 ROM.
         </div>
 
         <!-- Detected ECU Signatures -->
         <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; margin-bottom: 0.8rem;">
-          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.3rem;">ECU Signatures</div>
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.3rem;" data-i18n="tuning.ecu_signatures">ECU Signatures</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.8rem;">
             <div>Bosch HW: <b id="tuning-sig-hw" style="color: #58a6ff;">--</b></div>
             <div>Bosch SW: <b id="tuning-sig-sw" style="color: #58a6ff;">--</b></div>
-            <div>Part Number: <b id="tuning-sig-part" style="color: #58a6ff;">--</b></div>
-            <div>CRC32: <b id="tuning-sig-crc" style="color: #58a6ff;">--</b></div>
+            <div><span data-i18n="tuning.part_number">Part Number:</span> <b id="tuning-sig-part" style="color: #58a6ff;">--</b></div>
+            <div><span data-i18n="tuning.crc32">CRC32:</span> <b id="tuning-sig-crc" style="color: #58a6ff;">--</b></div>
           </div>
         </div>
 
         <!-- Bosch Checksum Solver Block -->
         <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; margin-bottom: 0.8rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
-            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);">Bosch MPC5xx Checksums</div>
+            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);" data-i18n="tuning.checksums_title">Bosch MPC5xx Checksums</div>
             <span id="tuning-checksum-badge" class="badge">UNKNOWN</span>
           </div>
-          <div id="tuning-checksum-summary" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+          <div id="tuning-checksum-summary" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;" data-i18n="tuning.awaiting_scan">
             Awaiting ROM scan...
           </div>
-          <button id="btn-fix-checksums" class="btn btn-warning" style="width: 100%; display: none;" onclick="fixRomChecksums()">
+          <button id="btn-fix-checksums" class="btn btn-warning" style="width: 100%; display: none;" onclick="fixRomChecksums()" data-i18n="tuning.btn_fix_checksums">
             🛠️ Fix All Bosch Checksums In-Place
           </button>
         </div>
@@ -865,29 +865,29 @@
         <!-- 1-Click Stage Tuning & DTC Suppression -->
         <div class="card-header" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
           <span>⚡</span>
-          <span>1-Click Safe Stage Tuning (.sgmod)</span>
+          <span data-i18n="tuning.one_click_title">1-Click Safe Stage Tuning (.sgmod)</span>
         </div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.8rem;">
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.8rem;" data-i18n="tuning.one_click_desc">
           Generate compact (~2 KB), self-healing .sgmod packages with Reed-Solomon FEC.
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-          <button class="btn btn-primary" onclick="generateStageTune(1)" id="btn-gen-stage1" disabled>
+          <button class="btn btn-primary" onclick="generateStageTune(1)" id="btn-gen-stage1" disabled data-i18n="tuning.btn_stage1">
             🚀 Generate Stage 1 Tune (+18% Torque, +120mbar Boost, +50bar Rail)
           </button>
-          <button class="btn btn-danger" onclick="generateStageTune(2)" id="btn-gen-stage2" disabled>
+          <button class="btn btn-danger" onclick="generateStageTune(2)" id="btn-gen-stage2" disabled data-i18n="tuning.btn_stage2">
             🏁 Generate Stage 2 Race Tune (+25% Torque, DPF/EGR Delete, DTC Off)
           </button>
         </div>
 
         <!-- DTC Kill Matrix -->
         <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
-          <div style="font-size: 0.85rem; font-weight: bold; margin-bottom: 0.4rem;">🎯 DTC Suppression (P-Code Kill)</div>
+          <div style="font-size: 0.85rem; font-weight: bold; margin-bottom: 0.4rem;" data-i18n="tuning.dtc_kill_title">🎯 DTC Suppression (P-Code Kill)</div>
           <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
-            <input type="text" id="dtc-kill-input" placeholder="e.g. P0401, P2002, P0100" style="flex: 1; font-family: monospace;">
-            <button class="btn btn-warning" onclick="generateDtcKillMod()" id="btn-gen-dtc-kill" disabled>Kill DTCs</button>
+            <input type="text" id="dtc-kill-input" placeholder="e.g. P0401, P2002, P0100" data-i18n-placeholder="tuning.dtc_kill_ph" style="flex: 1; font-family: monospace;">
+            <button class="btn btn-warning" onclick="generateDtcKillMod()" id="btn-gen-dtc-kill" disabled data-i18n="tuning.btn_dtc_kill">Kill DTCs</button>
           </div>
           <div style="font-size: 0.75rem; color: var(--text-muted);">
-            Quick presets: <a href="#" onclick="setDtcPreset('P0401, P0402'); return false;" style="color: var(--accent);">EGR (P0401)</a> | <a href="#" onclick="setDtcPreset('P2002, P2452'); return false;" style="color: var(--accent);">DPF (P2002)</a> | <a href="#" onclick="setDtcPreset('P2047, P2048'); return false;" style="color: var(--accent);">AdBlue (P2047)</a>
+            <span data-i18n="tuning.quick_presets">Quick presets:</span> <a href="#" onclick="setDtcPreset('P0401, P0402'); return false;" style="color: var(--accent);">EGR (P0401)</a> | <a href="#" onclick="setDtcPreset('P2002, P2452'); return false;" style="color: var(--accent);">DPF (P2002)</a> | <a href="#" onclick="setDtcPreset('P2047, P2048'); return false;" style="color: var(--accent);">AdBlue (P2047)</a>
           </div>
         </div>
       </div>
@@ -897,13 +897,13 @@
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span>🗺️</span>
-            <span>Detected Calibration Maps (<span id="detected-maps-count">0</span>)</span>
+            <span><span data-i18n="tuning.detected_maps">Detected Calibration Maps</span> (<span id="detected-maps-count">0</span>)</span>
           </div>
         </div>
 
         <!-- Maps Selection Dropdown / Badges -->
         <div id="maps-selector-list" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem;">
-          <div style="font-size: 0.85rem; color: var(--text-muted);">No maps detected yet. Load a ROM file to start automated pattern matching.</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted);" data-i18n="tuning.no_maps">No maps detected yet. Load a ROM file to start automated pattern matching.</div>
         </div>
 
         <!-- Active Map Detail / Table Editor -->
@@ -915,12 +915,12 @@
             </div>
             <!-- Percentage Modification Toolbar -->
             <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="font-size: 0.8rem; color: var(--text-muted);">Modify:</span>
+              <span style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="tuning.modify">Modify:</span>
               <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.05)">+5%</button>
               <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.10)">+10%</button>
               <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.15)">+15%</button>
               <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.18)">+18%</button>
-              <button class="btn btn-danger" style="padding: 0.2rem 0.4rem;" onclick="resetActiveMap()">Reset</button>
+              <button class="btn btn-danger" style="padding: 0.2rem 0.4rem;" onclick="resetActiveMap()" data-i18n="tuning.reset">Reset</button>
             </div>
           </div>
 
@@ -935,8 +935,8 @@
         <!-- Generated Modpack Output Container -->
         <div id="tuning-output-container" style="display: none; margin-top: 1rem; background: #0b1520; border: 1px solid var(--accent); border-radius: 6px; padding: 0.8rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <div style="font-weight: bold; color: var(--accent);">✓ Generated Community Mod Package (.sgmod)</div>
-            <button class="btn btn-primary" style="padding: 0.2rem 0.6rem;" onclick="applyGeneratedMod()">
+            <div style="font-weight: bold; color: var(--accent);" data-i18n="tuning.generated_mod">✓ Generated Community Mod Package (.sgmod)</div>
+            <button class="btn btn-primary" style="padding: 0.2rem 0.6rem;" onclick="applyGeneratedMod()" data-i18n="tuning.btn_flash_mod">
               ⚡ 1-Click Flash Mod to Vehicle
             </button>
           </div>
@@ -951,8 +951,8 @@
     <div class="modal-dialog">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 0.6rem;">
-          <span id="safety-modal-badge" class="badge badge-recording">HIGH RISK / DESTRUCTIVE</span>
-          <h3 id="safety-modal-title" style="font-size: 1.1rem; color: #fff;">Safety Interlock Confirmation</h3>
+          <span id="safety-modal-badge" class="badge badge-recording" data-i18n="modal.badge_danger">HIGH RISK / DESTRUCTIVE</span>
+          <h3 id="safety-modal-title" style="font-size: 1.1rem; color: #fff;" data-i18n="modal.title">Safety Interlock Confirmation</h3>
         </div>
         <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeSafetyModal()">✕</button>
       </div>
@@ -961,42 +961,42 @@
 
         <!-- Hardware & Environmental Interlock Gates -->
         <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem;">
-          <b style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">Pre-Flight Hardware Interlocks</b>
+          <b style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 0.5rem;" data-i18n="modal.preflight_title">Pre-Flight Hardware Interlocks</b>
           
           <div class="safety-check-item">
             <span id="gate-voltage-icon" class="safety-check-icon">⚡</span>
             <div style="flex: 1;">
-              <span>System Voltage Requirement: <b id="gate-voltage-target">≥ 12.50 V</b></span>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">Live measured voltage: <b id="gate-voltage-live" style="color: var(--accent);">13.8V</b></div>
+              <span><span data-i18n="modal.voltage_req">System Voltage Requirement:</span> <b id="gate-voltage-target">≥ 12.50 V</b></span>
+              <div style="font-size: 0.75rem; color: var(--text-muted);"><span data-i18n="modal.voltage_live">Live measured voltage:</span> <b id="gate-voltage-live" style="color: var(--accent);">13.8V</b></div>
             </div>
-            <span id="gate-voltage-status" class="badge badge-ready">PASS ✓</span>
+            <span id="gate-voltage-status" class="badge badge-ready" data-i18n="modal.pass">PASS ✓</span>
           </div>
 
           <div class="safety-check-item">
             <span id="gate-ignition-icon" class="safety-check-icon">🔑</span>
             <div style="flex: 1;">
-              <span>Terminal 15 (Ignition ON, Engine OFF)</span>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">Engine must not be running during procedure.</div>
+              <span data-i18n="modal.ignition_req">Terminal 15 (Ignition ON, Engine OFF)</span>
+              <div style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="modal.ignition_sub">Engine must not be running during procedure.</div>
             </div>
-            <span id="gate-ignition-status" class="badge badge-ready">PASS ✓</span>
+            <span id="gate-ignition-status" class="badge badge-ready" data-i18n="modal.pass">PASS ✓</span>
           </div>
 
           <div class="safety-check-item">
             <span id="gate-backup-icon" class="safety-check-icon">📜</span>
             <div style="flex: 1;">
-              <span>Automated Git Configuration Snapshot</span>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">State snapshot will be committed to garage history before write.</div>
+              <span data-i18n="modal.backup_req">Automated Git Configuration Snapshot</span>
+              <div style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="modal.backup_sub">State snapshot will be committed to garage history before write.</div>
             </div>
-            <span class="badge badge-ready">READY ✓</span>
+            <span class="badge badge-ready" data-i18n="modal.ready">READY ✓</span>
           </div>
         </div>
 
         <!-- Keyword Confirmation Container -->
         <div id="safety-modal-keyword-container" style="display: none; margin-bottom: 0.5rem;">
-          <div style="font-size: 0.85rem; color: var(--warning); margin-bottom: 0.4rem;">
+          <div style="font-size: 0.85rem; color: var(--warning); margin-bottom: 0.4rem;" data-i18n="modal.type_confirm">
             Type <code id="safety-modal-keyword" style="color: var(--danger); font-weight: bold;">CONFIRM</code> to unlock execution:
           </div>
-          <input type="text" id="safety-modal-input" placeholder="Type confirmation keyword..." style="width: 100%;" onkeyup="checkSafetyModalKeyword(event)">
+          <input type="text" id="safety-modal-input" placeholder="Type confirmation keyword..." data-i18n-placeholder="modal.placeholder_keyword" style="width: 100%;" onkeyup="checkSafetyModalKeyword(event)">
         </div>
       </div>
       <div class="modal-footer">

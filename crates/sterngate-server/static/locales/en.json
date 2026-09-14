@@ -142,6 +142,19 @@
     "tuning": "Map Studio & Tuning"
   },
   "modal": {
+    "title": "Safety Interlock Confirmation",
+    "badge_danger": "HIGH RISK / DESTRUCTIVE",
+    "preflight_title": "Pre-Flight Hardware Interlocks",
+    "voltage_req": "System Voltage Requirement:",
+    "voltage_live": "Live measured voltage:",
+    "ignition_req": "Terminal 15 (Ignition ON, Engine OFF)",
+    "ignition_sub": "Engine must not be running during procedure.",
+    "backup_req": "Automated Git Configuration Snapshot",
+    "backup_sub": "State snapshot will be committed to garage history before write.",
+    "pass": "PASS ✓",
+    "ready": "READY ✓",
+    "type_confirm": "Type CONFIRM to unlock execution:",
+    "placeholder_keyword": "Type confirmation keyword...",
     "btn_cancel": "Cancel / Abort",
     "btn_confirm": "Execute Procedure"
   },
@@ -158,6 +171,33 @@
     "title": "🏛️ Local Calibration Vault & Firmware Explorer",
     "desc": "Scans local storage (.bin, .rom, .cff, .smr-f, .fls) without uploading binaries over the internet. Automatically compares embedded Bosch HW/SW IDs against connected vehicle ECUs and detects software updates.",
     "btn_scan": "🔍 Scan Local Vault"
+  },
+  "tuning": {
+    "title": "ROM Binary & Signature Analysis",
+    "desc": "Upload or inspect Bosch EDC16 / EDC17 flash memory dumps (.bin, .ori).",
+    "btn_load_rom": "📂 Load ROM Binary (.bin/.ori)",
+    "btn_load_sample": "⚡ Load Simulated EDC16 ROM",
+    "file_status_none": "No ROM loaded. Select a file or load simulated EDC16 CP31 ROM.",
+    "ecu_signatures": "ECU Signatures",
+    "part_number": "Part Number:",
+    "crc32": "CRC32:",
+    "checksums_title": "Bosch MPC5xx Checksums",
+    "awaiting_scan": "Awaiting ROM scan...",
+    "btn_fix_checksums": "🛠️ Fix All Bosch Checksums In-Place",
+    "one_click_title": "1-Click Safe Stage Tuning (.sgmod)",
+    "one_click_desc": "Generate compact (~2 KB), self-healing .sgmod packages with Reed-Solomon FEC.",
+    "btn_stage1": "🚀 Generate Stage 1 Tune (+18% Torque, +120mbar Boost, +50bar Rail)",
+    "btn_stage2": "🏁 Generate Stage 2 Race Tune (+25% Torque, DPF/EGR Delete, DTC Off)",
+    "dtc_kill_title": "🎯 DTC Suppression (P-Code Kill)",
+    "dtc_kill_ph": "e.g. P0401, P2002, P0100",
+    "btn_dtc_kill": "Kill DTCs",
+    "quick_presets": "Quick presets:",
+    "detected_maps": "Detected Calibration Maps",
+    "no_maps": "No maps detected yet. Load a ROM file to start automated pattern matching.",
+    "modify": "Modify:",
+    "reset": "Reset",
+    "generated_mod": "✓ Generated Community Mod Package (.sgmod)",
+    "btn_flash_mod": "⚡ 1-Click Flash Mod to Vehicle"
   }
 }
 

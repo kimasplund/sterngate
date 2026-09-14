@@ -1,3 +1,4 @@
+use crate::i18n::Language;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -81,67 +82,156 @@ pub struct CascadeReport {
 }
 
 impl CascadeReport {
-    /// Format report into human-readable Markdown
+    /// Format report into human-readable Markdown (defaults to English)
     pub fn to_markdown(&self) -> String {
+        self.to_markdown_localized(Language::En)
+    }
+
+    /// Format report into human-readable Markdown for the specified language
+    pub fn to_markdown_localized(&self, lang: Language) -> String {
         let mut md = String::new();
-        md.push_str("# Mercedes-Benz 'Cascade of Death' Early Warning Report\n\n");
-        md.push_str(&format!("- **Scan Timestamp:** `{}`\n", self.timestamp));
-        md.push_str(&format!(
-            "- **Overall Status:** {}\n",
-            match self.overall_severity {
-                CascadeSeverity::Normal => "✅ ALL SYSTEMS HEALTHY",
-                CascadeSeverity::Watchlist => "⚠️ PREVENTIVE WATCHLIST ITEMS DETECTED",
-                CascadeSeverity::ImminentDanger => "🚨 CRITICAL: IMMINENT CASCADE FAILURE DETECTED",
+        let title = match lang {
+            Language::En => "# Mercedes-Benz 'Cascade of Death' Early Warning Report\n\n",
+            Language::De => "# Mercedes-Benz 'Kaskadenschaden' Frühwarnbericht\n\n",
+            Language::Sv => "# Mercedes-Benz 'Kaskadhaveri' Tidig Varningsrapport\n\n",
+        };
+        md.push_str(title);
+
+        let ts_label = match lang {
+            Language::En => "Scan Timestamp",
+            Language::De => "Scan-Zeitpunkt",
+            Language::Sv => "Skanningstidpunkt",
+        };
+        md.push_str(&format!("- **{}:** `{}`\n", ts_label, self.timestamp));
+
+        let status_label = match lang {
+            Language::En => "Overall Status",
+            Language::De => "Gesamtstatus",
+            Language::Sv => "Totalstatus",
+        };
+        let status_val = match (self.overall_severity, lang) {
+            (CascadeSeverity::Normal, Language::De) => "✅ ALLE SYSTEME BETRIEBSBEREIT",
+            (CascadeSeverity::Normal, Language::Sv) => "✅ ALLA SYSTEM NORMAL",
+            (CascadeSeverity::Normal, Language::En) => "✅ ALL SYSTEMS HEALTHY",
+            (CascadeSeverity::Watchlist, Language::De) => {
+                "⚠️ PRÄVENTIVE BEOBACHTUNGSPUNKTE ERKANNT"
             }
-        ));
+            (CascadeSeverity::Watchlist, Language::Sv) => "⚠️ FÖREBYGGANDE OBSERVATIONER UPPTÄCKTA",
+            (CascadeSeverity::Watchlist, Language::En) => "⚠️ PREVENTIVE WATCHLIST ITEMS DETECTED",
+            (CascadeSeverity::ImminentDanger, Language::De) => {
+                "🚨 KRITISCH: UNMITTELBARER KASKADENSCHADEN ERKANNT"
+            }
+            (CascadeSeverity::ImminentDanger, Language::Sv) => {
+                "🚨 KRITISKT: OMEDELBART KASKADHAVERI UPPTÄCKT"
+            }
+            (CascadeSeverity::ImminentDanger, Language::En) => {
+                "🚨 CRITICAL: IMMINENT CASCADE FAILURE DETECTED"
+            }
+        };
+        md.push_str(&format!("- **{}:** {}\n", status_label, status_val));
+
+        let total_label = match lang {
+            Language::En => "Total Cascades Evaluated",
+            Language::De => "Geprüfte Kaskaden",
+            Language::Sv => "Totalt Utvärderade Kaskader",
+        };
         md.push_str(&format!(
-            "- **Total Cascades Evaluated:** {}\n\n",
-            self.total_cascades_checked
+            "- **{}:** {}\n\n",
+            total_label, self.total_cascades_checked
         ));
 
         if self.alerts.is_empty() {
-            md.push_str("No active cascade warnings or mechanical anomalies detected.\n");
+            let empty_msg = match lang {
+                Language::En => "No active cascade warnings or mechanical anomalies detected.\n",
+                Language::De => {
+                    "Keine aktiven Kaskadenwarnungen oder mechanischen Anomalien erkannt.\n"
+                }
+                Language::Sv => {
+                    "Inga aktiva kaskadvarningar eller mekaniska avvikelser upptäckta.\n"
+                }
+            };
+            md.push_str(empty_msg);
             return md;
         }
 
-        md.push_str("## Active Cascade Warnings & Intervention Guide\n\n");
+        let section_header = match lang {
+            Language::En => "## Active Cascade Warnings & Intervention Guide\n\n",
+            Language::De => "## Aktive Kaskadenwarnungen & Reparaturleitfaden\n\n",
+            Language::Sv => "## Aktiva Kaskadvarningar & Åtgärdsguide\n\n",
+        };
+        md.push_str(section_header);
+
+        let (evidence_label, root_label, outcome_label, action_label, parts_label, models_label) =
+            match lang {
+                Language::En => (
+                    "Telemetry Evidence",
+                    "Inexpensive Root Trigger",
+                    "Catastrophic Outcome if Ignored",
+                    "Recommended Action",
+                    "OEM Part Numbers",
+                    "Affected Models",
+                ),
+                Language::De => (
+                    "Erkannte Messwert-Beweise",
+                    "Günstiges Auslöser-Bauteil",
+                    "Katastrophale Folge bei Nichtbeachtung",
+                    "Empfohlene Maßnahme",
+                    "OEM-Teilenummern",
+                    "Betroffene Baureihen",
+                ),
+                Language::Sv => (
+                    "Telemetribevis",
+                    "Lågkostnads Primärorsak",
+                    "Katastrofal Följd vid Ignorering",
+                    "Rekommenderad Åtgärd",
+                    "OEM-Artikelnummer",
+                    "Påverkade Modeller",
+                ),
+            };
+
         for alert in &self.alerts {
             let icon = match alert.severity {
                 CascadeSeverity::Normal => "✅",
                 CascadeSeverity::Watchlist => "⚠️",
                 CascadeSeverity::ImminentDanger => "🚨",
             };
+            let sev_str = match (alert.severity, lang) {
+                (CascadeSeverity::Normal, _) => "NORMAL",
+                (CascadeSeverity::Watchlist, Language::De) => "BEOBACHTUNG",
+                (CascadeSeverity::Watchlist, Language::Sv) => "OBSERVATION",
+                (CascadeSeverity::Watchlist, Language::En) => "WATCHLIST",
+                (CascadeSeverity::ImminentDanger, Language::De) => "AKUTE GEFAHR",
+                (CascadeSeverity::ImminentDanger, Language::Sv) => "ÖVERHÄNGANDE FARA",
+                (CascadeSeverity::ImminentDanger, Language::En) => "IMMINENT DANGER",
+            };
+            md.push_str(&format!("### {} {} ({})\n", icon, alert.name, sev_str));
             md.push_str(&format!(
-                "### {} {} ({})\n",
-                icon,
-                alert.name,
-                alert.severity.as_str()
+                "- **{}:** {}\n",
+                evidence_label, alert.telemetry_evidence
             ));
             md.push_str(&format!(
-                "- **Telemetry Evidence:** {}\n",
-                alert.telemetry_evidence
+                "- **{}:** {}\n",
+                root_label, alert.root_cause_part
             ));
             md.push_str(&format!(
-                "- **Inexpensive Root Trigger:** {}\n",
-                alert.root_cause_part
+                "- **{}:** {}\n",
+                outcome_label, alert.catastrophic_outcome
             ));
             md.push_str(&format!(
-                "- **Catastrophic Outcome if Ignored:** {}\n",
-                alert.catastrophic_outcome
-            ));
-            md.push_str(&format!(
-                "- **Recommended Action:** {}\n",
-                alert.recommendation
+                "- **{}:** {}\n",
+                action_label, alert.recommendation
             ));
             if !alert.oem_part_numbers.is_empty() {
                 md.push_str(&format!(
-                    "- **OEM Part Numbers:** {}\n",
+                    "- **{}:** {}\n",
+                    parts_label,
                     alert.oem_part_numbers.join(", ")
                 ));
             }
             if !alert.affected_chassis.is_empty() {
                 md.push_str(&format!(
-                    "- **Affected Models:** {}\n",
+                    "- **{}:** {}\n",
+                    models_label,
                     alert.affected_chassis.join(", ")
                 ));
             }
@@ -1053,5 +1143,58 @@ impl CascadeWatchdog {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cascade_report_localization() {
+        let alert = CascadeAlert {
+            id: CascadeId::SbcAccumulatorExhaustion,
+            name: "SBC Hydraulic Accumulator Exhaustion".to_string(),
+            severity: CascadeSeverity::ImminentDanger,
+            root_cause_part: "OEM nitrogen reservoir sphere A 000 430 26 94".to_string(),
+            catastrophic_outcome: "Hydraulic pump motor thermal burnout".to_string(),
+            telemetry_evidence: "SBC Accumulator Pressure: 35.0 bar <= 42.0 bar".to_string(),
+            recommendation: "Replace accumulator sphere immediately".to_string(),
+            oem_part_numbers: vec!["A 000 430 26 94".to_string()],
+            affected_chassis: vec!["W211".to_string()],
+        };
+
+        let report = CascadeReport {
+            timestamp: "2026-09-14T12:00:00Z".to_string(),
+            overall_severity: CascadeSeverity::ImminentDanger,
+            alerts: vec![alert],
+            total_cascades_checked: 13,
+        };
+
+        // German
+        let de_md = report.to_markdown_localized(Language::De);
+        assert!(de_md.contains("Kaskadenschaden"));
+        assert!(de_md.contains("Scan-Zeitpunkt"));
+        assert!(de_md.contains("Gesamtstatus"));
+        assert!(de_md.contains("KRITISCH: UNMITTELBARER KASKADENSCHADEN ERKANNT"));
+        assert!(de_md.contains("Erkannte Messwert-Beweise"));
+        assert!(de_md.contains("Günstiges Auslöser-Bauteil"));
+        assert!(de_md.contains("Katastrophale Folge bei Nichtbeachtung"));
+        assert!(de_md.contains("Empfohlene Maßnahme"));
+        assert!(de_md.contains("OEM-Teilenummern"));
+        assert!(de_md.contains("Betroffene Baureihen"));
+
+        // Swedish
+        let sv_md = report.to_markdown_localized(Language::Sv);
+        assert!(sv_md.contains("Kaskadhaveri"));
+        assert!(sv_md.contains("Skanningstidpunkt"));
+        assert!(sv_md.contains("Totalstatus"));
+        assert!(sv_md.contains("KRITISKT: OMEDELBART KASKADHAVERI UPPTÄCKT"));
+        assert!(sv_md.contains("Telemetribevis"));
+        assert!(sv_md.contains("Lågkostnads Primärorsak"));
+        assert!(sv_md.contains("Katastrofal Följd vid Ignorering"));
+        assert!(sv_md.contains("Rekommenderad Åtgärd"));
+        assert!(sv_md.contains("OEM-Artikelnummer"));
+        assert!(sv_md.contains("Påverkade Modeller"));
     }
 }

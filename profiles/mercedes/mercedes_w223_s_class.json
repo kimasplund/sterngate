@@ -165,8 +165,8 @@
       "name": "Reprogramming Attempt Counter",
       "names": {
         "en": "Reprogramming Attempt Counter",
-        "de": "Reprogramming Attempt Counter",
-        "sv": "Reprogramming Attempt Counter"
+        "de": "Umprogrammierungs-Versuchszähler",
+        "sv": "Omprogrammeringsförsöksräknare"
       },
       "module": "ESP223",
       "service": 34,
@@ -184,8 +184,8 @@
       "name": "Diagnostic Trace Memory",
       "names": {
         "en": "Diagnostic Trace Memory",
-        "de": "Diagnostic Trace Memory",
-        "sv": "Diagnostic Trace Memory"
+        "de": "Diagnose-Ablaufverfolgungsspeicher",
+        "sv": "Diagnostiskt spårningsminne"
       },
       "module": "ESP223",
       "service": 34,
@@ -203,8 +203,8 @@
       "name": "Usage Histogram",
       "names": {
         "en": "Usage Histogram",
-        "de": "Usage Histogram",
-        "sv": "Usage Histogram"
+        "de": "Nutzungs-Histogramm",
+        "sv": "Användningshistogram"
       },
       "module": "ESP223",
       "service": 34,
@@ -222,8 +222,8 @@
       "name": "Global Time Sync Measured Values",
       "names": {
         "en": "Global Time Sync Measured Values",
-        "de": "Global Time Sync Measured Values",
-        "sv": "Global Time Sync Measured Values"
+        "de": "Globale Zeitsynchronisations-Messwerte",
+        "sv": "Globala tidssynkroniseringsmätvärden"
       },
       "module": "ESP223",
       "service": 34,
@@ -241,8 +241,8 @@
       "name": "Vehicle Odometer in Low Resolution",
       "names": {
         "en": "Vehicle Odometer in Low Resolution",
-        "de": "Vehicle Odometer in Low Resolution",
-        "sv": "Vehicle Odometer in Low Resolution"
+        "de": "Fahrzeug-Kilometerstand (geringe Auflösung)",
+        "sv": "Vägmätare (låg upplösning)"
       },
       "module": "ESP223",
       "service": 34,
@@ -260,8 +260,8 @@
       "name": "Read Stored EVC Configuration",
       "names": {
         "en": "Read Stored EVC Configuration",
-        "de": "Read Stored EVC Configuration",
-        "sv": "Read Stored EVC Configuration"
+        "de": "Gespeicherte EVC-Konfiguration lesen",
+        "sv": "Läs sparad EVC-konfiguration"
       },
       "module": "ESP223",
       "service": 34,
@@ -279,8 +279,8 @@
       "name": "Reprogramming Resume Information",
       "names": {
         "en": "Reprogramming Resume Information",
-        "de": "Reprogramming Resume Information",
-        "sv": "Reprogramming Resume Information"
+        "de": "Umprogrammierungs-Fortsetzungsinformation",
+        "sv": "Omprogrammeringsåterupptagningsinformation"
       },
       "module": "ESP223",
       "service": 34,
@@ -317,8 +317,8 @@
       "name": "Reprogramming Attempt Counter",
       "names": {
         "en": "Reprogramming Attempt Counter",
-        "de": "Reprogramming Attempt Counter",
-        "sv": "Reprogramming Attempt Counter"
+        "de": "Umprogrammierungs-Versuchszähler",
+        "sv": "Omprogrammeringsförsöksräknare"
       },
       "module": "AVAS223",
       "service": 34,
@@ -336,8 +336,8 @@
       "name": "Diagnostic Trace Memory",
       "names": {
         "en": "Diagnostic Trace Memory",
-        "de": "Diagnostic Trace Memory",
-        "sv": "Diagnostic Trace Memory"
+        "de": "Diagnose-Ablaufverfolgungsspeicher",
+        "sv": "Diagnostiskt spårningsminne"
       },
       "module": "AVAS223",
       "service": 34,
@@ -355,8 +355,8 @@
       "name": "Global Time Sync Measured Values",
       "names": {
         "en": "Global Time Sync Measured Values",
-        "de": "Global Time Sync Measured Values",
-        "sv": "Global Time Sync Measured Values"
+        "de": "Globale Zeitsynchronisations-Messwerte",
+        "sv": "Globala tidssynkroniseringsmätvärden"
       },
       "module": "AVAS223",
       "service": 34,
@@ -374,8 +374,8 @@
       "name": "Vehicle Odometer in Low Resolution",
       "names": {
         "en": "Vehicle Odometer in Low Resolution",
-        "de": "Vehicle Odometer in Low Resolution",
-        "sv": "Vehicle Odometer in Low Resolution"
+        "de": "Fahrzeug-Kilometerstand (geringe Auflösung)",
+        "sv": "Vägmätare (låg upplösning)"
       },
       "module": "AVAS223",
       "service": 34,
@@ -393,8 +393,8 @@
       "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
       "names": {
         "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
-        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
-        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+        "de": "ISO 15765-2 Blockgröße und STmin anpassen",
+        "sv": "Justera ISO 15765-2 blockstorlek och STmin"
       },
       "module": "AVAS223",
       "service": 34,
@@ -412,8 +412,8 @@
       "name": "Reprogramming Resume Information",
       "names": {
         "en": "Reprogramming Resume Information",
-        "de": "Reprogramming Resume Information",
-        "sv": "Reprogramming Resume Information"
+        "de": "Umprogrammierungs-Fortsetzungsinformation",
+        "sv": "Omprogrammeringsåterupptagningsinformation"
       },
       "module": "AVAS223",
       "service": 34,
@@ -507,8 +507,8 @@
       "name": "Reprogramming Attempt Counter",
       "names": {
         "en": "Reprogramming Attempt Counter",
-        "de": "Reprogramming Attempt Counter",
-        "sv": "Reprogramming Attempt Counter"
+        "de": "Umprogrammierungs-Versuchszähler",
+        "sv": "Omprogrammeringsförsöksräknare"
       },
       "module": "TPM223",
       "service": 34,
@@ -545,8 +545,8 @@
       "name": "Diagnostic Trace Memory",
       "names": {
         "en": "Diagnostic Trace Memory",
-        "de": "Diagnostic Trace Memory",
-        "sv": "Diagnostic Trace Memory"
+        "de": "Diagnose-Ablaufverfolgungsspeicher",
+        "sv": "Diagnostiskt spårningsminne"
       },
       "module": "TPM223",
       "service": 34,
@@ -564,8 +564,8 @@
       "name": "Global Time Sync Measured Values",
       "names": {
         "en": "Global Time Sync Measured Values",
-        "de": "Global Time Sync Measured Values",
-        "sv": "Global Time Sync Measured Values"
+        "de": "Globale Zeitsynchronisations-Messwerte",
+        "sv": "Globala tidssynkroniseringsmätvärden"
       },
       "module": "TPM223",
       "service": 34,
@@ -583,8 +583,8 @@
       "name": "Vehicle Odometer in Low Resolution",
       "names": {
         "en": "Vehicle Odometer in Low Resolution",
-        "de": "Vehicle Odometer in Low Resolution",
-        "sv": "Vehicle Odometer in Low Resolution"
+        "de": "Fahrzeug-Kilometerstand (geringe Auflösung)",
+        "sv": "Vägmätare (låg upplösning)"
       },
       "module": "TPM223",
       "service": 34,
@@ -602,8 +602,8 @@
       "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
       "names": {
         "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
-        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
-        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+        "de": "ISO 15765-2 Blockgröße und STmin anpassen",
+        "sv": "Justera ISO 15765-2 blockstorlek och STmin"
       },
       "module": "TPM223",
       "service": 34,
@@ -621,8 +621,8 @@
       "name": "Read Stored EVC Configuration",
       "names": {
         "en": "Read Stored EVC Configuration",
-        "de": "Read Stored EVC Configuration",
-        "sv": "Read Stored EVC Configuration"
+        "de": "Gespeicherte EVC-Konfiguration lesen",
+        "sv": "Läs sparad EVC-konfiguration"
       },
       "module": "TPM223",
       "service": 34,
@@ -640,8 +640,8 @@
       "name": "Reprogramming Resume Information",
       "names": {
         "en": "Reprogramming Resume Information",
-        "de": "Reprogramming Resume Information",
-        "sv": "Reprogramming Resume Information"
+        "de": "Umprogrammierungs-Fortsetzungsinformation",
+        "sv": "Omprogrammeringsåterupptagningsinformation"
       },
       "module": "TPM223",
       "service": 34,

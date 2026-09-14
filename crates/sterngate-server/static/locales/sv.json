@@ -142,6 +142,19 @@
     "tuning": "Map Studio & Optimering"
   },
   "modal": {
+    "title": "Säkerhetsspärr och bekräftelse",
+    "badge_danger": "HÖG RISK / DESTRUKTIV",
+    "preflight_title": "Hårdvarusäkerhetsspärrar före start",
+    "voltage_req": "Krav på systemspänning:",
+    "voltage_live": "Uppmätt spänning i realtid:",
+    "ignition_req": "Tändning på (Klämma 15), motor avstängd",
+    "ignition_sub": "Motorn får inte vara igång under proceduren.",
+    "backup_req": "Automatisk Git-konfigurationsögonblicksbild",
+    "backup_sub": "Aktuellt tillstånd sparas i garaget innan skrivning.",
+    "pass": "GODKÄND ✓",
+    "ready": "REDO ✓",
+    "type_confirm": "Skriv BEKRAFTA för att låsa upp körning:",
+    "placeholder_keyword": "Skriv bekräftelseord...",
     "btn_cancel": "Avbryt",
     "btn_confirm": "Utför procedur"
   },
@@ -158,6 +171,33 @@
     "title": "🏛️ Lokalt Kalibreringsvalv & Firmware-Utforskare",
     "desc": "Skannar lokal lagring (.bin, .rom, .cff, .smr-f, .fls) utan uppladdning över internet. Jämför Bosch HW/SW med anslutna styrenheter och identifierar mjukvaruuppdateringar.",
     "btn_scan": "🔍 Skanna lokalt valv"
+  },
+  "tuning": {
+    "title": "ROM-binär- & signaturanalys",
+    "desc": "Ladda upp eller inspektera Bosch EDC16 / EDC17 flashminnesdumpar (.bin, .ori).",
+    "btn_load_rom": "📂 Ladda ROM-binärfil (.bin/.ori)",
+    "btn_load_sample": "⚡ Ladda simulerad EDC16 ROM",
+    "file_status_none": "Ingen ROM laddad. Välj en fil eller ladda simulerad EDC16 CP31 ROM.",
+    "ecu_signatures": "Styrenhetssignaturer",
+    "part_number": "Artikelnummer:",
+    "crc32": "CRC32:",
+    "checksums_title": "Bosch MPC5xx kontrollsummor",
+    "awaiting_scan": "Väntar på ROM-skanning...",
+    "btn_fix_checksums": "🛠️ Korrigera alla Bosch-kontrollsummor direkt",
+    "one_click_title": "1-Klick Säker stegoptimering (.sgmod)",
+    "one_click_desc": "Skapa kompakta (~2 KB), självläkande .sgmod-paket med Reed-Solomon FEC.",
+    "btn_stage1": "🚀 Skapa Steg 1-optimering (+18% vridmoment, +120mbar laddtryck, +50bar rail)",
+    "btn_stage2": "🏁 Skapa Steg 2 Race-optimering (+25% vridmoment, DPF/EGR Delete, DTC Off)",
+    "dtc_kill_title": "🎯 Felkodsundertryckning (P-kod Kill)",
+    "dtc_kill_ph": "t.ex. P0401, P2002, P0100",
+    "btn_dtc_kill": "Släck felkoder",
+    "quick_presets": "Snabbval:",
+    "detected_maps": "Identifierade styrboxmappar",
+    "no_maps": "Inga mappar identifierade än. Ladda en ROM-fil för att starta mönsterigenkänning.",
+    "modify": "Ändra:",
+    "reset": "Återställ",
+    "generated_mod": "✓ Skapat Community Mod-paket (.sgmod)",
+    "btn_flash_mod": "⚡ 1-Klick Flash Mod till fordon"
   }
 }
 
