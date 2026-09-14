@@ -2,8 +2,9 @@ use serde_json::{json, Value};
 use sha2::Digest;
 use sterngate_core::{
     lookup_routine_name, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc,
-    EcuCatalog, FlashPackageManifest, Language, SuspensionCorner, SuspensionCornerAction,
-    SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot, VehicleGarage, VehicleProfile,
+    EcoStartStopMode, EcuCatalog, FirmwareVault, FlashPackageManifest, Language, SuspensionCorner,
+    SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot,
+    VehicleGarage, VehicleProfile,
 };
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 use sterngate_protocol::{BusDiscoverer, FlashingWorker, ServiceRoutineManager, VehicleScanner};
@@ -447,6 +448,82 @@ pub fn get_tools_list() -> Value {
                     "output_path": {
                         "type": "string",
                         "description": "Optional file path to save HTML report on local filesystem (e.g. 'diagnostic_report.html')"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_guided_workflow",
+            "description": "Execute automotive guided workflows and one-click quick mods: VMax speed limiter (DID 0x0110), seatbelt acoustic chime (DID 0x0201), tank liters Restliteranzeige (DID 0x0205), cornering fog lights (DID 0x0310), ECO start-stop memory (DID 0x0320), EGR soot air mass optimization, and AdBlue 800km emergency lockout reset. Automatically commits configuration to vehicle garage git history.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["workflow"],
+                "properties": {
+                    "workflow": {
+                        "type": "string",
+                        "enum": ["vmax", "seatbelt_chime", "tank_liters", "cornering_lights", "eco_start_stop", "egr_optimize", "adblue_reset"],
+                        "description": "Target workflow or quick mod to execute"
+                    },
+                    "speed_limit_kmh": {
+                        "type": "integer",
+                        "description": "Speed limit in km/h for 'vmax' (e.g. 210, 250, 280, 300). Default: 250",
+                        "default": 250
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Enable/disable flag for seatbelt_chime (true=audible chime on, false=muted), tank_liters, or cornering_lights. Default: true",
+                        "default": true
+                    },
+                    "eco_mode": {
+                        "type": "string",
+                        "enum": ["remember", "disabled", "always_on"],
+                        "description": "ECO Start-Stop mode: 'remember' (driver last state), 'disabled' (inverted), 'always_on' (factory standard). Default: 'remember'",
+                        "default": "remember"
+                    },
+                    "vin": {
+                        "type": "string",
+                        "description": "Vehicle VIN for recording mutation in vehicle garage git repository"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_vault_scan",
+            "description": "Scan local disk directory for firmware binaries (.bin, .rom, .cff, .smr-f, .fls), extract embedded Bosch HW/SW numbers, and cross-reference against connected ECU hardware to discover calibration upgrades.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Local directory path to scan (default: 'firmware_vault')",
+                        "default": "firmware_vault"
+                    },
+                    "hw_id": {
+                        "type": "string",
+                        "description": "Target ECU hardware number to check for upgrades (e.g. '0281012224')"
+                    },
+                    "sw_id": {
+                        "type": "string",
+                        "description": "Current ECU calibration software number (e.g. '1037365000')"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_import_profiles",
+            "description": "Batch ingest and convert Daimler CBF and SMR-D diagnostic database files into native Sterngate JSON profiles, mapping CAN IDs using the 990-ECU canonical catalog.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["input_path"],
+                "properties": {
+                    "input_path": {
+                        "type": "string",
+                        "description": "Path to CBF/SMR-D archive file or extracted directory"
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Target directory for generated Sterngate JSON profiles (default: 'profiles')",
+                        "default": "profiles"
                     }
                 }
             }
@@ -1368,6 +1445,263 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                     }))
                 }
                 Err(e) => Err(format!("Failed to generate diagnostic report: {}", e)),
+            }
+        }
+        "sterngate_guided_workflow" => {
+            let workflow = arguments
+                .get("workflow")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let vin = arguments
+                .get("vin")
+                .and_then(|v| v.as_str())
+                .unwrap_or("WDB2112061A000001");
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+
+            match workflow {
+                "vmax" => {
+                    let speed = arguments
+                        .get("speed_limit_kmh")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(250) as u16;
+                    match ServiceRoutineManager::configure_speed_limiter(
+                        &mut mock_iface,
+                        0x7E0,
+                        0x7E8,
+                        speed,
+                    )
+                    .await
+                    {
+                        Ok(status) => {
+                            let note = format!(
+                                "VMax speed limiter configured to {} km/h via MCP",
+                                speed
+                            );
+                            let _ = garage.save_coding(
+                                vin,
+                                &status.module,
+                                &format!("VMAX_{}KMH", speed),
+                                None,
+                                &note,
+                            );
+                            Ok(serde_json::to_value(status).unwrap())
+                        }
+                        Err(e) => Err(format!("VMax configuration failed: {}", e)),
+                    }
+                }
+                "seatbelt_chime" => {
+                    let enabled = arguments
+                        .get("enabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    match ServiceRoutineManager::configure_seatbelt_chime(
+                        &mut mock_iface,
+                        0x7E4,
+                        0x7EC,
+                        enabled,
+                    )
+                    .await
+                    {
+                        Ok(status) => {
+                            let note = format!(
+                                "Instrument cluster seatbelt acoustic warning chime {} via MCP",
+                                if enabled { "enabled" } else { "muted" }
+                            );
+                            let _ = garage.save_coding(
+                                vin,
+                                &status.module,
+                                if enabled { "CHIME_ON" } else { "CHIME_MUTED" },
+                                None,
+                                &note,
+                            );
+                            Ok(serde_json::to_value(status).unwrap())
+                        }
+                        Err(e) => Err(format!("Seatbelt chime configuration failed: {}", e)),
+                    }
+                }
+                "tank_liters" => {
+                    let enabled = arguments
+                        .get("enabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true);
+                    match ServiceRoutineManager::configure_tank_liters_display(
+                        &mut mock_iface,
+                        0x7E4,
+                        0x7EC,
+                        enabled,
+                    )
+                    .await
+                    {
+                        Ok(status) => {
+                            let note = format!(
+                                "Instrument cluster exact tank liters display {} via MCP",
+                                if enabled { "enabled" } else { "disabled" }
+                            );
+                            let _ = garage.save_coding(
+                                vin,
+                                &status.module,
+                                if enabled {
+                                    "RESTLITER_ON"
+                                } else {
+                                    "RESTLITER_OFF"
+                                },
+                                None,
+                                &note,
+                            );
+                            Ok(serde_json::to_value(status).unwrap())
+                        }
+                        Err(e) => Err(format!("Tank liters configuration failed: {}", e)),
+                    }
+                }
+                "cornering_lights" => {
+                    let enabled = arguments
+                        .get("enabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true);
+                    match ServiceRoutineManager::configure_cornering_lights(
+                        &mut mock_iface,
+                        0x7E2,
+                        0x7EA,
+                        enabled,
+                    )
+                    .await
+                    {
+                        Ok(status) => {
+                            let note = format!(
+                                "Front SAM intelligent cornering fog lights {} via MCP",
+                                if enabled { "enabled" } else { "disabled" }
+                            );
+                            let _ = garage.save_coding(
+                                vin,
+                                &status.module,
+                                if enabled {
+                                    "CORNERING_FOG_ON"
+                                } else {
+                                    "CORNERING_FOG_OFF"
+                                },
+                                None,
+                                &note,
+                            );
+                            Ok(serde_json::to_value(status).unwrap())
+                        }
+                        Err(e) => Err(format!("Cornering lights configuration failed: {}", e)),
+                    }
+                }
+                "eco_start_stop" => {
+                    let mode_str = arguments
+                        .get("eco_mode")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("remember");
+                    let mode = EcoStartStopMode::parse_str(mode_str)
+                        .ok_or_else(|| format!("Invalid ECO mode '{}'", mode_str))?;
+                    match ServiceRoutineManager::configure_eco_start_stop(
+                        &mut mock_iface,
+                        0x7E0,
+                        0x7E8,
+                        mode,
+                    )
+                    .await
+                    {
+                        Ok(status) => {
+                            let note = format!(
+                                "Updated ECO Start-Stop configuration: {} via MCP",
+                                mode.as_str()
+                            );
+                            let _ = garage.save_coding(
+                                vin,
+                                &status.module,
+                                &format!("{:02X}", status.did),
+                                None,
+                                &note,
+                            );
+                            Ok(serde_json::to_value(status).unwrap())
+                        }
+                        Err(e) => Err(format!("ECO Start-Stop configuration failed: {}", e)),
+                    }
+                }
+                "egr_optimize" => {
+                    match ServiceRoutineManager::optimize_egr_adaptation(
+                        &mut mock_iface,
+                        0x7E0,
+                        0x7E8,
+                    )
+                    .await
+                    {
+                        Ok(status) => {
+                            let note =
+                                "EGR adaptation optimized (+40 mg soot reduction offset applied) via MCP";
+                            let _ = garage.save_coding(
+                                vin,
+                                &status.module,
+                                "EGR_AIRMASS_+40MG",
+                                None,
+                                note,
+                            );
+                            Ok(serde_json::to_value(status).unwrap())
+                        }
+                        Err(e) => Err(format!("EGR optimization failed: {}", e)),
+                    }
+                }
+                "adblue_reset" => {
+                    match ServiceRoutineManager::reset_adblue_countdown(
+                        &mut mock_iface,
+                        0x7E0,
+                        0x7E8,
+                    )
+                    .await
+                    {
+                        Ok(status) => {
+                            let note =
+                                "AdBlue / SCR emergency 800km countdown and lockout reset executed via MCP";
+                            let _ =
+                                garage.save_coding(vin, "SCR_DIAG", "0x0218_RESET_OK", None, note);
+                            Ok(serde_json::to_value(status).unwrap())
+                        }
+                        Err(e) => Err(format!("AdBlue reset procedure failed: {}", e)),
+                    }
+                }
+                _ => Err(format!(
+                    "Unknown workflow: '{}'. Valid options: 'vmax', 'seatbelt_chime', 'tank_liters', 'cornering_lights', 'eco_start_stop', 'egr_optimize', 'adblue_reset'",
+                    workflow
+                )),
+            }
+        }
+        "sterngate_vault_scan" => {
+            let scan_path = arguments
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("firmware_vault");
+            let entries = FirmwareVault::scan_directory(scan_path);
+            let hw_id = arguments.get("hw_id").and_then(|v| v.as_str());
+            let sw_id = arguments.get("sw_id").and_then(|v| v.as_str());
+            let recommendation = if let (Some(hw), Some(sw)) = (hw_id, sw_id) {
+                FirmwareVault::find_upgrade_recommendation(&entries, hw, sw)
+            } else {
+                None
+            };
+            Ok(json!({
+                "success": true,
+                "scan_path": scan_path,
+                "total_files": entries.len(),
+                "entries": entries,
+                "recommendation": recommendation,
+            }))
+        }
+        "sterngate_import_profiles" => {
+            let input_path = arguments
+                .get("input_path")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing required 'input_path'")?;
+            let output_dir = arguments
+                .get("output_dir")
+                .and_then(|v| v.as_str())
+                .unwrap_or("profiles");
+            match sterngate_protocol::ProfileImporter::import_from_path(input_path, output_dir) {
+                Ok(report) => Ok(json!({
+                    "success": true,
+                    "report": report
+                })),
+                Err(e) => Err(format!("Profile import failed: {}", e)),
             }
         }
         _ => Err(format!("Unknown tool name: {}", name)),

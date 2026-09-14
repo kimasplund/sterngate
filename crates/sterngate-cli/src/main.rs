@@ -7,9 +7,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use sterngate_core::{
     lookup_routine_name, CascadeSeverity, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark,
-    DriveSummary, Dtc, EcuCatalog, FlashPackageManifest, FlashState, Language, SterngateError,
-    SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample,
-    VehicleGarage, VehicleProfile,
+    DriveSummary, Dtc, EcoStartStopMode, EcuCatalog, FirmwareVault, FlashPackageManifest,
+    FlashState, Language, SterngateError, SuspensionCorner, SuspensionCornerAction,
+    SuspensionLeakDetector, SuspensionSample, VehicleGarage, VehicleProfile,
 };
 use sterngate_hal::{OpenPortInterface, SocketCanInterface, VehicleInterface, VirtualCanInterface};
 use sterngate_mcp::McpServer;
@@ -233,6 +233,18 @@ enum FlashCommands {
     },
     /// Query current flashing engine status and API lock
     Status,
+    /// Scan local firmware vault for matching flash files
+    VaultScan {
+        /// Vault directory path
+        #[arg(short, long, default_value = "firmware_vault")]
+        path: PathBuf,
+        /// Filter by target ECU Hardware ID
+        #[arg(long)]
+        hw_id: Option<String>,
+        /// Filter by target ECU Software Calibration ID
+        #[arg(long)]
+        sw_id: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -275,6 +287,72 @@ enum ServiceCommands {
         /// Store zero-height driving calibration level
         #[arg(long)]
         calibrate: bool,
+    },
+    /// Configure vehicle maximum road speed limiter (VMax)
+    Vmax {
+        /// Desired speed limit in km/h (e.g. 250, 300)
+        #[arg(short, long)]
+        speed: u16,
+        /// Target vehicle VIN for Git garage commit
+        #[arg(long)]
+        vin: Option<String>,
+    },
+    /// Configure instrument cluster acoustic seatbelt warning chime
+    Seatbelt {
+        /// Mute acoustic seatbelt warning chime
+        #[arg(long)]
+        mute: bool,
+        /// Enable acoustic seatbelt warning chime
+        #[arg(long)]
+        enable: bool,
+        /// Target vehicle VIN for Git garage commit
+        #[arg(long)]
+        vin: Option<String>,
+    },
+    /// Configure instrument cluster remaining fuel in liters display (Restliteranzeige)
+    TankLiters {
+        /// Enable remaining fuel display in liters
+        #[arg(long)]
+        enable: bool,
+        /// Disable remaining fuel display in liters
+        #[arg(long)]
+        disable: bool,
+        /// Target vehicle VIN for Git garage commit
+        #[arg(long)]
+        vin: Option<String>,
+    },
+    /// Configure Front SAM intelligent cornering fog lights (Abbiegelicht)
+    CorneringLights {
+        /// Enable intelligent cornering fog lights
+        #[arg(long)]
+        enable: bool,
+        /// Disable intelligent cornering fog lights
+        #[arg(long)]
+        disable: bool,
+        /// Target vehicle VIN for Git garage commit
+        #[arg(long)]
+        vin: Option<String>,
+    },
+    /// Configure ECO Start-Stop memory behavior
+    Eco {
+        /// ECO Start-Stop mode ("always-on", "memory" / "last-state", "default-off")
+        #[arg(short, long, default_value = "memory")]
+        mode: String,
+        /// Target vehicle VIN for Git garage commit
+        #[arg(long)]
+        vin: Option<String>,
+    },
+    /// Optimize EGR adaptation (+40 mg soot reduction offset and stop relearn)
+    Egr {
+        /// Target vehicle VIN for Git garage commit
+        #[arg(long)]
+        vin: Option<String>,
+    },
+    /// Reset AdBlue / SCR 800km emergency start lockout counter & adaptations
+    Adblue {
+        /// Target vehicle VIN for Git garage commit
+        #[arg(long)]
+        vin: Option<String>,
     },
 }
 
@@ -932,6 +1010,72 @@ async fn main() -> Result<()> {
                     println!("Flashing Engine State: Idle (API Lock: disengaged)");
                     return Ok(());
                 }
+                FlashCommands::VaultScan { path, hw_id, sw_id } => {
+                    println!("============================================================");
+                    println!("  LOCAL FIRMWARE VAULT SCANNER");
+                    println!("============================================================");
+                    println!("  Directory: {}", path.display());
+                    let files = FirmwareVault::scan_directory(&path);
+                    println!(
+                        "  Found {} firmware binary file(s) in vault.\n",
+                        files.len()
+                    );
+
+                    let filtered: Vec<_> = files
+                        .into_iter()
+                        .filter(|f| {
+                            if let Some(ref hw) = hw_id {
+                                if let Some(ref f_hw) = f.signatures.bosch_hw_id {
+                                    if !f_hw.to_lowercase().contains(&hw.to_lowercase()) {
+                                        return false;
+                                    }
+                                } else {
+                                    return false;
+                                }
+                            }
+                            if let Some(ref sw) = sw_id {
+                                if let Some(ref f_sw) = f.signatures.bosch_sw_id {
+                                    if !f_sw.to_lowercase().contains(&sw.to_lowercase()) {
+                                        return false;
+                                    }
+                                } else {
+                                    return false;
+                                }
+                            }
+                            true
+                        })
+                        .collect();
+
+                    for f in &filtered {
+                        println!("------------------------------------------------------------");
+                        println!("  File:            {}", f.filename);
+                        println!("  Path:            {}", f.file_path);
+                        println!(
+                            "  Size:            {} bytes ({:.2} KB)",
+                            f.file_size_bytes,
+                            f.file_size_bytes as f64 / 1024.0
+                        );
+                        println!("  Format:          {}", f.format);
+                        println!("  SHA-256:         {}", f.signatures.sha256_checksum);
+                        println!("  CRC32:           0x{:08X}", f.signatures.crc32_checksum);
+                        if let Some(ref hw) = f.signatures.bosch_hw_id {
+                            println!("  Hardware ID:     {}", hw);
+                        }
+                        if let Some(ref sw) = f.signatures.bosch_sw_id {
+                            println!("  Software ID:     {}", sw);
+                        }
+                        if let Some(ref part) = f.signatures.oem_part_number {
+                            println!("  Part Number:     {}", part);
+                        }
+                    }
+                    if !filtered.is_empty() {
+                        println!("------------------------------------------------------------");
+                        println!("  Total matched: {} file(s)", filtered.len());
+                    } else if hw_id.is_some() || sw_id.is_some() {
+                        println!("  No firmware binaries matched the specified filter criteria.");
+                    }
+                    return Ok(());
+                }
             },
             Commands::Service { action } => match action {
                 ServiceCommands::Sbc {
@@ -1091,6 +1235,331 @@ async fn main() -> Result<()> {
                     .await?;
 
                     println!("✓ {}", res);
+                    return Ok(());
+                }
+                ServiceCommands::Vmax { speed, vin } => {
+                    let mut iface = open_interface(&cli.can_interface).await;
+                    println!("============================================================");
+                    println!("  CONFIGURING VEHICLE SPEED LIMITER (VMax)");
+                    println!("============================================================");
+                    println!("  Target Speed: {} km/h", speed);
+                    let status = ServiceRoutineManager::configure_speed_limiter(
+                        iface.as_mut(),
+                        0x7E0,
+                        0x7E8,
+                        speed,
+                    )
+                    .await?;
+                    println!("  ✓ {}", status.message);
+                    if let Some(prev) = status.previous_limit_kmh {
+                        println!("  • Previous limit: {} km/h", prev);
+                    }
+                    println!("  • New limit:      {} km/h", status.speed_limit_kmh);
+
+                    let target_vin = vin.unwrap_or_else(|| "WDB2112061A000001".into());
+                    let garage = VehicleGarage::new(VehicleGarage::default_path());
+                    let note = format!(
+                        "Vehicle speed limiter (VMax) set to {} km/h",
+                        status.speed_limit_kmh
+                    );
+                    let _ = garage.save_coding(
+                        &target_vin,
+                        &status.module,
+                        &format!("{} km/h", status.speed_limit_kmh),
+                        None,
+                        &note,
+                    );
+                    println!(
+                        "  ✓ Committed calibration change to Vehicle Garage Git history (VIN: {})",
+                        target_vin
+                    );
+                    return Ok(());
+                }
+                ServiceCommands::Seatbelt { mute, enable, vin } => {
+                    let mut iface = open_interface(&cli.can_interface).await;
+                    let acoustic_enabled = enable && !mute;
+                    println!("============================================================");
+                    println!("  INSTRUMENT CLUSTER SEATBELT WARNING CHIME");
+                    println!("============================================================");
+                    println!(
+                        "  Target Acoustic Setting: {}",
+                        if acoustic_enabled { "ENABLED" } else { "MUTED" }
+                    );
+                    let status = ServiceRoutineManager::configure_seatbelt_chime(
+                        iface.as_mut(),
+                        0x7E4,
+                        0x7EC,
+                        acoustic_enabled,
+                    )
+                    .await?;
+                    println!("  ✓ {}", status.message);
+                    println!(
+                        "  • Acoustic chime active: {}",
+                        status.acoustic_chime_enabled
+                    );
+                    println!(
+                        "  • Visual warning lamp:   {}",
+                        status.visual_warning_lamp_active
+                    );
+
+                    let target_vin = vin.unwrap_or_else(|| "WDB2112061A000001".into());
+                    let garage = VehicleGarage::new(VehicleGarage::default_path());
+                    let note = format!(
+                        "Instrument cluster seatbelt acoustic warning chime {}",
+                        if acoustic_enabled { "enabled" } else { "muted" }
+                    );
+                    let _ = garage.save_coding(
+                        &target_vin,
+                        &status.module,
+                        if acoustic_enabled {
+                            "CHIME_ON"
+                        } else {
+                            "CHIME_MUTED"
+                        },
+                        None,
+                        &note,
+                    );
+                    println!(
+                        "  ✓ Committed calibration change to Vehicle Garage Git history (VIN: {})",
+                        target_vin
+                    );
+                    return Ok(());
+                }
+                ServiceCommands::TankLiters {
+                    enable,
+                    disable,
+                    vin,
+                } => {
+                    let mut iface = open_interface(&cli.can_interface).await;
+                    let is_enabled = !disable || enable;
+                    println!("============================================================");
+                    println!("  INSTRUMENT CLUSTER REMAINING FUEL DISPLAY (RESTLITER)");
+                    println!("============================================================");
+                    println!(
+                        "  Setting: {}",
+                        if is_enabled { "ENABLE" } else { "DISABLE" }
+                    );
+                    let status = ServiceRoutineManager::configure_tank_liters_display(
+                        iface.as_mut(),
+                        0x7E4,
+                        0x7EC,
+                        is_enabled,
+                    )
+                    .await?;
+                    println!("  ✓ {}", status.message);
+                    println!(
+                        "  • Digital exact liters display: {}",
+                        status.exact_liters_display_enabled
+                    );
+
+                    let target_vin = vin.unwrap_or_else(|| "WDB2112061A000001".into());
+                    let garage = VehicleGarage::new(VehicleGarage::default_path());
+                    let note = format!(
+                        "Instrument cluster exact tank liters display (Restliteranzeige) {}",
+                        if is_enabled { "enabled" } else { "disabled" }
+                    );
+                    let _ = garage.save_coding(
+                        &target_vin,
+                        &status.module,
+                        if is_enabled {
+                            "RESTLITER_ON"
+                        } else {
+                            "RESTLITER_OFF"
+                        },
+                        None,
+                        &note,
+                    );
+                    println!(
+                        "  ✓ Committed calibration change to Vehicle Garage Git history (VIN: {})",
+                        target_vin
+                    );
+                    return Ok(());
+                }
+                ServiceCommands::CorneringLights {
+                    enable,
+                    disable,
+                    vin,
+                } => {
+                    let mut iface = open_interface(&cli.can_interface).await;
+                    let is_enabled = !disable || enable;
+                    println!("============================================================");
+                    println!("  FRONT SAM INTELLIGENT CORNERING FOG LIGHTS");
+                    println!("============================================================");
+                    println!(
+                        "  Setting: {}",
+                        if is_enabled { "ENABLE" } else { "DISABLE" }
+                    );
+                    let status = ServiceRoutineManager::configure_cornering_lights(
+                        iface.as_mut(),
+                        0x7E2,
+                        0x7EA,
+                        is_enabled,
+                    )
+                    .await?;
+                    println!("  ✓ {}", status.message);
+                    println!(
+                        "  • Cornering fog lights active: {}",
+                        status.cornering_lights_enabled
+                    );
+                    println!(
+                        "  • Activation threshold:       < {} km/h",
+                        status.activation_threshold_kmh
+                    );
+
+                    let target_vin = vin.unwrap_or_else(|| "WDB2112061A000001".into());
+                    let garage = VehicleGarage::new(VehicleGarage::default_path());
+                    let note = format!(
+                        "Front SAM intelligent cornering fog lights {}",
+                        if is_enabled { "enabled" } else { "disabled" }
+                    );
+                    let _ = garage.save_coding(
+                        &target_vin,
+                        &status.module,
+                        if is_enabled {
+                            "CORNERING_LIGHTS_ON"
+                        } else {
+                            "CORNERING_LIGHTS_OFF"
+                        },
+                        None,
+                        &note,
+                    );
+                    println!(
+                        "  ✓ Committed calibration change to Vehicle Garage Git history (VIN: {})",
+                        target_vin
+                    );
+                    return Ok(());
+                }
+                ServiceCommands::Eco { mode, vin } => {
+                    let mut iface = open_interface(&cli.can_interface).await;
+                    let parsed_mode = match mode.to_lowercase().as_str() {
+                        "always-on" | "always_on" | "on" => EcoStartStopMode::AlwaysOn,
+                        "memory" | "last-state" | "last_state" | "remember" => {
+                            EcoStartStopMode::RememberLastState
+                        }
+                        "default-off" | "default_off" | "off" => EcoStartStopMode::DefaultOff,
+                        other => {
+                            anyhow::bail!(
+                                "Invalid ECO mode '{}'. Choose: 'always-on', 'memory', or 'default-off'",
+                                other
+                            );
+                        }
+                    };
+                    println!("============================================================");
+                    println!("  ECO START-STOP MEMORY CONFIGURATION");
+                    println!("============================================================");
+                    println!("  Target Mode: {}", parsed_mode.as_str());
+                    let status = ServiceRoutineManager::configure_eco_start_stop(
+                        iface.as_mut(),
+                        0x7E0,
+                        0x7E8,
+                        parsed_mode,
+                    )
+                    .await?;
+                    println!("  ✓ {}", status.message);
+                    if let Some(prev) = status.previous_mode {
+                        println!("  • Previous Mode: {}", prev.as_str());
+                    }
+                    println!("  • Active Mode:   {}", status.mode.as_str());
+
+                    let target_vin = vin.unwrap_or_else(|| "WDB2112061A000001".into());
+                    let garage = VehicleGarage::new(VehicleGarage::default_path());
+                    let note = format!(
+                        "Updated ECO Start-Stop configuration: {}",
+                        status.mode.as_str()
+                    );
+                    let _ = garage.save_coding(
+                        &target_vin,
+                        &status.module,
+                        &format!("{:02X}", status.did),
+                        None,
+                        &note,
+                    );
+                    println!(
+                        "  ✓ Committed calibration change to Vehicle Garage Git history (VIN: {})",
+                        target_vin
+                    );
+                    return Ok(());
+                }
+                ServiceCommands::Egr { vin } => {
+                    let mut iface = open_interface(&cli.can_interface).await;
+                    println!("============================================================");
+                    println!("  EGR ADAPTATION & SOOT REDUCTION OPTIMIZATION");
+                    println!("============================================================");
+                    let status = ServiceRoutineManager::optimize_egr_adaptation(
+                        iface.as_mut(),
+                        0x7E0,
+                        0x7E8,
+                    )
+                    .await?;
+                    println!("  ✓ {}", status.message);
+                    println!(
+                        "  • Air Mass Positive Offset: +{:.1} mg/hub",
+                        status.air_mass_offset_mg
+                    );
+                    println!("  • Lower Stops Relearned:    {}", status.stops_relearned);
+
+                    let target_vin = vin.unwrap_or_else(|| "WDB2112061A000001".into());
+                    let garage = VehicleGarage::new(VehicleGarage::default_path());
+                    let note = "EGR adaptation optimized (+40 mg soot reduction offset applied)";
+                    let _ = garage.save_coding(
+                        &target_vin,
+                        &status.module,
+                        "EGR_AIRMASS_+40MG",
+                        None,
+                        note,
+                    );
+                    println!(
+                        "  ✓ Committed calibration change to Vehicle Garage Git history (VIN: {})",
+                        target_vin
+                    );
+                    return Ok(());
+                }
+                ServiceCommands::Adblue { vin } => {
+                    let mut iface = open_interface(&cli.can_interface).await;
+                    println!("============================================================");
+                    println!("  🚨 ADBLUE / SCR 800KM EMERGENCY LOCKOUT RESET");
+                    println!("============================================================");
+                    println!("  Executing cryptographic unlock (Level 01) and adaptation wipe...");
+                    let status =
+                        ServiceRoutineManager::reset_adblue_countdown(iface.as_mut(), 0x7E0, 0x7E8)
+                            .await?;
+                    if status.success {
+                        println!("  ✓ {}", status.message);
+                        println!(
+                            "  • Security Access Unlocked:     {}",
+                            status.security_unlocked
+                        );
+                        println!(
+                            "  • Countdown Counter Reset:      {}",
+                            status.countdown_reset
+                        );
+                        println!(
+                            "  • NOx Adaptations Cleared:      {}",
+                            status.adaptations_cleared
+                        );
+                        println!(
+                            "  • Ultrasonic Level Calibrated:  {}",
+                            status.level_sensor_calibrated
+                        );
+
+                        let target_vin = vin.unwrap_or_else(|| "WDB2112061A000001".into());
+                        let garage = VehicleGarage::new(VehicleGarage::default_path());
+                        let note =
+                            "AdBlue / SCR emergency lockout counter and NOx adaptations reset";
+                        let _ = garage.save_coding(
+                            &target_vin,
+                            "CR4/SCR",
+                            "ADBLUE_LOCKOUT_CLEARED",
+                            None,
+                            note,
+                        );
+                        println!(
+                            "  ✓ Committed calibration change to Vehicle Garage Git history (VIN: {})",
+                            target_vin
+                        );
+                    } else {
+                        eprintln!("  ❌ {}", status.message);
+                    }
                     return Ok(());
                 }
             },

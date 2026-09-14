@@ -572,4 +572,76 @@ mod tests {
             4
         );
     }
+
+    #[tokio::test]
+    async fn test_mcp_workflows_vault_and_importer_tools() {
+        // 1. sterngate_guided_workflow: vmax
+        let vmax_res = tools::handle_tool_call(
+            "sterngate_guided_workflow",
+            &json!({
+                "workflow": "vmax",
+                "speed_limit_kmh": 250,
+                "vin": "WDB2112061A999888"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(vmax_res["success"].as_bool().unwrap());
+        assert_eq!(vmax_res["speed_limit_kmh"].as_u64().unwrap(), 250);
+
+        // 2. sterngate_guided_workflow: seatbelt_chime
+        let seatbelt_res = tools::handle_tool_call(
+            "sterngate_guided_workflow",
+            &json!({
+                "workflow": "seatbelt_chime",
+                "enabled": false,
+                "vin": "WDB2112061A999888"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(seatbelt_res["success"].as_bool().unwrap());
+        assert!(!seatbelt_res["acoustic_chime_enabled"].as_bool().unwrap());
+
+        // 3. sterngate_guided_workflow: tank_liters
+        let tank_res = tools::handle_tool_call(
+            "sterngate_guided_workflow",
+            &json!({
+                "workflow": "tank_liters",
+                "enabled": true,
+                "vin": "WDB2112061A999888"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(tank_res["success"].as_bool().unwrap());
+        assert!(tank_res["exact_liters_display_enabled"].as_bool().unwrap());
+
+        // 4. sterngate_guided_workflow: cornering_lights
+        let corner_res = tools::handle_tool_call(
+            "sterngate_guided_workflow",
+            &json!({
+                "workflow": "cornering_lights",
+                "enabled": true,
+                "vin": "WDB2112061A999888"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(corner_res["success"].as_bool().unwrap());
+        assert!(corner_res["cornering_lights_enabled"].as_bool().unwrap());
+
+        // 5. sterngate_vault_scan
+        let vault_res = tools::handle_tool_call(
+            "sterngate_vault_scan",
+            &json!({
+                "path": "profiles",
+                "hw_id": "0281012224",
+                "sw_id": "1037365000"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(vault_res["success"].as_bool().unwrap());
+    }
 }
