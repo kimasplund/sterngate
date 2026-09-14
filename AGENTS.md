@@ -59,12 +59,16 @@ crates/
    - `CompressorProtectionGuard` & `SuspensionLeakDetector`: Thermal watchdog (40s auto-cutoff) and pneumatic leak diagnostics.
    - `VehicleGarage` & `DecodedVin`: Local Git-backed per-vehicle configuration tracking and VIN decoder.
    - `DriveBenchmark`: High-frequency drive telemetry sampling and A/B comparative benchmark analysis.
+   - `BoschChecksumSolver` & `BoschMapDetector`: Automotive calibration engine for Bosch EDC16/EDC17 partitioned 32-bit block checksum recalculation and automatic map detection (torque, boost, rail, smoke limiters).
+   - `StageGenerator`: Automated Stage 1 (+18% torque), Stage 2 (+25% torque, DPF/EGR off), and custom DTC suppression (`p_codes`) calibration synthesizer.
+   - `SterngateMod`: Shareable `.sgmod` mod package system with ASCII armor and Reed-Solomon $GF(2^8)$ error-correction parity.
 
 2. **`sterngate-hal`**:
    - `VehicleInterface`: The unified asynchronous trait (`send`, `recv`, `open`, `close`, `set_filter`).
    - `SocketCanInterface`: Native Linux CAN interface (`can0`, `can1`, `vcan0`).
    - `VirtualCanInterface`: In-memory emulator that simulates Mercedes W211 Central Gateway (N93), EDC16 engine, EGS52 transmission, and ABC/ENR suspension for offline tests.
-   - `J2534Interface`: PassThru API bridge for hardware like Tactrix OpenPort 2.0.
+   - `OpenPortInterface`: Native reverse-engineered Linux USB driver for Tactrix OpenPort 2.0 (clone-safe, direct hardware Pin 16 ADC battery voltage measurement).
+   - `J2534Interface`: PassThru API bridge.
 
 3. **`sterngate-protocol`**:
    - `IsoTpChannel`: Asynchronous ISO 15765-2 layer handling Single Frame, First Frame, Consecutive Frame, and Flow Control (`0x30`).
@@ -74,22 +78,32 @@ crates/
    - `VehicleScanner`: Multi-ECU gateway scanner, ENR compressor control, and ABC hydraulic surge limiter.
    - `BusDiscoverer`: CAN ID range probing (`0x700..0x7EF`), identification DID interrogation, and auto profile generation.
    - `ServiceRoutineManager`: Safety-critical workshop service routines (SBC pad mode 0 bar deactivation/reactivation, Common Rail IMA coding, suspension corner actuation).
+   - `VinAdaptationManager`: Donor replacement ECU Re-VIN adaptation with SecurityAccess unlock and EEPROM/Flash tracking.
+   - `ModRunner`: Validation, safety preconditions, and execution runner for `.sgmod` community packages.
 
 4. **`sterngate-p2p`**:
    - Wraps Iroh for P2P QUIC communication between `--bridge` (car-side SBC host) and `--tech` (remote technician client).
    - Generates and dials `NodeTicket` strings.
 
 5. **`sterngate-server`**:
-   - Exposes REST routes (`/api/v1/telemetry`, `/api/v1/dtc`, `/api/v1/coding`, `/api/v1/flash`, `/api/v1/vehicles`, `/api/v1/analyze/cascades`, `/api/v1/abc/control`, `/api/v1/service/sbc`, `/api/v1/service/ima`, `/api/v1/service/suspension`, `/api/v1/diag/discover`, `/api/v1/diag/report.html`).
-   - Streams live parameters over WebSockets at 20–50 Hz.
+   - Modular `routes/` architecture with 10 domain submodules:
+     * `telemetry`: 20–50 Hz telemetry sampling and continuous CSV flight recorder.
+     * `diagnostics`: DTC retrieval, memory clearing, multi-ECU quick scan, bus discovery, and standalone HTML diagnostic reports.
+     * `flashing`: Flash progress monitoring, ROM inspection, staging, and local firmware vault scanner.
+     * `service`: Workshop routines, SBC deactivation/reactivation, Common Rail IMA coding, and air suspension leveling.
+     * `coding`: Variant coding read/write, Re-VIN adaptation, and one-click guided workflows (VMax, AdBlue, EGR, seatbelt chime, tank liters, cornering lights).
+     * `vehicle`: Vehicle profiles, 1,340+ ECU catalog search, and Git garage history tracking.
+     * `analytics`: Suspension pneumatic leak detector, drive run A/B comparative benchmarking, 13 cascades of death watchdog, and thermal compressor/ABC guards.
+     * `community_mods`: `.sgmod` package inspection, validation, creation, and deployment.
+     * `tuning`: ROM map detection, Stage 1/2 generation, DTC suppression masks, and Bosch MPC5xx block checksum solvers.
    - Serves the embedded single-page dashboard at `http://localhost:8080` localized in English, German, and Swedish.
 
 6. **`sterngate-mcp`**:
-   - Implements JSON-RPC 2.0 stdio Model Context Protocol.
-   - Enables AI agents to read DTCs, inspect live telemetry, check vehicle profiles, evaluate 13 cascades of death, actuate compressor/ABC safety guards, run pre-flash checks, discover uncataloged ECUs, dispatch workshop service routines, execute detached flashing, and export HTML diagnostic reports.
+   - Implements JSON-RPC 2.0 stdio Model Context Protocol (38 tools across 7 modular domain executors).
+   - Enables AI agents to read DTCs, stream telemetry, run pre-flash checks, analyze 13 cascades of death, actuate safety guards, execute detached flashing, apply community mods, scan ROM calibration maps, generate Stage 1/2 tunes, suppress DTC error masks, and recalculate Bosch checksums.
 
 7. **`sterngate-cli`**:
-   - Clap CLI interface unifying all operational modes:
+   - Modular architecture (`args.rs` Clap parser + `commands/` directory with 10 command handlers):
      * `sterngate --local`: Standalone SBC + local UI.
      * `sterngate --bridge` (alias `--car`): In-car diagnostic bridge + Iroh P2P host.
      * `sterngate --tech --ticket <TICKET>` (alias `--ticket`): Remote technician diagnostic client.
@@ -97,22 +111,26 @@ crates/
      * `sterngate mock`: Virtual simulation mode for zero-hardware testing.
      * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities (dtc, live, clear, routine, scan, discover).
      * `sterngate flash <subcommand>`: Direct terminal ECU flashing suite (stage, preflight, start, status).
-     * `sterngate service <subcommand>`: Workshop service routines (sbc, ima, suspension).
-     * `sterngate coding <subcommand>`: Variant coding & Git garage history (read, write, backup, diff).
+     * `sterngate service <subcommand>`: Workshop service routines (sbc, ima, suspension, workflow).
+     * `sterngate coding <subcommand>`: Variant coding & Git garage history (read, write, backup, diff, revin).
      * `sterngate ecu <subcommand>`: 1,340+ ECU diagnostic catalog index (stats, search, inspect).
      * `sterngate profile <subcommand>`: Vehicle profile management (list, inspect, generate).
      * `sterngate analyze <subcommand>`: Predictive analytics and containment (suspension, compare, cascades, abc).
+     * `sterngate mod <subcommand>`: Shareable community mods (inspect, apply, create, library).
+     * `sterngate tune <subcommand>`: Binary ROM tuning & map calibration (scan, stage1, stage2, dtc-kill, checksum).
 
 ---
 
 ## 4. Progressive Skills Suite
 
 Specialized agent skills are maintained under `.agents/skills/`:
-- **`sterngate-ops`**: Operational runbook for launching and troubleshooting all CLI modes.
-- **`sterngate-mcp`**: Integration guide for calling Sterngate MCP tools and resources.
+- **`sterngate-ops`**: Operational runbook for launching and troubleshooting all CLI modes, REST APIs, and native OpenPort hardware.
+- **`sterngate-mcp`**: Integration guide for calling all 38 Sterngate MCP tools and resources over JSON-RPC.
 - **`vehicle-profiles`**: Guide for converting CBF/ODX files and defining JSON vehicle profiles.
-- **`safe-flashing`**: Pre-flight checklist, voltage interlocks, and recovery runbooks.
+- **`safe-flashing`**: Pre-flight checklist, voltage interlocks, flashing state machine, and recovery runbooks.
 - **`community-mods`**: Authoring, validation, Reed-Solomon FEC self-healing, and deployment for shareable `.sgmod` packages.
+- **`ecu-tuning`**: Bosch EDC16/EDC17 calibration map scanning, Stage 1/2 generation, DTC kill tables, and MPC5xx partitioned checksum calculation.
+- **`bench-recovery`**: Hardware pinouts, bench wiring harnesses, BDM probe frame positioning, and unbricking/cloning for Bosch EDC16C31 / CP31 using K-Tag V7.020, BDM100, and Sterngate.
 
 Whenever you add or modify protocols, CLI flags, or profile schemas, you **MUST** update the corresponding skill file.
 

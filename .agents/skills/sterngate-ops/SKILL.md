@@ -493,3 +493,78 @@ sterngate --openport diag live
 # Run flash preflight with hardware voltage interlock
 sterngate --openport flash preflight --manifest flash_pkg/edc16_stage1.json --rom flash_pkg/edc16_stage1.bin
 ```
+
+---
+
+## 14. Binary ROM Calibration, Stage Tuning & DTC Suppression (`sterngate tune`)
+
+Sterngate includes an automated ECU map detection, stage tune generator, and Bosch MPC5xx block checksum engine:
+
+### CLI Commands
+```bash
+# 1. Scan binary ROM dump for calibration maps, hardware IDs, and checksum blocks
+sterngate tune scan --rom /path/to/stock_edc16.bin
+
+# 2. Generate verified Stage 1 calibration package (+18% torque, +120 mbar boost, +50 bar rail)
+sterngate tune stage1 --rom /path/to/stock_edc16.bin \
+  --chassis "W211 E280 CDI" --ecu EDC16CP31 --output stage1.sgmod --armor
+
+# 3. Generate Stage 2 calibration package (+25% torque, DPF Off, EGR zeroing, P0401/P2002 suppressed)
+sterngate tune stage2 --rom /path/to/stock_edc16.bin \
+  --chassis "W211 E280 CDI" --ecu EDC16CP31 --output stage2.sgmod --armor
+
+# 4. Suppress specific Diagnostic Trouble Codes (zero error enable switches in ROM table)
+sterngate tune dtc-kill --rom /path/to/stock_edc16.bin --codes P0401,P2002 \
+  --output dtc_delete.sgmod --armor
+
+# 5. Verify and recalculate Bosch MPC5xx 32-bit block checksums
+sterngate tune checksum --rom /path/to/modified_rom.bin --fix --output /path/to/fixed_rom.bin
+```
+
+### REST API Endpoints
+```bash
+# Scan ROM
+curl -s -X POST http://localhost:8080/api/v1/tuning/scan \
+  -H "Content-Type: application/json" \
+  -d '{"rom_path": "/path/to/stock.bin"}' | jq .
+
+# Generate Stage 1 Tune
+curl -s -X POST http://localhost:8080/api/v1/tuning/stage1 \
+  -H "Content-Type: application/json" \
+  -d '{"rom_path": "/path/to/stock.bin", "chassis": "W211 E280 CDI", "ecu_name": "EDC16CP31"}' | jq .
+
+# Suppress DTC Error Masks
+curl -s -X POST http://localhost:8080/api/v1/tuning/dtc/kill \
+  -H "Content-Type: application/json" \
+  -d '{"rom_path": "/path/to/stock.bin", "p_codes": ["P0401", "P2002"]}' | jq .
+
+# Verify & Recalculate Checksums
+curl -s -X POST http://localhost:8080/api/v1/tuning/checksum/fix \
+  -H "Content-Type: application/json" \
+  -d '{"rom_path": "/path/to/modified.bin", "output_path": "/path/to/fixed.bin"}' | jq .
+```
+
+---
+
+## 15. Community Mod Packages & Reed-Solomon Parity (`sterngate mod`)
+
+Sterngate allows packaging variant coding calibrations, DID patches, and flash modifications into shareable `.sgmod` packages protected by Reed-Solomon $GF(2^8)$ error-correction:
+
+### CLI Commands
+```bash
+# 1. Inspect mod package compatibility, target vehicle rules, and test FEC self-healing
+sterngate mod inspect --input mods/w211_top_speed_300.sgmod
+
+# 2. Safely apply mod to vehicle with automatic pre-mod Git garage snapshotting
+sterngate mod apply --input mods/w211_top_speed_300.sgmod --vin WDB2112061A000001
+
+# 3. Create a new community mod package
+sterngate mod create --name "EGR Airmass Offset" --author "TunerKim" \
+  --description "Increases fresh air mass by 40mg to minimize intake manifold soot" \
+  --chassis W211 --ecu EDC16 --did 0x0115 --data "0028" \
+  --output mods/egr_offset.sgmod --armor
+
+# 4. List all installed mod packages in local library
+sterngate mod library
+```
+

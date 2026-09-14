@@ -62,6 +62,7 @@ Or when running the compiled release binary:
 | `sterngate_list_vehicles` | *(None)* | Lists all recognized vehicles stored in local Git garage by VIN with model, scan count, and last scanned date. |
 | `sterngate_analyze_suspension_leak` | `duration_min` (opt), `left_rear_start_mm` (opt), `left_rear_end_mm` (opt), `right_rear_start_mm` (opt), `right_rear_end_mm` (opt), `compressor_run_time_sec` (opt), `compressor_duty_cycle_pct` (opt) | Evaluates Mercedes S211 rear air suspension (ENR) or W211 AIRMATIC for pneumatic leaks, drop rate mm/h, L/R height asymmetry, and compressor duty cycle strain. |
 | `sterngate_protect_compressor` | `action` (`inhibit`, `restore`, `workshop`), `reason` (opt) | Controls active compressor protection on Mercedes S211 ENR / W211 AIRMATIC to prevent compressor motor burnout and relay welding during air leaks. |
+| `sterngate_control_abc_limiter` | `action` (`dump`, `lock`, `restore`) | Controls Active Body Control (ABC) hydraulic surge limiter: dumps system to 120 bar safe pressure (Routine 0x0220) or locks strut isolation valves (0x0221) to prevent catastrophic fluid spray over hot exhaust. |
 | `sterngate_check_cascade_warnings` | `sbc_accumulator_pressure_bar` (opt), `max_cylinder_balance_trim_mm3` (opt), `tcc_slip_rpm` (opt), `compressor_continuous_run_sec` (opt), `suspension_height_drop_rate_mm_h` (opt) | Inspects vehicle vitals against 7 notorious Mercedes 'Cascade of Death' failure modes (SBC accumulator, Black Death blow-by, 722.6 pilot bushing wicking, TCC slip, DPF/M55 short, cam magnet oil wicking, air suspension). |
 | `sterngate_compare_drive_runs` | `run_a` (opt), `run_b` (opt), `baseline_...` (opt), `target_...` (opt) | Performs A/B comparative benchmark between two drive telemetry runs to evaluate whether parameter/mechanical changes were beneficial (fuel consumption, TCC slip, boost). |
 | `sterngate_verify_flash_staging` | `target_module`, `expected_hw_id`, `sha256`, `crc32` | Evaluates a staged flash binary against safety checks (battery voltage $\ge 12.5\text{ V}$, CRC32, SHA256, HW match). |
@@ -161,5 +162,18 @@ When a user asks:
 - *"Find which chassis use the 722.9 7G-Tronic transmission ECU:"*
   1. Call `sterngate_inspect_ecu_definition` with `{"ecu": "VGSNAG2"}`.
   2. Inspect the returned `chassis_supported` array (e.g. W204, W212, W221, W164).
+- *"Can you tune my ECU binary for Stage 1 or Stage 2?"*
+  1. Call `sterngate_scan_rom_maps` with `rom_path` or `rom_base64` to detect Bosch maps, hardware/software IDs, and MPC5xx checksum status.
+  2. Call `sterngate_generate_stage_tune` specifying `stage: 1` (+18% peak torque, +120 mbar boost, +50 bar rail) or `stage: 2` (+25% peak torque, DPF delete, EGR zeroing).
+  3. The tool generates an armored, self-healing `.sgmod` package with Reed-Solomon parity ready for direct flash deployment.
+- *"I replaced my DPF with a downpipe and need to suppress DTC P0401 and P2002:"*
+  1. Call `sterngate_kill_dtc` with `{"p_codes": ["P0401", "P2002"], "chassis": "W211", "ecu_name": "EDC16"}`.
+  2. The tool zeros the exact 8-bit/16-bit error enable masks in the binary ROM table and packages it into an armored `.sgmod`.
+- *"Verify and fix Bosch MPC5xx block checksums after editing a ROM:"*
+  1. Call `sterngate_solve_checksum` with `{"rom_path": "/path/to/rom.bin", "fix": true, "output_path": "/path/to/rom_fixed.bin"}`.
+  2. The solver computes 32-bit sums across all defined blocks and patches the MPC5xx checksum vectors.
+- *"I installed a donor/salvage replacement ECU from another vehicle:"*
+  1. Call `sterngate_adapt_donor_ecu_vin` with `{"ecu": "CR4", "new_vin": "WDB2112061A999888"}`.
+  2. The tool unlocks the donor ECU via seed-key SecurityAccess, rewrites the 17-character VIN via UDS DID 0xF190, verifies the readback, and commits the adaptation to the vehicle's Git garage repository.
 
 
