@@ -19,6 +19,12 @@
 ## Key Capabilities
 
 - **13 Mercedes Cascades of Death Monitored**: Autonomous early warning watchdog that detects failing $1.50–$160 wear parts before they cause catastrophic $2,000–$10,000+ mechanical or electrical destruction (SBC accumulator, Black Death washers, pilot bushing ATF wicking, TCC slip, DPF/M55 swirl motor, camshaft magnets, air suspension compressor burnout, ABC pulsation damper surge, ESL steering lock seizure, M272/M273 balance shaft wear, Valeo radiator glycol contamination, SAM water ingress, and OM642 oil cooler starvation).
+- **Automated ECU Calibration & Stage 1/2 Tuning Engine**: Reverse-engineered Bosch map detector scans raw ROM binaries to locate Driver Wish, Torque Limiter, Smoke Limiter ($\lambda \ge 1.15$), Boost Target, Rail Pressure, and SVBL scalars. Automatically synthesizes verified Stage 1 (+18% torque, +120 mbar boost, +50 bar rail) and Stage 2 (+25% torque, +200 mbar boost, DPF delete, EGR zeroing) calibration packages.
+- **Bosch MPC5xx 32-Bit Partitioned Block Checksums**: Autonomous checksum engine recalculates 32-bit inverted carry checksums across Bootloader, Firmware Core, and Calibration blocks in milliseconds, eliminating ECU bricking after tuning.
+- **Precision DTC Suppression (Error Switch Table Zeroing)**: Selectively zeroes individual 8-bit/16-bit error enable switches in the Flash ROM table (e.g. `P0401`, `P2002`) without disabling unrelated diagnostic trouble codes.
+- **Shareable Community Mod Packages (`.sgmod`)**: Secure, portable calibration format featuring ASCII armor and Reed-Solomon $GF(2^8)$ error-correction parity—capable of auto-repairing up to 8 damaged bytes from copy-paste corruption.
+- **Donor Replacement ECU Re-VIN Adaptation**: Seamlessly pairs salvage/donor engine control modules by unlocking seed-key SecurityAccess, reprogramming the 17-character vehicle identification number via UDS DID 0xF190, and snapshotting the change in Git garage history.
+- **One-Click Guided Workshop Procedures**: Pre-tested workshop routines for VMax top speed limiter configuration, AdBlue/SCR emergency lockout reset, EGR soot reduction (+40mg offset), seatbelt chime muting, exact tank liters display (Restliteranzeige), and cornering fog lights.
 - **Active Hardware Safety Guards**: Software-controlled kill-switches and pressure limiters:
   * **ENR / AIRMATIC Compressor Guard**: Autonomous thermal watchdog with 40s continuous run cutoff, 180s cooldown, and Routine `0x0210` safe mode relay disconnect.
   * **ABC Hydraulic Surge Limiter**: Routine `0x0220` pressure dump (reduce 200 bar to 120 bar safe fallback) and Routine `0x0221` strut isolation valve lock to prevent line explosion over hot exhaust.
@@ -31,7 +37,7 @@
 - **Universal Modularity**: Decouples vehicle profiles from executable code. Profiles are stored in declarative JSON schemas under `profiles/`. Switch between a Mercedes W211 OM646 CDI, a VAG Golf Mk6 2.0 TDI (EDC17 + DSG), or a BMW E90 3.0d (DDE6) without recompiling the binary.
 - **Decoupled Safe Flashing**: Atomic local file staging, strict pre-flight safety gates (voltage $\ge 12.5\text{ V}$, SHA256 & Bosch CRC32 verification, HW/SW calibration match), and a detached Tokio worker immune to browser closes or network drops.
 - **P2P Remote Operations (Iroh)**: Integrated peer-to-peer QUIC tunneling allows an end customer to plug the device into their OBD port and share a short Node Ticket with a remote technician anywhere in the world—punching through carrier-grade NATs without port forwarding.
-- **Built-in Model Context Protocol (MCP) Server**: Exposes diagnostic routines, live telemetry snapshots, fault code scanning, 13-cascade checks, safety limiters, and flash safety verification directly to AI agents.
+- **Built-in Model Context Protocol (MCP) Server**: 38 standardized tools across 7 domains exposing live telemetry, diagnostic scanning, 13 cascades of death, flashing safety gates, ECU tuning, DTC suppression, and checksum recalculation directly to AI agents.
 - **Hardware Abstraction Layer (HAL)**: Native support for Linux SocketCAN (`can0`, CANable, gs_usb, Candlelight, SPI MCP2518FD), native Tactrix OpenPort 2.0 (`--openport`), SAE J2534 PassThru, and zero-hardware virtual simulation.
 
 ---
@@ -300,6 +306,89 @@ sterngate coding diff --vin WDB2112061A000001
 Generate a self-contained, beautifully styled HTML diagnostic report for print or customer handoff:
 ```bash
 sterngate diag scan --export-html report.html --lang en
+```
+
+---
+
+## 11. Binary ROM Map Scanning, Stage 1/2 Tuning & Bosch Checksums (`sterngate tune`)
+
+Sterngate features an automated calibration engine capable of scanning raw ROM binaries, synthesizing Stage 1/2 tunes, zeroing DTC error switches, and recalculating Bosch MPC5xx 32-bit block checksums:
+
+```bash
+# 1. Scan binary ROM dump for calibration maps, hardware IDs, and checksum blocks
+sterngate tune scan --rom stock_edc16.bin
+
+# 2. Synthesize verified Stage 1 tune (+18% torque, +120 mbar boost, +50 bar rail, stock emissions)
+sterngate tune stage1 --rom stock_edc16.bin \
+  --chassis "W211 E280 CDI" --ecu EDC16CP31 --output stage1.sgmod --armor
+
+# 3. Synthesize Stage 2 tune (+25% torque, DPF delete, EGR zeroed, P0401/P2002 suppressed)
+sterngate tune stage2 --rom stock_edc16.bin \
+  --chassis "W211 E280 CDI" --ecu EDC16CP31 --output stage2.sgmod --armor
+
+# 4. Precision DTC Suppression (zeroes single-byte error enable switches in ROM table)
+sterngate tune dtc-kill --rom stock_edc16.bin --codes P0401,P2002 \
+  --output dtc_delete.sgmod --armor
+
+# 5. Verify and recalculate Bosch MPC5xx 32-bit partitioned block checksums
+sterngate tune checksum --rom modified_rom.bin --fix --output fixed_rom.bin
+```
+
+---
+
+## 12. Shareable Community Mod Packages (`.sgmod`) & Reed-Solomon Parity (`sterngate mod`)
+
+Sterngate packages vehicle calibrations, DID configurations, and flash patches into portable `.sgmod` files protected by Reed-Solomon $GF(2^8)$ error-correction parity:
+
+```bash
+# 1. Inspect mod package compatibility, target vehicle rules, and test FEC self-healing
+sterngate mod inspect --input mods/w211_top_speed_300.sgmod
+
+# 2. Safely apply mod to vehicle with automatic pre-mod Git garage snapshotting
+sterngate mod apply --input mods/w211_top_speed_300.sgmod --vin WDB2112061A000001
+
+# 3. Author a new shareable community mod package
+sterngate mod create --name "EGR Airmass Offset" --author "TunerKim" \
+  --description "Increases fresh air mass by 40mg to minimize intake manifold soot" \
+  --chassis W211 --ecu EDC16 --did 0x0115 --data "0028" \
+  --output mods/egr_offset.sgmod --armor
+
+# 4. List all installed mod packages in local library
+sterngate mod library
+```
+
+---
+
+## 13. Donor ECU Re-VIN Adaptation & One-Click Guided Workflows
+
+Sterngate provides automated, guided workshop procedures that replace legacy Xentry engineering menus:
+
+### Donor Replacement ECU Re-VIN Adaptation
+Seamlessly pair salvage or replacement ECUs to the vehicle:
+```bash
+# Unlocks seed-key SecurityAccess, rewrites VIN (0xF190), verifies readback, commits to Git garage
+sterngate coding revin --ecu CR4 --vin WDB2112061A999888
+```
+
+### One-Click Guided Workshop Procedures
+```bash
+# Configure VMax top speed limiter (e.g. 250 km/h)
+sterngate service workflow vmax --speed 250
+
+# Mute instrument cluster seatbelt acoustic warning chime
+sterngate service workflow seatbelt --disable
+
+# Enable instrument cluster exact remaining fuel in liters (Restliteranzeige)
+sterngate service workflow tank-liters --enable
+
+# Enable front SAM cornering fog lights (Abbiegelicht)
+sterngate service workflow cornering --enable
+
+# Reset AdBlue / SCR emergency lockout counter and NOx adaptations
+sterngate service workflow adblue-reset
+
+# Optimize Common Rail EGR soot reduction offset (+40mg fresh air)
+sterngate service workflow egr-optimize
 ```
 
 ---
