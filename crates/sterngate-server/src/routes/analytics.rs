@@ -123,6 +123,17 @@ async fn control_compressor(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CompressorControlRequest>,
 ) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "API is locked during flash operation",
+            })),
+        )
+            .into_response();
+    }
+
     let action_str = payload.action.to_lowercase();
     let reason = payload
         .reason
@@ -247,6 +258,17 @@ async fn control_abc(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AbcControlRequest>,
 ) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "API is locked during flash operation",
+            })),
+        )
+            .into_response();
+    }
+
     let action_str = payload.action.to_lowercase();
     let mut iface = state.interface.lock().await;
     match VehicleScanner::control_abc_safety_limiter(&mut **iface, &action_str).await {
