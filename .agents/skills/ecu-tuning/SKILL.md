@@ -108,3 +108,4 @@ sterngate mod apply --input stage1_om646.sgmod --vin WDB2112061A000001
 2. Call `sterngate_generate_stage_tune` with `{"rom_path": "/path/to/rom.bin", "stage": 1, "chassis": "W211", "ecu_name": "EDC16"}`.
 3. Review the returned `.sgmod` package and summary metrics.
 4. Call `sterngate_apply_community_mod` with the generated package.
+
