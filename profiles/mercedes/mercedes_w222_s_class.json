@@ -1,0 +1,228 @@
+{
+  "profile_name": "mercedes_w222_s_class",
+  "oem": "Mercedes-Benz",
+  "chassis": "W222",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "MED177": {
+      "name": "MED177 (W222 S-Class (2013-2020))",
+      "names": {
+        "en": "MED177 Controller",
+        "de": "MED177 Steuergerät",
+        "sv": "MED177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CR60NFZ": {
+      "name": "CR60NFZ (W222 S-Class (2013-2020))",
+      "names": {
+        "en": "CR60NFZ Controller",
+        "de": "CR60NFZ Steuergerät",
+        "sv": "CR60NFZ Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W222 S-Class (2013-2020))",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ABC222": {
+      "name": "ABC222 (W222 S-Class (2013-2020))",
+      "names": {
+        "en": "ABC222 Controller",
+        "de": "ABC222 Steuergerät",
+        "sv": "ABC222 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ABR222": {
+      "name": "ABR222 (W222 S-Class (2013-2020))",
+      "names": {
+        "en": "ABR222 Controller",
+        "de": "ABR222 Steuergerät",
+        "sv": "ABR222 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EPKB222": {
+      "name": "EPKB222 (W222 S-Class (2013-2020))",
+      "names": {
+        "en": "EPKB222 Controller",
+        "de": "EPKB222 Steuergerät",
+        "sv": "EPKB222 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS222": {
+      "name": "EZS222 (W222 S-Class (2013-2020))",
+      "names": {
+        "en": "EZS222 Controller",
+        "de": "EZS222 Steuergerät",
+        "sv": "EZS222 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "med177_hw_id",
+      "name": "MED177 Hardware Number",
+      "names": {
+        "en": "MED177 Hardware Number",
+        "de": "MED177 Hardwarenummer",
+        "sv": "MED177 Hårdvarunummer"
+      },
+      "module": "MED177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "cr60nfz_hw_id",
+      "name": "CR60NFZ Hardware Number",
+      "names": {
+        "en": "CR60NFZ Hardware Number",
+        "de": "CR60NFZ Hardwarenummer",
+        "sv": "CR60NFZ Hårdvarunummer"
+      },
+      "module": "CR60NFZ",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "abc222_hw_id",
+      "name": "ABC222 Hardware Number",
+      "names": {
+        "en": "ABC222 Hardware Number",
+        "de": "ABC222 Hardwarenummer",
+        "sv": "ABC222 Hårdvarunummer"
+      },
+      "module": "ABC222",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "abr222_hw_id",
+      "name": "ABR222 Hardware Number",
+      "names": {
+        "en": "ABR222 Hardware Number",
+        "de": "ABR222 Hardwarenummer",
+        "sv": "ABR222 Hårdvarunummer"
+      },
+      "module": "ABR222",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "epkb222_hw_id",
+      "name": "EPKB222 Hardware Number",
+      "names": {
+        "en": "EPKB222 Hardware Number",
+        "de": "EPKB222 Hardwarenummer",
+        "sv": "EPKB222 Hårdvarunummer"
+      },
+      "module": "EPKB222",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs222_hw_id",
+      "name": "EZS222 Hardware Number",
+      "names": {
+        "en": "EZS222 Hardware Number",
+        "de": "EZS222 Hardwarenummer",
+        "sv": "EZS222 Hårdvarunummer"
+      },
+      "module": "EZS222",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

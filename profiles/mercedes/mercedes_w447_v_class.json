@@ -1,0 +1,166 @@
+{
+  "profile_name": "mercedes_w447_v_class",
+  "oem": "Mercedes-Benz",
+  "chassis": "W447",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "CR60NFZ": {
+      "name": "CR60NFZ (W447 V-Class / Vito (2014-Present))",
+      "names": {
+        "en": "CR60NFZ Controller",
+        "de": "CR60NFZ Steuergerät",
+        "sv": "CR60NFZ Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG2": {
+      "name": "VGSNAG2 (W447 V-Class / Vito (2014-Present))",
+      "names": {
+        "en": "VGSNAG2 Controller",
+        "de": "VGSNAG2 Steuergerät",
+        "sv": "VGSNAG2 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W447 V-Class / Vito (2014-Present))",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP447": {
+      "name": "ESP447 (W447 V-Class / Vito (2014-Present))",
+      "names": {
+        "en": "ESP447 Controller",
+        "de": "ESP447 Steuergerät",
+        "sv": "ESP447 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS447": {
+      "name": "EZS447 (W447 V-Class / Vito (2014-Present))",
+      "names": {
+        "en": "EZS447 Controller",
+        "de": "EZS447 Steuergerät",
+        "sv": "EZS447 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "cr60nfz_hw_id",
+      "name": "CR60NFZ Hardware Number",
+      "names": {
+        "en": "CR60NFZ Hardware Number",
+        "de": "CR60NFZ Hardwarenummer",
+        "sv": "CR60NFZ Hårdvarunummer"
+      },
+      "module": "CR60NFZ",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag2_hw_id",
+      "name": "VGSNAG2 Hardware Number",
+      "names": {
+        "en": "VGSNAG2 Hardware Number",
+        "de": "VGSNAG2 Hardwarenummer",
+        "sv": "VGSNAG2 Hårdvarunummer"
+      },
+      "module": "VGSNAG2",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp447_hw_id",
+      "name": "ESP447 Hardware Number",
+      "names": {
+        "en": "ESP447 Hardware Number",
+        "de": "ESP447 Hardwarenummer",
+        "sv": "ESP447 Hårdvarunummer"
+      },
+      "module": "ESP447",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs447_hw_id",
+      "name": "EZS447 Hardware Number",
+      "names": {
+        "en": "EZS447 Hardware Number",
+        "de": "EZS447 Hardwarenummer",
+        "sv": "EZS447 Hårdvarunummer"
+      },
+      "module": "EZS447",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "profile_name": "mercedes_w907_sprinter",
+  "oem": "Mercedes-Benz",
+  "chassis": "W907",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "CR60NFZ": {
+      "name": "CR60NFZ (W907 / W910 Sprinter (2018-Present))",
+      "names": {
+        "en": "CR60NFZ Controller",
+        "de": "CR60NFZ Steuergerät",
+        "sv": "CR60NFZ Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CRD3": {
+      "name": "CRD3 (W907 / W910 Sprinter (2018-Present))",
+      "names": {
+        "en": "CRD3 Controller",
+        "de": "CRD3 Steuergerät",
+        "sv": "CRD3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ACU907": {
+      "name": "ACU907 (W907 / W910 Sprinter (2018-Present))",
+      "names": {
+        "en": "ACU907 Controller",
+        "de": "ACU907 Steuergerät",
+        "sv": "ACU907 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ACU907_IO1": {
+      "name": "ACU907_IO1 (W907 / W910 Sprinter (2018-Present))",
+      "names": {
+        "en": "ACU907_IO1 Controller",
+        "de": "ACU907_IO1 Steuergerät",
+        "sv": "ACU907_IO1 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP907": {
+      "name": "ESP907 (W907 / W910 Sprinter (2018-Present))",
+      "names": {
+        "en": "ESP907 Controller",
+        "de": "ESP907 Steuergerät",
+        "sv": "ESP907 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS907": {
+      "name": "EZS907 (W907 / W910 Sprinter (2018-Present))",
+      "names": {
+        "en": "EZS907 Controller",
+        "de": "EZS907 Steuergerät",
+        "sv": "EZS907 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "cr60nfz_hw_id",
+      "name": "CR60NFZ Hardware Number",
+      "names": {
+        "en": "CR60NFZ Hardware Number",
+        "de": "CR60NFZ Hardwarenummer",
+        "sv": "CR60NFZ Hårdvarunummer"
+      },
+      "module": "CR60NFZ",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "crd3_hw_id",
+      "name": "CRD3 Hardware Number",
+      "names": {
+        "en": "CRD3 Hardware Number",
+        "de": "CRD3 Hardwarenummer",
+        "sv": "CRD3 Hårdvarunummer"
+      },
+      "module": "CRD3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "acu907_hw_id",
+      "name": "ACU907 Hardware Number",
+      "names": {
+        "en": "ACU907 Hardware Number",
+        "de": "ACU907 Hardwarenummer",
+        "sv": "ACU907 Hårdvarunummer"
+      },
+      "module": "ACU907",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "acu907_io1_hw_id",
+      "name": "ACU907_IO1 Hardware Number",
+      "names": {
+        "en": "ACU907_IO1 Hardware Number",
+        "de": "ACU907_IO1 Hardwarenummer",
+        "sv": "ACU907_IO1 Hårdvarunummer"
+      },
+      "module": "ACU907_IO1",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp907_hw_id",
+      "name": "ESP907 Hardware Number",
+      "names": {
+        "en": "ESP907 Hardware Number",
+        "de": "ESP907 Hardwarenummer",
+        "sv": "ESP907 Hårdvarunummer"
+      },
+      "module": "ESP907",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs907_hw_id",
+      "name": "EZS907 Hardware Number",
+      "names": {
+        "en": "EZS907 Hardware Number",
+        "de": "EZS907 Hardwarenummer",
+        "sv": "EZS907 Hårdvarunummer"
+      },
+      "module": "EZS907",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

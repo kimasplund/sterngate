@@ -25,7 +25,7 @@
 - **Native Linux Tactrix OpenPort 2.0 Driver**: Reverse-engineered direct USB bulk protocol via `rusb` (`--openport`). Eliminates abandoned 32-bit Windows drivers and Wine. **100% Clone Safe**—strips out vendor phone-home and anti-clone flash erase commands that brick Chinese clones on Windows. Includes direct OBD-II Pin 16 ADC hardware voltage monitoring to enforce the $\ge 12.5\text{ V}$ flashing interlock.
 - **Vehicle Garage & Per-Car Git Configuration Tracking**: Automatically identifies and decodes VINs (e.g. S211 Estate OM646), creates an isolated Git repository under `data/vehicles/<VIN>/`, and commits every diagnostic scan, live vital snapshot, and variant coding session with full history and rollback capability.
 - **In-Flight Drive Benchmarking & A/B Comparative Analysis**: High-frequency drive telemetry sampling (consumption, boost, rail pressure, coolant, TCC lockup slip) with mathematical diesel consumption modeling and A/B comparison to verify if tuning, adaptations, or hardware changes were beneficial.
-- **21st-Century Compact 990-ECU Catalog**: Compact JSON routing index (1,001 lines, 170 KB) mapping CAN Tx/Rx IDs, protocols (UDS/KWP2000), functional IDs, DTC counts, and multi-chassis platforms without legacy binary file bloat.
+- **1,340+ Canonical ECU Catalog & 17,800+ DTC Dictionary**: Comprehensive routing index mapping CAN Tx/Rx IDs, UDS/KWP2000 protocols, functional IDs, and multi-chassis coverage for 1,347 automotive electronic control units across classic and modern platforms (W203 through W223), paired with a dictionary of 17,857 Mercedes diagnostic trouble codes in German and English.
 - **Multilingual Diagnostics**: Fully localized in English (`en`), German (`de`, authentic Daimler OEM terms), and Swedish (`sv`) across all DTCs, routines, parameters, CLI output, and web dashboard.
 - **Beyond Generic OBD-II**: Interrogates manufacturer-specific DIDs through the vehicle's Central Gateway (CGW) using UDS (ISO 14229) and KWP2000 (ISO 14230). Read 722.6 automatic transmission fluid temperatures (for the crucial 80°C level check), cylinder-by-cylinder smooth running injector balances, torque converter clutch slip, and Airmatic line pressures.
 - **Universal Modularity**: Decouples vehicle profiles from executable code. Profiles are stored in declarative JSON schemas under `profiles/`. Switch between a Mercedes W211 OM646 CDI, a VAG Golf Mk6 2.0 TDI (EDC17 + DSG), or a BMW E90 3.0d (DDE6) without recompiling the binary.
@@ -214,20 +214,20 @@ sterngate analyze compare
 
 ---
 
-## 9. Daimler 990-ECU Diagnostic Catalog Explorer
+## 9. Daimler 1,340+ ECU Diagnostic Catalog Explorer
 
-Sterngate features a compact 21st-century diagnostic routing catalog (`data/ecu_catalog.json`) indexing 990 canonical Mercedes-Benz ECUs:
+Sterngate features an expanded diagnostic routing catalog (`data/ecu_catalog.json`) indexing 1,347 canonical electronic control units across Mercedes-Benz architectures:
 ```bash
 # View summary statistics of the ECU catalog
 sterngate ecu stats
 
 # Search for ECUs by name or chassis platform
 sterngate ecu search EGS
-sterngate ecu search W211
+sterngate ecu search W223
 
 # Inspect detailed diagnostic routing for an ECU
-sterngate ecu inspect EGS52
-sterngate ecu inspect VGSNAG2
+sterngate ecu inspect MED1775
+sterngate ecu inspect ESP223
 ```
 
 ---
@@ -237,7 +237,7 @@ sterngate ecu inspect VGSNAG2
 ### A. Bus Discovery & Automated Profile Generation
 Interrogate uncataloged vehicle networks without proprietary engineering tools:
 ```bash
-# Probes CAN IDs (0x7E0..0x7EF), reads identification DIDs, correlates with 990-ECU database
+# Probes CAN IDs (0x7E0..0x7EF), reads identification DIDs, correlates with 1,340+ ECU database
 sterngate diag discover --start 0x7E0 --end 0x7EF
 
 # Automatically compile discovered ECUs and standard DIDs into a vehicle profile

@@ -125,10 +125,16 @@ Sterngate provides two formal JSON schemas for diagnostic definition:
 2. **Modular ECU Definition Schema** (`profiles/schema/sterngate-ecu.schema.json`): Encapsulates an individual ECU module (e.g. `EGS52`, `EDC16`, `VGSNAG2`) with its diagnostic routing, physical & functional CAN arbitration IDs, supported DIDs, UDS Service 0x31 routines, variant coding layouts, and localized DTC definitions.
 
 ### Compact Runtime Index (`data/ecu_catalog.json`)
-The canonical database contains **990 unique automotive ECUs** in a 21st-century compact format (exactly 1 line per ECU, 1,001 lines total, 170 KB):
+The canonical database contains **1,347 unique automotive ECUs** in a 21st-century compact format (1 line per ECU, JSON routing index) covering architectures from 1996 through 2024:
 ```json
 {"ecu_name": "EGS52", "protocol": "UDS", "tx_id": "0x7e1", "rx_id": "0x7e9", "func_id": "0x7df", "dtc_count": 114, "chassis": ["ML_W163", "SLK_R170", "SLK_R171", "C_Class_W202", "W203/C209", "W211/C219", "S_W220/CL_W215", "W221/C216", "SL_R230"]}
+{"ecu_name": "ESP223", "protocol": "UDS", "tx_id": "0x7e0", "rx_id": "0x7e8", "func_id": "0x7df", "dtc_count": 984, "chassis": ["W223"]}
 ```
+
+### Multilingual Diagnostic Trouble Code (DTC) Database (`data/dtc_database_mb.json`)
+Indexed directly from factory diagnostic simulations, containing **17,857 DTC entries** with dual English and German fault texts:
+- Standard 5-character OBD/ISO codes (`P0100`, `P0560`, `U0100`, `C1500`)
+- Factory 7-character UDS codes with Failure Type Bytes (`P164456`, `P056000`, `U010087`)
 
 ### CLI Catalog Commands
 ```bash
@@ -137,11 +143,11 @@ sterngate ecu stats
 
 # Search ECUs by name or chassis keyword
 sterngate ecu search EGS
-sterngate ecu search W211
+sterngate ecu search W223
 
 # Detailed inspection of an ECU (protocol, CAN IDs, DTC count, chassis list)
-sterngate ecu inspect VGSNAG2
-sterngate ecu inspect EDC16
+sterngate ecu inspect MED1775
+sterngate ecu inspect ESP223
 ```
 
 ---

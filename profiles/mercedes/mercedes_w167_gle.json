@@ -1,0 +1,432 @@
+{
+  "profile_name": "mercedes_w167_gle",
+  "oem": "Mercedes-Benz",
+  "chassis": "W167",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "CR60NFZ": {
+      "name": "CR60NFZ (W167 GLE / GLS (2019-Present))",
+      "names": {
+        "en": "CR60NFZ Controller",
+        "de": "CR60NFZ Steuergerät",
+        "sv": "CR60NFZ Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W167 GLE / GLS (2019-Present))",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP167": {
+      "name": "ESP167 (W167 GLE / GLS (2019-Present))",
+      "names": {
+        "en": "ESP167 Controller",
+        "de": "ESP167 Steuergerät",
+        "sv": "ESP167 Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS167": {
+      "name": "EZS167 (W167 GLE / GLS (2019-Present))",
+      "names": {
+        "en": "EZS167 Controller",
+        "de": "EZS167 Steuergerät",
+        "sv": "EZS167 Styrenhet"
+      },
+      "tx_id": "0x0607",
+      "rx_id": "0x0587",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "PTC167": {
+      "name": "PTC167 (W167 GLE / GLS (2019-Present))",
+      "names": {
+        "en": "PTC167 Controller",
+        "de": "PTC167 Steuergerät",
+        "sv": "PTC167 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "cr60nfz_hw_id",
+      "name": "CR60NFZ Hardware Number",
+      "names": {
+        "en": "CR60NFZ Hardware Number",
+        "de": "CR60NFZ Hardwarenummer",
+        "sv": "CR60NFZ Hårdvarunummer"
+      },
+      "module": "CR60NFZ",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_0105",
+      "name": "Usage Histogram",
+      "names": {
+        "en": "Usage Histogram",
+        "de": "Usage Histogram",
+        "sv": "Usage Histogram"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x0105",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_010d",
+      "name": "Read Used EVC Config",
+      "names": {
+        "en": "Read Used EVC Config",
+        "de": "Read Used EVC Config",
+        "sv": "Read Used EVC Config"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp167_0134",
+      "name": "SAR Trigger Counter",
+      "names": {
+        "en": "SAR Trigger Counter",
+        "de": "SAR Trigger Counter",
+        "sv": "SAR Trigger Counter"
+      },
+      "module": "ESP167",
+      "service": 34,
+      "did": "0x0134",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_010c",
+      "name": "Odometer Value from Network",
+      "names": {
+        "en": "Odometer Value from Network",
+        "de": "Odometer Value from Network",
+        "sv": "Odometer Value from Network"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x010C",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_010f",
+      "name": "LIN Slope Mode",
+      "names": {
+        "en": "LIN Slope Mode",
+        "de": "LIN Slope Mode",
+        "sv": "LIN Slope Mode"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x010F",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_012d",
+      "name": "Engine Style",
+      "names": {
+        "en": "Engine Style",
+        "de": "Engine Style",
+        "sv": "Engine Style"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x012D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs167_0132",
+      "name": "Operating Time last ignition cycle",
+      "names": {
+        "en": "Operating Time last ignition cycle",
+        "de": "Operating Time last ignition cycle",
+        "sv": "Operating Time last ignition cycle"
+      },
+      "module": "EZS167",
+      "service": 34,
+      "did": "0x0132",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ptc167_hw_id",
+      "name": "PTC167 Hardware Number",
+      "names": {
+        "en": "PTC167 Hardware Number",
+        "de": "PTC167 Hardwarenummer",
+        "sv": "PTC167 Hårdvarunummer"
+      },
+      "module": "PTC167",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

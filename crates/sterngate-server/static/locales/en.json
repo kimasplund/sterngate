@@ -83,7 +83,7 @@
   },
   "cbf": {
     "title": "Mercedes-Benz ECU Diagnostic Routing & Platform Catalog",
-    "stats_badge": "990 Canonical ECUs",
+    "stats_badge": "1,340+ Canonical ECUs",
     "redundancy_badge": "ACTIVE JSON ROUTING",
     "search_ph": "Search ECU or chassis (e.g. EGS, VGSNAG, W211, ME97, CR4)...",
     "btn_search": "Search",
@@ -95,7 +95,7 @@
     "col_chassis": "Chassis / Platform",
     "col_action": "Action",
     "btn_inspect": "Inspect",
-    "prompt": "Enter an ECU or chassis name above to search 990 canonical Mercedes ECUs.",
+    "prompt": "Enter an ECU or chassis name above to search 1,340+ canonical Mercedes ECUs.",
     "searching": "Searching ECU catalog...",
     "no_matches": "No matching ECUs found in catalog.",
     "inspect_title": "ECU Diagnostic Definition:",

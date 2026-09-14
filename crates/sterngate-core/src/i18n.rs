@@ -51,57 +51,163 @@ impl FromStr for Language {
     }
 }
 
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+/// Diagnostic Trouble Code dictionary entry with translations and raw hex value
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DtcRecord {
+    #[serde(default)]
+    pub hex: Option<String>,
+    #[serde(default)]
+    pub en: Option<String>,
+    #[serde(default)]
+    pub de: Option<String>,
+    #[serde(default)]
+    pub sv: Option<String>,
+}
+
+static DTC_DATABASE: OnceLock<HashMap<String, DtcRecord>> = OnceLock::new();
+
+/// Retrieve the global DTC database (lazy loaded on first access)
+pub fn get_dtc_database() -> &'static HashMap<String, DtcRecord> {
+    DTC_DATABASE.get_or_init(|| {
+        if let Ok(env_path) = std::env::var("STERNGATE_DTC_DATABASE") {
+            let p = PathBuf::from(env_path);
+            if p.exists() {
+                if let Ok(content) = std::fs::read_to_string(&p) {
+                    if let Ok(map) = serde_json::from_str::<HashMap<String, DtcRecord>>(&content) {
+                        return map;
+                    }
+                }
+            }
+        }
+
+        let candidates = [
+            Path::new("data/dtc_database_mb.json"),
+            Path::new("../../data/dtc_database_mb.json"),
+            Path::new("../data/dtc_database_mb.json"),
+        ];
+
+        for &cand in &candidates {
+            if cand.exists() {
+                if let Ok(content) = std::fs::read_to_string(cand) {
+                    if let Ok(map) = serde_json::from_str::<HashMap<String, DtcRecord>>(&content) {
+                        return map;
+                    }
+                }
+            }
+        }
+
+        // Fallback: embedded compile-time OEM database
+        const EMBEDDED_DTC: &str = include_str!("../../../data/dtc_database_mb.json");
+        serde_json::from_str::<HashMap<String, DtcRecord>>(EMBEDDED_DTC).unwrap_or_default()
+    })
+}
+
+/// Return total number of indexed DTCs in the active database
+pub fn dtc_database_count() -> usize {
+    get_dtc_database().len()
+}
+
 /// Look up common automotive Diagnostic Trouble Code descriptions by language
 pub fn lookup_dtc_description(code: &str, lang: Language) -> String {
+    let norm_code = code.trim().to_uppercase();
+
+    // 1. High-priority standard / curated translations
+    let static_desc = match lang {
+        Language::En => match norm_code.as_str() {
+            "P0100" => Some("Mass Air Flow (MAF) Sensor Circuit Malfunction"),
+            "P0105" => Some("Manifold Absolute Pressure (MAP) Sensor Circuit Malfunction"),
+            "P0115" => Some("Engine Coolant Temperature Circuit Malfunction"),
+            "P0234" => Some("Turbocharger/Supercharger Overboost Condition"),
+            "P0235" => Some("Turbocharger Boost Sensor A Circuit Malfunction"),
+            "P0300" => Some("Random/Multiple Cylinder Misfire Detected"),
+            "P0700" => Some("Transmission Control System (MIL Request)"),
+            "P0715" => Some("Input/Turbine Speed Sensor Circuit Malfunction"),
+            "P0730" => Some("Incorrect Gear Ratio (Transmission Slip)"),
+            "P0740" => Some("Torque Converter Clutch Circuit Malfunction"),
+            "C1500" => Some("Air Suspension Central Reservoir Plausibility Error"),
+            _ => None,
+        },
+        Language::De => match norm_code.as_str() {
+            "P0100" => Some("Luftmassenmesser (LMM) Schaltkreis Fehlfunktion"),
+            "P0105" => Some("Saugrohrdrucksensor (MAP) Schaltkreis Fehlfunktion"),
+            "P0115" => Some("Kühlmitteltemperatursensor Schaltkreis Fehlfunktion"),
+            "P0234" => Some("Ladedruck-Regelung: Regelgrenze überschritten (Überdruck)"),
+            "P0235" => Some("Ladedrucksensor A Schaltkreis Fehlfunktion"),
+            "P0300" => Some("Verbrennungsaussetzer auf mehreren Zylindern erkannt"),
+            "P0700" => Some("Getriebesteuerungssystem (Fehlerleuchten-Anforderung)"),
+            "P0715" => Some("Eingangsdrehzahl-/Turbinendrehzahlsensor Schaltkreis Fehlfunktion"),
+            "P0730" => Some("Unplausible Gangübersetzung (Getriebeschlupf erkannt)"),
+            "P0740" => Some("Wandlerüberbrückungskupplung (WÜK) Fehlfunktion"),
+            "C1500" => Some("Luftfederung Zentralspeicher Plausibilitätsfehler"),
+            _ => None,
+        },
+        Language::Sv => match norm_code.as_str() {
+            "P0100" => Some("Luftmassemätare (LMM) Strömkretsfel"),
+            "P0105" => Some("Insugstrycksgivare (MAP) Strömkretsfel"),
+            "P0115" => Some("Motorkylvätsketemperaturgivare Strömkretsfel"),
+            "P0234" => Some("Laddtrycksreglering: Reglergräns överskriden (Övertryck)"),
+            "P0235" => Some("Laddtrycksgivare A Strömkretsfel"),
+            "P0300" => Some("Slumpmässiga/flera cylinderfeltändningar upptäckta"),
+            "P0700" => Some("Växellådsstyrsystem (MIL-begäran)"),
+            "P0715" => Some("Ingående varvtalssensor/turbinvarvtalssensor Strömkretsfel"),
+            "P0730" => Some("Felaktigt utväxlingsförhållande (Växellådsslir)"),
+            "P0740" => Some("Momentomvandlarkoppling (WÜK) Strömkretsfel"),
+            "U0100" => Some("Förlorad kommunikation med motorstyrenhet (ECM)"),
+            "U0101" => Some("Förlorad kommunikation med växellådsstyrenhet (TCM)"),
+            "C1500" => Some("Luftfjädring centralreservoar rimlighetsfel"),
+            _ => None,
+        },
+    };
+
+    if let Some(desc) = static_desc {
+        return desc.to_string();
+    }
+
+    // 2. Query OEM DTC Database (check exact code, then 5-character prefix alias e.g. P1644 from P164456)
+    let db = get_dtc_database();
+    let entry = db.get(&norm_code).or_else(|| {
+        if norm_code.len() > 5 {
+            db.get(&norm_code[..5])
+        } else {
+            None
+        }
+    });
+
+    if let Some(rec) = entry {
+        match lang {
+            Language::De => {
+                if let Some(de) = &rec.de {
+                    return de.clone();
+                } else if let Some(en) = &rec.en {
+                    return en.clone();
+                }
+            }
+            Language::Sv => {
+                if let Some(sv) = &rec.sv {
+                    return sv.clone();
+                } else if let Some(en) = &rec.en {
+                    return en.clone();
+                }
+            }
+            Language::En => {
+                if let Some(en) = &rec.en {
+                    return en.clone();
+                } else if let Some(de) = &rec.de {
+                    return de.clone();
+                }
+            }
+        }
+    }
+
+    // 3. Fallback generic description
     match lang {
-        Language::En => match code {
-            "P0100" => "Mass Air Flow (MAF) Sensor Circuit Malfunction".into(),
-            "P0105" => "Manifold Absolute Pressure (MAP) Sensor Circuit Malfunction".into(),
-            "P0115" => "Engine Coolant Temperature Circuit Malfunction".into(),
-            "P0234" => "Turbocharger/Supercharger Overboost Condition".into(),
-            "P0235" => "Turbocharger Boost Sensor A Circuit Malfunction".into(),
-            "P0300" => "Random/Multiple Cylinder Misfire Detected".into(),
-            "P0700" => "Transmission Control System (MIL Request)".into(),
-            "P0715" => "Input/Turbine Speed Sensor Circuit Malfunction".into(),
-            "P0730" => "Incorrect Gear Ratio (Transmission Slip)".into(),
-            "P0740" => "Torque Converter Clutch Circuit Malfunction".into(),
-            "U0100" => "Lost Communication With Engine Control Module (ECM/PCM)".into(),
-            "U0101" => "Lost Communication with Transmission Control Module (TCM)".into(),
-            "C1500" => "Air Suspension Central Reservoir Plausibility Error".into(),
-            _ => format!("Manufacturer or Standard DTC {}", code),
-        },
-        Language::De => match code {
-            "P0100" => "Luftmassenmesser (LMM) Schaltkreis Fehlfunktion".into(),
-            "P0105" => "Saugrohrdrucksensor (MAP) Schaltkreis Fehlfunktion".into(),
-            "P0115" => "Kühlmitteltemperatursensor Schaltkreis Fehlfunktion".into(),
-            "P0234" => "Ladedruck-Regelung: Regelgrenze überschritten (Überdruck)".into(),
-            "P0235" => "Ladedrucksensor A Schaltkreis Fehlfunktion".into(),
-            "P0300" => "Verbrennungsaussetzer auf mehreren Zylindern erkannt".into(),
-            "P0700" => "Getriebesteuerungssystem (Fehlerleuchten-Anforderung)".into(),
-            "P0715" => "Eingangsdrehzahl-/Turbinendrehzahlsensor Schaltkreis Fehlfunktion".into(),
-            "P0730" => "Unplausible Gangübersetzung (Getriebeschlupf erkannt)".into(),
-            "P0740" => "Wandlerüberbrückungskupplung (WÜK) Fehlfunktion".into(),
-            "U0100" => "Kommunikation mit Motorsteuergerät (MSG) verloren".into(),
-            "U0101" => "Kommunikation mit Getriebesteuergerät (EGS/VGS) verloren".into(),
-            "C1500" => "Luftfederung Zentralspeicher Plausibilitätsfehler".into(),
-            _ => format!("Hersteller- oder Standard-Fehlercode {}", code),
-        },
-        Language::Sv => match code {
-            "P0100" => "Luftmassemätare (LMM) Strömkretsfel".into(),
-            "P0105" => "Insugstrycksgivare (MAP) Strömkretsfel".into(),
-            "P0115" => "Motorkylvätsketemperaturgivare Strömkretsfel".into(),
-            "P0234" => "Laddtrycksreglering: Reglergräns överskriden (Övertryck)".into(),
-            "P0235" => "Laddtrycksgivare A Strömkretsfel".into(),
-            "P0300" => "Slumpmässiga/flera cylinderfeltändningar upptäckta".into(),
-            "P0700" => "Växellådsstyrsystem (MIL-begäran)".into(),
-            "P0715" => "Ingående varvtalssensor/turbinvarvtalssensor Strömkretsfel".into(),
-            "P0730" => "Felaktigt utväxlingsförhållande (Växellådsslir)".into(),
-            "P0740" => "Momentomvandlarkoppling (WÜK) Strömkretsfel".into(),
-            "U0100" => "Förlorad kommunikation med motorstyrenhet (ECM)".into(),
-            "U0101" => "Förlorad kommunikation med växellådsstyrenhet (TCM)".into(),
-            "C1500" => "Luftfjädring centralreservoar rimlighetsfel".into(),
-            _ => format!("Tillverkarspecifik eller standard felkod {}", code),
-        },
+        Language::En => format!("Manufacturer or Standard DTC {}", code),
+        Language::De => format!("Hersteller- oder Standard-Fehlercode {}", code),
+        Language::Sv => format!("Tillverkarspecifik eller standard felkod {}", code),
     }
 }
 

@@ -99,7 +99,7 @@ crates/
      * `sterngate flash <subcommand>`: Direct terminal ECU flashing suite (stage, preflight, start, status).
      * `sterngate service <subcommand>`: Workshop service routines (sbc, ima, suspension).
      * `sterngate coding <subcommand>`: Variant coding & Git garage history (read, write, backup, diff).
-     * `sterngate ecu <subcommand>`: 990-ECU diagnostic catalog index (stats, search, inspect).
+     * `sterngate ecu <subcommand>`: 1,340+ ECU diagnostic catalog index (stats, search, inspect).
      * `sterngate profile <subcommand>`: Vehicle profile management (list, inspect, generate).
      * `sterngate analyze <subcommand>`: Predictive analytics and containment (suspension, compare, cascades, abc).
 

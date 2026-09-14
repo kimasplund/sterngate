@@ -1,0 +1,259 @@
+{
+  "profile_name": "mercedes_w205_c_class",
+  "oem": "Mercedes-Benz",
+  "chassis": "W205",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "MED177": {
+      "name": "MED177 (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "MED177 Controller",
+        "de": "MED177 Steuergerät",
+        "sv": "MED177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CR43": {
+      "name": "CR43 (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "CR43 Controller",
+        "de": "CR43 Steuergerät",
+        "sv": "CR43 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CR60NFZ": {
+      "name": "CR60NFZ (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "CR60NFZ Controller",
+        "de": "CR60NFZ Steuergerät",
+        "sv": "CR60NFZ Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG2": {
+      "name": "VGSNAG2 (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "VGSNAG2 Controller",
+        "de": "VGSNAG2 Steuergerät",
+        "sv": "VGSNAG2 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP205": {
+      "name": "ESP205 (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "ESP205 Controller",
+        "de": "ESP205 Steuergerät",
+        "sv": "ESP205 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ACC_205": {
+      "name": "ACC_205 (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "ACC_205 Controller",
+        "de": "ACC_205 Steuergerät",
+        "sv": "ACC_205 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS205": {
+      "name": "EZS205 (W205 C-Class (2014-2021))",
+      "names": {
+        "en": "EZS205 Controller",
+        "de": "EZS205 Steuergerät",
+        "sv": "EZS205 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "med177_hw_id",
+      "name": "MED177 Hardware Number",
+      "names": {
+        "en": "MED177 Hardware Number",
+        "de": "MED177 Hardwarenummer",
+        "sv": "MED177 Hårdvarunummer"
+      },
+      "module": "MED177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "cr43_hw_id",
+      "name": "CR43 Hardware Number",
+      "names": {
+        "en": "CR43 Hardware Number",
+        "de": "CR43 Hardwarenummer",
+        "sv": "CR43 Hårdvarunummer"
+      },
+      "module": "CR43",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "cr60nfz_hw_id",
+      "name": "CR60NFZ Hardware Number",
+      "names": {
+        "en": "CR60NFZ Hardware Number",
+        "de": "CR60NFZ Hardwarenummer",
+        "sv": "CR60NFZ Hårdvarunummer"
+      },
+      "module": "CR60NFZ",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag2_hw_id",
+      "name": "VGSNAG2 Hardware Number",
+      "names": {
+        "en": "VGSNAG2 Hardware Number",
+        "de": "VGSNAG2 Hardwarenummer",
+        "sv": "VGSNAG2 Hårdvarunummer"
+      },
+      "module": "VGSNAG2",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp205_hw_id",
+      "name": "ESP205 Hardware Number",
+      "names": {
+        "en": "ESP205 Hardware Number",
+        "de": "ESP205 Hardwarenummer",
+        "sv": "ESP205 Hårdvarunummer"
+      },
+      "module": "ESP205",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "acc_205_hw_id",
+      "name": "ACC_205 Hardware Number",
+      "names": {
+        "en": "ACC_205 Hardware Number",
+        "de": "ACC_205 Hardwarenummer",
+        "sv": "ACC_205 Hårdvarunummer"
+      },
+      "module": "ACC_205",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs205_hw_id",
+      "name": "EZS205 Hardware Number",
+      "names": {
+        "en": "EZS205 Hardware Number",
+        "de": "EZS205 Hardwarenummer",
+        "sv": "EZS205 Hårdvarunummer"
+      },
+      "module": "EZS205",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

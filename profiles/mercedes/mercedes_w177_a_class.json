@@ -1,0 +1,596 @@
+{
+  "profile_name": "mercedes_w177_a_class",
+  "oem": "Mercedes-Benz",
+  "chassis": "W177",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "MED177": {
+      "name": "MED177 (W177 A-Class / CLA (2018-Present))",
+      "names": {
+        "en": "MED177 Controller",
+        "de": "MED177 Steuergerät",
+        "sv": "MED177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CR60NFZ": {
+      "name": "CR60NFZ (W177 A-Class / CLA (2018-Present))",
+      "names": {
+        "en": "CR60NFZ Controller",
+        "de": "CR60NFZ Steuergerät",
+        "sv": "CR60NFZ Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP177": {
+      "name": "ESP177 (W177 A-Class / CLA (2018-Present))",
+      "names": {
+        "en": "ESP177 Controller",
+        "de": "ESP177 Steuergerät",
+        "sv": "ESP177 Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP177_AMG": {
+      "name": "ESP177_AMG (W177 A-Class / CLA (2018-Present))",
+      "names": {
+        "en": "ESP177_AMG Controller",
+        "de": "ESP177_AMG Steuergerät",
+        "sv": "ESP177_AMG Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "TPMMFA2": {
+      "name": "TPMMFA2 (W177 A-Class / CLA (2018-Present))",
+      "names": {
+        "en": "TPMMFA2 Controller",
+        "de": "TPMMFA2 Steuergerät",
+        "sv": "TPMMFA2 Styrenhet"
+      },
+      "tx_id": "0x0652",
+      "rx_id": "0x05d2",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS177": {
+      "name": "EZS177 (W177 A-Class / CLA (2018-Present))",
+      "names": {
+        "en": "EZS177 Controller",
+        "de": "EZS177 Steuergerät",
+        "sv": "EZS177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "med177_hw_id",
+      "name": "MED177 Hardware Number",
+      "names": {
+        "en": "MED177 Hardware Number",
+        "de": "MED177 Hardwarenummer",
+        "sv": "MED177 Hårdvarunummer"
+      },
+      "module": "MED177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "cr60nfz_hw_id",
+      "name": "CR60NFZ Hardware Number",
+      "names": {
+        "en": "CR60NFZ Hardware Number",
+        "de": "CR60NFZ Hardwarenummer",
+        "sv": "CR60NFZ Hårdvarunummer"
+      },
+      "module": "CR60NFZ",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_0105",
+      "name": "Usage Histogram",
+      "names": {
+        "en": "Usage Histogram",
+        "de": "Usage Histogram",
+        "sv": "Usage Histogram"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x0105",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_010d",
+      "name": "Used EVC Config",
+      "names": {
+        "en": "Used EVC Config",
+        "de": "Used EVC Config",
+        "sv": "Used EVC Config"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_012b",
+      "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+      "names": {
+        "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x012B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP177",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_0105",
+      "name": "Usage Histogram",
+      "names": {
+        "en": "Usage Histogram",
+        "de": "Usage Histogram",
+        "sv": "Usage Histogram"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x0105",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_010d",
+      "name": "Used EVC Config",
+      "names": {
+        "en": "Used EVC Config",
+        "de": "Used EVC Config",
+        "sv": "Used EVC Config"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_012b",
+      "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+      "names": {
+        "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x012B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp177_amg_0134",
+      "name": "SAR Trigger Counter",
+      "names": {
+        "en": "SAR Trigger Counter",
+        "de": "SAR Trigger Counter",
+        "sv": "SAR Trigger Counter"
+      },
+      "module": "ESP177_AMG",
+      "service": 34,
+      "did": "0x0134",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_010d",
+      "name": "Used EVC Config",
+      "names": {
+        "en": "Used EVC Config",
+        "de": "Used EVC Config",
+        "sv": "Used EVC Config"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_0140",
+      "name": "Obsolescence Data",
+      "names": {
+        "en": "Obsolescence Data",
+        "de": "Obsolescence Data",
+        "sv": "Obsolescence Data"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x0140",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_0210",
+      "name": "ECU standby enable",
+      "names": {
+        "en": "ECU standby enable",
+        "de": "ECU standby enable",
+        "sv": "ECU standby enable"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x0210",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpmmfa2_0215",
+      "name": "WU ID Location",
+      "names": {
+        "en": "WU ID Location",
+        "de": "WU ID Location",
+        "sv": "WU ID Location"
+      },
+      "module": "TPMMFA2",
+      "service": 34,
+      "did": "0x0215",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs177_hw_id",
+      "name": "EZS177 Hardware Number",
+      "names": {
+        "en": "EZS177 Hardware Number",
+        "de": "EZS177 Hardwarenummer",
+        "sv": "EZS177 Hårdvarunummer"
+      },
+      "module": "EZS177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

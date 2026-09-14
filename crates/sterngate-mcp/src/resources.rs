@@ -79,8 +79,8 @@ pub fn read_resource(uri: &str) -> Result<Value, String> {
                 Ok(serde_json::to_value(catalog.stats()).unwrap())
             } else {
                 Ok(json!({
-                    "total_ecus": 990,
-                    "unique_ecus": 990
+                    "total_ecus": 1347,
+                    "unique_ecus": 1347
                 }))
             }
         }

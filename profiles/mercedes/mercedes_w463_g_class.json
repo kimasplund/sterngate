@@ -1,0 +1,432 @@
+{
+  "profile_name": "mercedes_w463_g_class",
+  "oem": "Mercedes-Benz",
+  "chassis": "W463",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "MED177": {
+      "name": "MED177 (W463 / W464 G-Class AMG)",
+      "names": {
+        "en": "MED177 Controller",
+        "de": "MED177 Steuergerät",
+        "sv": "MED177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W463 / W464 G-Class AMG)",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP464": {
+      "name": "ESP464 (W463 / W464 G-Class AMG)",
+      "names": {
+        "en": "ESP464 Controller",
+        "de": "ESP464 Steuergerät",
+        "sv": "ESP464 Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP465": {
+      "name": "ESP465 (W463 / W464 G-Class AMG)",
+      "names": {
+        "en": "ESP465 Controller",
+        "de": "ESP465 Steuergerät",
+        "sv": "ESP465 Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS463": {
+      "name": "EZS463 (W463 / W464 G-Class AMG)",
+      "names": {
+        "en": "EZS463 Controller",
+        "de": "EZS463 Steuergerät",
+        "sv": "EZS463 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "med177_hw_id",
+      "name": "MED177 Hardware Number",
+      "names": {
+        "en": "MED177 Hardware Number",
+        "de": "MED177 Hardwarenummer",
+        "sv": "MED177 Hårdvarunummer"
+      },
+      "module": "MED177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_010d",
+      "name": "Used EVC Config",
+      "names": {
+        "en": "Used EVC Config",
+        "de": "Used EVC Config",
+        "sv": "Used EVC Config"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_012b",
+      "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+      "names": {
+        "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x012B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_0134",
+      "name": "SAR Trigger Counter",
+      "names": {
+        "en": "SAR Trigger Counter",
+        "de": "SAR Trigger Counter",
+        "sv": "SAR Trigger Counter"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x0134",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp464_0135",
+      "name": "Number of SAR Write Cycles",
+      "names": {
+        "en": "Number of SAR Write Cycles",
+        "de": "Number of SAR Write Cycles",
+        "sv": "Number of SAR Write Cycles"
+      },
+      "module": "ESP464",
+      "service": 34,
+      "did": "0x0135",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_010d",
+      "name": "Used EVC Config",
+      "names": {
+        "en": "Used EVC Config",
+        "de": "Used EVC Config",
+        "sv": "Used EVC Config"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_012b",
+      "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+      "names": {
+        "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x012B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_0134",
+      "name": "SAR Trigger Counter",
+      "names": {
+        "en": "SAR Trigger Counter",
+        "de": "SAR Trigger Counter",
+        "sv": "SAR Trigger Counter"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x0134",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp465_0135",
+      "name": "Number of SAR Write Cycles",
+      "names": {
+        "en": "Number of SAR Write Cycles",
+        "de": "Number of SAR Write Cycles",
+        "sv": "Number of SAR Write Cycles"
+      },
+      "module": "ESP465",
+      "service": 34,
+      "did": "0x0135",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs463_hw_id",
+      "name": "EZS463 Hardware Number",
+      "names": {
+        "en": "EZS463 Hardware Number",
+        "de": "EZS463 Hardwarenummer",
+        "sv": "EZS463 Hårdvarunummer"
+      },
+      "module": "EZS463",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

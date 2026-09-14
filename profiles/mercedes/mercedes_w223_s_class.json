@@ -1,0 +1,658 @@
+{
+  "profile_name": "mercedes_w223_s_class",
+  "oem": "Mercedes-Benz",
+  "chassis": "W223",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "MED177": {
+      "name": "MED177 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "MED177 Controller",
+        "de": "MED177 Steuergerät",
+        "sv": "MED177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CR61": {
+      "name": "CR61 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "CR61 Controller",
+        "de": "CR61 Steuergerät",
+        "sv": "CR61 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP223": {
+      "name": "ESP223 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "ESP223 Controller",
+        "de": "ESP223 Steuergerät",
+        "sv": "ESP223 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "AVAS223": {
+      "name": "AVAS223 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "AVAS223 Controller",
+        "de": "AVAS223 Steuergerät",
+        "sv": "AVAS223 Styrenhet"
+      },
+      "tx_id": "0x064e",
+      "rx_id": "0x05ce",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "AD_FL223": {
+      "name": "AD_FL223 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "AD_FL223 Controller",
+        "de": "AD_FL223 Steuergerät",
+        "sv": "AD_FL223 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "AD_FR223": {
+      "name": "AD_FR223 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "AD_FR223 Controller",
+        "de": "AD_FR223 Steuergerät",
+        "sv": "AD_FR223 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "TPM223": {
+      "name": "TPM223 (W223 S-Class (2021-Present))",
+      "names": {
+        "en": "TPM223 Controller",
+        "de": "TPM223 Steuergerät",
+        "sv": "TPM223 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "med177_hw_id",
+      "name": "MED177 Hardware Number",
+      "names": {
+        "en": "MED177 Hardware Number",
+        "de": "MED177 Hardwarenummer",
+        "sv": "MED177 Hårdvarunummer"
+      },
+      "module": "MED177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "cr61_hw_id",
+      "name": "CR61 Hardware Number",
+      "names": {
+        "en": "CR61 Hardware Number",
+        "de": "CR61 Hardwarenummer",
+        "sv": "CR61 Hårdvarunummer"
+      },
+      "module": "CR61",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_0105",
+      "name": "Usage Histogram",
+      "names": {
+        "en": "Usage Histogram",
+        "de": "Usage Histogram",
+        "sv": "Usage Histogram"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x0105",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_0107",
+      "name": "Global Time Sync Measured Values",
+      "names": {
+        "en": "Global Time Sync Measured Values",
+        "de": "Global Time Sync Measured Values",
+        "sv": "Global Time Sync Measured Values"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x0107",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_010a",
+      "name": "Vehicle Odometer in Low Resolution",
+      "names": {
+        "en": "Vehicle Odometer in Low Resolution",
+        "de": "Vehicle Odometer in Low Resolution",
+        "sv": "Vehicle Odometer in Low Resolution"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x010A",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_010d",
+      "name": "Read Stored EVC Configuration",
+      "names": {
+        "en": "Read Stored EVC Configuration",
+        "de": "Read Stored EVC Configuration",
+        "sv": "Read Stored EVC Configuration"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp223_012a",
+      "name": "ActivateSupplierSpecificMessages",
+      "names": {
+        "en": "ActivateSupplierSpecificMessages",
+        "de": "ActivateSupplierSpecificMessages",
+        "sv": "ActivateSupplierSpecificMessages"
+      },
+      "module": "ESP223",
+      "service": 34,
+      "did": "0x012A",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_0107",
+      "name": "Global Time Sync Measured Values",
+      "names": {
+        "en": "Global Time Sync Measured Values",
+        "de": "Global Time Sync Measured Values",
+        "sv": "Global Time Sync Measured Values"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x0107",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_010a",
+      "name": "Vehicle Odometer in Low Resolution",
+      "names": {
+        "en": "Vehicle Odometer in Low Resolution",
+        "de": "Vehicle Odometer in Low Resolution",
+        "sv": "Vehicle Odometer in Low Resolution"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x010A",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_0133",
+      "name": "Current Operating Time",
+      "names": {
+        "en": "Current Operating Time",
+        "de": "Current Operating Time",
+        "sv": "Current Operating Time"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x0133",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas223_0180",
+      "name": "Root CA Certificate",
+      "names": {
+        "en": "Root CA Certificate",
+        "de": "Root CA Certificate",
+        "sv": "Root CA Certificate"
+      },
+      "module": "AVAS223",
+      "service": 34,
+      "did": "0x0180",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ad_fl223_hw_id",
+      "name": "AD_FL223 Hardware Number",
+      "names": {
+        "en": "AD_FL223 Hardware Number",
+        "de": "AD_FL223 Hardwarenummer",
+        "sv": "AD_FL223 Hårdvarunummer"
+      },
+      "module": "AD_FL223",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ad_fr223_hw_id",
+      "name": "AD_FR223 Hardware Number",
+      "names": {
+        "en": "AD_FR223 Hardware Number",
+        "de": "AD_FR223 Hardwarenummer",
+        "sv": "AD_FR223 Hårdvarunummer"
+      },
+      "module": "AD_FR223",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_0101",
+      "name": "ECU Logging Data",
+      "names": {
+        "en": "ECU Logging Data",
+        "de": "ECU Logging Data",
+        "sv": "ECU Logging Data"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x0101",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_0107",
+      "name": "Global Time Sync Measured Values",
+      "names": {
+        "en": "Global Time Sync Measured Values",
+        "de": "Global Time Sync Measured Values",
+        "sv": "Global Time Sync Measured Values"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x0107",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_010a",
+      "name": "Vehicle Odometer in Low Resolution",
+      "names": {
+        "en": "Vehicle Odometer in Low Resolution",
+        "de": "Vehicle Odometer in Low Resolution",
+        "sv": "Vehicle Odometer in Low Resolution"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x010A",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_010d",
+      "name": "Read Stored EVC Configuration",
+      "names": {
+        "en": "Read Stored EVC Configuration",
+        "de": "Read Stored EVC Configuration",
+        "sv": "Read Stored EVC Configuration"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "tpm223_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "TPM223",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

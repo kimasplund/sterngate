@@ -42,7 +42,10 @@ pub use flash::{
 };
 pub use frame::CanFrame;
 pub use garage::{DecodedVin, GitCommitInfo, VehicleEcuSnapshot, VehicleGarage, VehicleRecord};
-pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
+pub use i18n::{
+    dtc_database_count, get_dtc_database, lookup_dtc_description, lookup_routine_name, DtcRecord,
+    Language,
+};
 pub use modpack::{
     armor::{decode_from_armor, encode_to_armor, ARMOR_FOOTER, ARMOR_HEADER},
     fec::{FecStatus, ReedSolomonCodec},
@@ -156,12 +159,18 @@ mod tests {
     fn test_ecu_catalog_loading_and_search() {
         let catalog = EcuCatalog::load_default().unwrap();
         let stats = catalog.stats();
-        assert_eq!(stats.unique_ecus, 990);
+        assert!(stats.unique_ecus >= 1340);
 
         // Search for EGS
         let egs_results = catalog.search("EGS", 10);
         assert!(!egs_results.is_empty());
         assert!(egs_results.iter().any(|r| r.ecu_name == "EGS52"));
+
+        // Modern W223 ECU check
+        let esp223 = catalog.get_ecu("ESP223").unwrap();
+        assert_eq!(esp223.protocol, "UDS");
+        assert!(esp223.dtc_count >= 900);
+        assert!(esp223.chassis.contains(&"W223".to_string()));
 
         // Exact get_ecu inspection
         let egs52 = catalog.get_ecu("EGS52").unwrap();
@@ -178,6 +187,36 @@ mod tests {
         assert_eq!(vgs.protocol, "UDS");
         assert_eq!(vgs.dtc_count, 258);
         assert!(!vgs.chassis.is_empty());
+    }
+
+    #[test]
+    fn test_mercedes_dtc_database_lookup() {
+        assert!(dtc_database_count() >= 17000);
+
+        // Test standard powertrain code
+        let desc_p0100 = lookup_dtc_description("P0100", Language::En);
+        assert_eq!(desc_p0100, "Mass Air Flow (MAF) Sensor Circuit Malfunction");
+        let desc_p0100_de = lookup_dtc_description("P0100", Language::De);
+        assert_eq!(
+            desc_p0100_de,
+            "Luftmassenmesser (LMM) Schaltkreis Fehlfunktion"
+        );
+
+        // Test factory Mercedes 7-character UDS DTC
+        let desc_p164456 = lookup_dtc_description("P164456", Language::En);
+        assert!(desc_p164456.contains("variant coding"));
+
+        // Test voltage malfunction DTC in English and German
+        let desc_p056000_en = lookup_dtc_description("P056000", Language::En);
+        assert!(desc_p056000_en.contains("voltage has a malfunction"));
+        let desc_p056000_de = lookup_dtc_description("P056000", Language::De);
+        assert!(desc_p056000_de.contains("Bordnetzspannung hat Funktionsstörung"));
+
+        // Test UDS 3-byte DTC parsing
+        let dtc = Dtc::parse_uds_3byte(0x16, 0x44, 0x56, 0x2F, "MED177");
+        assert_eq!(dtc.code, "P164456");
+        assert_eq!(dtc.module, "MED177");
+        assert!(dtc.description.contains("variant coding"));
     }
 
     #[test]

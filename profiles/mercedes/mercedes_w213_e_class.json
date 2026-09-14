@@ -1,0 +1,556 @@
+{
+  "profile_name": "mercedes_w213_e_class",
+  "oem": "Mercedes-Benz",
+  "chassis": "W213",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "MED177": {
+      "name": "MED177 (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "MED177 Controller",
+        "de": "MED177 Steuergerät",
+        "sv": "MED177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "MED1775": {
+      "name": "MED1775 (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "MED1775 Controller",
+        "de": "MED1775 Steuergerät",
+        "sv": "MED1775 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CR60NFZ": {
+      "name": "CR60NFZ (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "CR60NFZ Controller",
+        "de": "CR60NFZ Steuergerät",
+        "sv": "CR60NFZ Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "CR61": {
+      "name": "CR61 (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "CR61 Controller",
+        "de": "CR61 Steuergerät",
+        "sv": "CR61 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP213_AMG": {
+      "name": "ESP213_AMG (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "ESP213_AMG Controller",
+        "de": "ESP213_AMG Steuergerät",
+        "sv": "ESP213_AMG Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP213_MOPF": {
+      "name": "ESP213_MOPF (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "ESP213_MOPF Controller",
+        "de": "ESP213_MOPF Steuergerät",
+        "sv": "ESP213_MOPF Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ACC_213": {
+      "name": "ACC_213 (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "ACC_213 Controller",
+        "de": "ACC_213 Steuergerät",
+        "sv": "ACC_213 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "EZS213": {
+      "name": "EZS213 (W213 E-Class (2016-2023))",
+      "names": {
+        "en": "EZS213 Controller",
+        "de": "EZS213 Steuergerät",
+        "sv": "EZS213 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "med177_hw_id",
+      "name": "MED177 Hardware Number",
+      "names": {
+        "en": "MED177 Hardware Number",
+        "de": "MED177 Hardwarenummer",
+        "sv": "MED177 Hårdvarunummer"
+      },
+      "module": "MED177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "med1775_hw_id",
+      "name": "MED1775 Hardware Number",
+      "names": {
+        "en": "MED1775 Hardware Number",
+        "de": "MED1775 Hardwarenummer",
+        "sv": "MED1775 Hårdvarunummer"
+      },
+      "module": "MED1775",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "cr60nfz_hw_id",
+      "name": "CR60NFZ Hardware Number",
+      "names": {
+        "en": "CR60NFZ Hardware Number",
+        "de": "CR60NFZ Hardwarenummer",
+        "sv": "CR60NFZ Hårdvarunummer"
+      },
+      "module": "CR60NFZ",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "cr61_hw_id",
+      "name": "CR61 Hardware Number",
+      "names": {
+        "en": "CR61 Hardware Number",
+        "de": "CR61 Hardwarenummer",
+        "sv": "CR61 Hårdvarunummer"
+      },
+      "module": "CR61",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_0107",
+      "name": "Response on Event Light Activation State",
+      "names": {
+        "en": "Response on Event Light Activation State",
+        "de": "Response on Event Light Activation State",
+        "sv": "Response on Event Light Activation State"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x0107",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_010d",
+      "name": "Used EVC Config",
+      "names": {
+        "en": "Used EVC Config",
+        "de": "Used EVC Config",
+        "sv": "Used EVC Config"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_012b",
+      "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+      "names": {
+        "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x012B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_amg_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP213_AMG",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_0105",
+      "name": "Usage Histogram",
+      "names": {
+        "en": "Usage Histogram",
+        "de": "Usage Histogram",
+        "sv": "Usage Histogram"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x0105",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_010d",
+      "name": "Read Used EVC Config",
+      "names": {
+        "en": "Read Used EVC Config",
+        "de": "Read Used EVC Config",
+        "sv": "Read Used EVC Config"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_0134",
+      "name": "SAR Trigger Counter",
+      "names": {
+        "en": "SAR Trigger Counter",
+        "de": "SAR Trigger Counter",
+        "sv": "SAR Trigger Counter"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x0134",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp213_mopf_0135",
+      "name": "Number of SAR Write Cycles",
+      "names": {
+        "en": "Number of SAR Write Cycles",
+        "de": "Number of SAR Write Cycles",
+        "sv": "Number of SAR Write Cycles"
+      },
+      "module": "ESP213_MOPF",
+      "service": 34,
+      "did": "0x0135",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "acc_213_hw_id",
+      "name": "ACC_213 Hardware Number",
+      "names": {
+        "en": "ACC_213 Hardware Number",
+        "de": "ACC_213 Hardwarenummer",
+        "sv": "ACC_213 Hårdvarunummer"
+      },
+      "module": "ACC_213",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "ezs213_hw_id",
+      "name": "EZS213 Hardware Number",
+      "names": {
+        "en": "EZS213 Hardware Number",
+        "de": "EZS213 Hardwarenummer",
+        "sv": "EZS213 Hårdvarunummer"
+      },
+      "module": "EZS213",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

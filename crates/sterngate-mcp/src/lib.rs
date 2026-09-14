@@ -61,7 +61,7 @@ mod tests {
         );
 
         let cat_res = resources::read_resource("sterngate://ecu/catalog").unwrap();
-        assert_eq!(cat_res.get("unique_ecus").unwrap().as_u64().unwrap(), 990);
+        assert!(cat_res.get("unique_ecus").unwrap().as_u64().unwrap() >= 1340);
     }
 
     #[tokio::test]

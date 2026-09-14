@@ -1,0 +1,432 @@
+{
+  "profile_name": "mercedes_w290_amg_gt",
+  "oem": "Mercedes-Benz",
+  "chassis": "W290",
+  "gateway_type": "DoIP / Central Gateway (CGW)",
+  "default_bitrate": 500000,
+  "modules": {
+    "MED177": {
+      "name": "MED177 (W290 AMG GT 4-Door Coupe)",
+      "names": {
+        "en": "MED177 Controller",
+        "de": "MED177 Steuergerät",
+        "sv": "MED177 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "VGSNAG3": {
+      "name": "VGSNAG3 (W290 AMG GT 4-Door Coupe)",
+      "names": {
+        "en": "VGSNAG3 Controller",
+        "de": "VGSNAG3 Steuergerät",
+        "sv": "VGSNAG3 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "ESP290_AMG": {
+      "name": "ESP290_AMG (W290 AMG GT 4-Door Coupe)",
+      "names": {
+        "en": "ESP290_AMG Controller",
+        "de": "ESP290_AMG Steuergerät",
+        "sv": "ESP290_AMG Styrenhet"
+      },
+      "tx_id": "0x07e2",
+      "rx_id": "0x07ea",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "AERO290": {
+      "name": "AERO290 (W290 AMG GT 4-Door Coupe)",
+      "names": {
+        "en": "AERO290 Controller",
+        "de": "AERO290 Steuergerät",
+        "sv": "AERO290 Styrenhet"
+      },
+      "tx_id": "0x7E0",
+      "rx_id": "0x7E8",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    },
+    "AVAS290AMG": {
+      "name": "AVAS290AMG (W290 AMG GT 4-Door Coupe)",
+      "names": {
+        "en": "AVAS290AMG Controller",
+        "de": "AVAS290AMG Steuergerät",
+        "sv": "AVAS290AMG Styrenhet"
+      },
+      "tx_id": "0x066e",
+      "rx_id": "0x05ee",
+      "protocol": "UDS",
+      "seed_key_algo": "DaimlerStandardLevel0B"
+    }
+  },
+  "parameters": [
+    {
+      "id": "med177_hw_id",
+      "name": "MED177 Hardware Number",
+      "names": {
+        "en": "MED177 Hardware Number",
+        "de": "MED177 Hardwarenummer",
+        "sv": "MED177 Hårdvarunummer"
+      },
+      "module": "MED177",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "vgsnag3_hw_id",
+      "name": "VGSNAG3 Hardware Number",
+      "names": {
+        "en": "VGSNAG3 Hardware Number",
+        "de": "VGSNAG3 Hardwarenummer",
+        "sv": "VGSNAG3 Hårdvarunummer"
+      },
+      "module": "VGSNAG3",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_010d",
+      "name": "Used EVC Config",
+      "names": {
+        "en": "Used EVC Config",
+        "de": "Used EVC Config",
+        "sv": "Used EVC Config"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x010D",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_012b",
+      "name": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+      "names": {
+        "en": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "de": "Adjust ISO 10681 2 Bandwidth Control Parameters",
+        "sv": "Adjust ISO 10681 2 Bandwidth Control Parameters"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x012B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_0131",
+      "name": "Activate SAR Data Storage",
+      "names": {
+        "en": "Activate SAR Data Storage",
+        "de": "Activate SAR Data Storage",
+        "sv": "Activate SAR Data Storage"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x0131",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_0134",
+      "name": "SAR Trigger Counter",
+      "names": {
+        "en": "SAR Trigger Counter",
+        "de": "SAR Trigger Counter",
+        "sv": "SAR Trigger Counter"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x0134",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "esp290_amg_0135",
+      "name": "Number of SAR Write Cycles",
+      "names": {
+        "en": "Number of SAR Write Cycles",
+        "de": "Number of SAR Write Cycles",
+        "sv": "Number of SAR Write Cycles"
+      },
+      "module": "ESP290_AMG",
+      "service": 34,
+      "did": "0x0135",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "aero290_hw_id",
+      "name": "AERO290 Hardware Number",
+      "names": {
+        "en": "AERO290 Hardware Number",
+        "de": "AERO290 Hardwarenummer",
+        "sv": "AERO290 Hårdvarunummer"
+      },
+      "module": "AERO290",
+      "service": 34,
+      "did": "0xF191",
+      "byte_offset": 0,
+      "length": 10,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_0100",
+      "name": "Reprogramming Attempt Counter",
+      "names": {
+        "en": "Reprogramming Attempt Counter",
+        "de": "Reprogramming Attempt Counter",
+        "sv": "Reprogramming Attempt Counter"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x0100",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_0102",
+      "name": "Diagnostic Trace Memory",
+      "names": {
+        "en": "Diagnostic Trace Memory",
+        "de": "Diagnostic Trace Memory",
+        "sv": "Diagnostic Trace Memory"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x0102",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_010a",
+      "name": "Vehicle Odometer in Low Resolution",
+      "names": {
+        "en": "Vehicle Odometer in Low Resolution",
+        "de": "Vehicle Odometer in Low Resolution",
+        "sv": "Vehicle Odometer in Low Resolution"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x010A",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_010b",
+      "name": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+      "names": {
+        "en": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "de": "Adjust ISO 15765 2 Block Size and STmin Parameter",
+        "sv": "Adjust ISO 15765 2 Block Size and STmin Parameter"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x010B",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_0120",
+      "name": "Reprogramming Resume Information",
+      "names": {
+        "en": "Reprogramming Resume Information",
+        "de": "Reprogramming Resume Information",
+        "sv": "Reprogramming Resume Information"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x0120",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_0200",
+      "name": "Voltage",
+      "names": {
+        "en": "Voltage",
+        "de": "Voltage",
+        "sv": "Voltage"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x0200",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_0201",
+      "name": "Temperature",
+      "names": {
+        "en": "Temperature",
+        "de": "Temperature",
+        "sv": "Temperature"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x0201",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    },
+    {
+      "id": "avas290amg_0202",
+      "name": "Supply Voltage",
+      "names": {
+        "en": "Supply Voltage",
+        "de": "Supply Voltage",
+        "sv": "Supply Voltage"
+      },
+      "module": "AVAS290AMG",
+      "service": 34,
+      "did": "0x0202",
+      "byte_offset": 0,
+      "length": 4,
+      "scaling": {
+        "slope": 1.0,
+        "offset": 0.0
+      },
+      "unit": ""
+    }
+  ]
+}

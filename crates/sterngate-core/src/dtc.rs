@@ -60,4 +60,49 @@ impl Dtc {
     pub fn localize(&mut self, lang: Language) {
         self.description = lookup_dtc_description(&self.code, lang);
     }
+
+    /// Parse 3-byte standard UDS (ISO 14229) Diagnostic Trouble Code with Failure Type Byte (FTB)
+    pub fn parse_uds_3byte(b0: u8, b1: u8, b2: u8, status_byte: u8, module: &str) -> Self {
+        Self::parse_uds_3byte_localized(b0, b1, b2, status_byte, module, Language::En)
+    }
+
+    /// Parse 3-byte standard UDS Diagnostic Trouble Code with localized description
+    pub fn parse_uds_3byte_localized(
+        b0: u8,
+        b1: u8,
+        b2: u8,
+        status_byte: u8,
+        module: &str,
+        lang: Language,
+    ) -> Self {
+        let prefix = match (b0 >> 6) & 0x03 {
+            0 => 'P',
+            1 => 'C',
+            2 => 'B',
+            3 => 'U',
+            _ => 'P',
+        };
+        let d1 = (b0 >> 4) & 0x03;
+        let d2 = b0 & 0x0F;
+        let d3 = (b1 >> 4) & 0x0F;
+        let d4 = b1 & 0x0F;
+        let code = format!("{}{:X}{:X}{:X}{:X}{:02X}", prefix, d1, d2, d3, d4, b2);
+
+        let confirmed = (status_byte & 0x08) != 0;
+        let pending = (status_byte & 0x04) != 0;
+        let warning_lamp_requested = (status_byte & 0x80) != 0;
+
+        let description = lookup_dtc_description(&code, lang);
+
+        Self {
+            code,
+            raw_bytes: [b0, b1, b2],
+            status_byte,
+            module: module.to_string(),
+            description,
+            confirmed,
+            pending,
+            warning_lamp_requested,
+        }
+    }
 }
