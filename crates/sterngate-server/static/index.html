@@ -915,7 +915,7 @@
             </div>
             <!-- Percentage Modification Toolbar -->
             <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="tuning.modify">Modify:</span>
+              <span style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="tuning.preview_label">Preview:</span>
               <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.05)">+5%</button>
               <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.10)">+10%</button>
               <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.15)">+15%</button>
@@ -929,6 +929,10 @@
             <table class="table" style="font-family: monospace; font-size: 0.75rem; margin: 0; text-align: right;" id="active-map-table">
               <!-- Rendered via JS -->
             </table>
+          </div>
+
+          <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--warning);" data-i18n="tuning.preview_note">
+            Preview only: these percentages recalculate the table for comparison. They are not written back to the ROM and are not included in generated packages.
           </div>
         </div>
 

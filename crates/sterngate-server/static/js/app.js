@@ -2468,30 +2468,48 @@ async function generateDtcKillMod() {
 
 async function applyGeneratedMod() {
   if (!lastGeneratedArmoredMod) return;
-  openSafetyModal({
-    actionType: 'mod_apply',
+
+  if (!activeVehicleVin) {
+    alert('Run a vehicle scan first: the mod is committed to that vehicle\'s garage history, so it must not be attributed to an unidentified car.');
+    return;
+  }
+
+  showSafetyModal({
     title: 'Flash Calibration Mod to Vehicle',
-    desc: 'Flash the generated calibration package to the connected vehicle ECU. Baseline snapshot will be saved to vehicle garage Git history.',
-    riskBadge: 'SAFE TUNING / REVERSIBLE',
-    keyword: null,
+    badge: 'CALIBRATION WRITE / REVERSIBLE',
+    badgeClass: 'badge-voltage',
+    description: `
+      Writes the generated calibration package to the connected vehicle ECU.<br><br>
+      A baseline snapshot is committed to the vehicle's garage Git history before any bytes reach the bus, so the change can be rolled back.
+    `,
     minVoltage: 12.5,
-    payload: {
-      content: lastGeneratedArmoredMod,
-      vin: currentVin || 'WDB2112061A123456',
-      battery_voltage: 13.8,
-      force: false
-    },
-    actionFn: async (payload) => {
-      const res = await fetch('/api/v1/mods/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(data.report.message);
-      } else {
-        alert('Mod flashing failed: ' + (data.error || 'Unknown error'));
+    requireEngineOff: true,
+    requireKeyword: null,
+    confirmBtnText: 'Flash Mod to Vehicle',
+    onConfirm: async () => {
+      try {
+        const res = await fetch('/api/v1/mods/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: lastGeneratedArmoredMod,
+            vin: activeVehicleVin,
+            // Sent only when actually measured; the server refuses rather
+            // than assuming a voltage that clears the mod's own interlock.
+            battery_voltage: (lastTelemetrySnap && lastTelemetrySnap.battery_voltage !== null && lastTelemetrySnap.battery_voltage !== undefined)
+              ? lastTelemetrySnap.battery_voltage
+              : null,
+            force: false
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert(data.report.message);
+        } else {
+          alert('Mod flashing failed: ' + (data.error || `HTTP ${res.status}`));
+        }
+      } catch (err) {
+        alert('Mod flashing failed: ' + err.message);
       }
     }
   });

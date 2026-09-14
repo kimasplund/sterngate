@@ -197,6 +197,8 @@
     "detected_maps": "Identifierade styrboxmappar",
     "no_maps": "Inga mappar identifierade än. Ladda en ROM-fil för att starta mönsterigenkänning.",
     "modify": "Ändra:",
+    "preview_label": "Förhandsvisning:",
+    "preview_note": "Endast förhandsvisning: procentvärdena räknar om tabellen för jämförelse. De skrivs inte tillbaka till ROM-filen och ingår inte i genererade paket.",
     "reset": "Återställ",
     "generated_mod": "✓ Skapat Community Mod-paket (.sgmod)",
     "btn_flash_mod": "⚡ 1-Klick Flash Mod till fordon"

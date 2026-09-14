@@ -197,6 +197,8 @@
     "detected_maps": "Detected Calibration Maps",
     "no_maps": "No maps detected yet. Load a ROM file to start automated pattern matching.",
     "modify": "Modify:",
+    "preview_label": "Preview:",
+    "preview_note": "Preview only: these percentages recalculate the table for comparison. They are not written back to the ROM and are not included in generated packages.",
     "reset": "Reset",
     "generated_mod": "✓ Generated Community Mod Package (.sgmod)",
     "btn_flash_mod": "⚡ 1-Click Flash Mod to Vehicle"

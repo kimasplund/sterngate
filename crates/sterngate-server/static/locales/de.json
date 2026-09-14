@@ -197,6 +197,8 @@
     "detected_maps": "Erkannte Kennfelder",
     "no_maps": "Noch keine Kennfelder erkannt. Laden Sie eine ROM-Datei, um die Mustererkennung zu starten.",
     "modify": "Anpassen:",
+    "preview_label": "Vorschau:",
+    "preview_note": "Nur Vorschau: Diese Prozentwerte berechnen die Tabelle zum Vergleich neu. Sie werden nicht in die ROM-Datei zurückgeschrieben und nicht in erzeugte Pakete übernommen.",
     "reset": "Zurücksetzen",
     "generated_mod": "✓ Erstelltes Community-Mod-Paket (.sgmod)",
     "btn_flash_mod": "⚡ 1-Klick Mod auf Fahrzeug flashen"
