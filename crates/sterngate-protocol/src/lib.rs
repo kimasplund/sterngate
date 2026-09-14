@@ -1,6 +1,7 @@
 pub mod discoverer;
 pub mod flasher;
 pub mod gate;
+pub mod importer;
 pub mod isotp;
 pub mod kwp2000;
 pub mod scanner;
@@ -11,6 +12,7 @@ pub mod uds;
 pub use discoverer::BusDiscoverer;
 pub use flasher::FlashingWorker;
 pub use gate::TransactionGate;
+pub use importer::{ImportReport, ProfileImporter};
 pub use isotp::IsoTpChannel;
 pub use kwp2000::KwpClient;
 pub use scanner::{ModuleScanResult, VehicleDiagnosticReport, VehicleScanner};
@@ -354,5 +356,84 @@ mod tests {
         assert!(report_mismatch
             .risk_explanation
             .contains("CRITICAL HARDWARE MISMATCH"));
+    }
+
+    #[tokio::test]
+    async fn test_quick_mod_routines() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        // 1. Speed limiter (VMax -> 250 km/h)
+        let v_res = ServiceRoutineManager::configure_speed_limiter(&mut sim, 0x7E0, 0x7E8, 250)
+            .await
+            .unwrap();
+        assert!(v_res.success);
+        assert_eq!(v_res.speed_limit_kmh, 250);
+
+        // 2. Seatbelt chime mute
+        let s_res = ServiceRoutineManager::configure_seatbelt_chime(&mut sim, 0x7C0, 0x7C8, false)
+            .await
+            .unwrap();
+        assert!(s_res.success);
+        assert!(!s_res.acoustic_chime_enabled);
+
+        // 3. Tank liters display
+        let t_res =
+            ServiceRoutineManager::configure_tank_liters_display(&mut sim, 0x7C0, 0x7C8, true)
+                .await
+                .unwrap();
+        assert!(t_res.success);
+        assert!(t_res.exact_liters_display_enabled);
+
+        // 4. Cornering lights
+        let c_res = ServiceRoutineManager::configure_cornering_lights(&mut sim, 0x7E2, 0x7EA, true)
+            .await
+            .unwrap();
+        assert!(c_res.success);
+        assert!(c_res.cornering_lights_enabled);
+    }
+
+    #[test]
+    fn test_profile_importer() {
+        let temp_in = std::env::temp_dir().join("sterngate_import_test_in");
+        let temp_out = std::env::temp_dir().join("sterngate_import_test_out");
+        let _ = std::fs::remove_dir_all(&temp_in);
+        let _ = std::fs::remove_dir_all(&temp_out);
+        std::fs::create_dir_all(&temp_in).unwrap();
+        std::fs::create_dir_all(&temp_out).unwrap();
+
+        // Create a mock CBF file (e.g. CR4.cbf)
+        let mock_cbf_data = vec![0x43, 0x41, 0x45, 0x53, 0x41, 0x52, 0x22, 0x01, 0x12, 0x34];
+        std::fs::write(temp_in.join("CR4.cbf"), &mock_cbf_data).unwrap();
+
+        // Create a mock SMR-D file (e.g. MED17_W205.smr-d)
+        let mock_smrd_data = b"MOCK_SMRD_ODX_CONTAINER";
+        std::fs::write(temp_in.join("MED17_W205.smr-d"), mock_smrd_data).unwrap();
+
+        let report = ProfileImporter::import_from_path(&temp_in, &temp_out).unwrap();
+        eprintln!("REPORT: {:?}", report);
+        assert_eq!(report.cbf_files_found, 1);
+        assert_eq!(report.smrd_files_found, 1);
+        assert_eq!(
+            report.profiles_generated.len(),
+            2,
+            "Warnings: {:?}",
+            report.warnings
+        );
+
+        // Verify generated profile JSON files exist and load
+        let gen_profile_path = temp_out.join("w164_w251_cr4.json");
+        assert!(gen_profile_path.exists());
+        let prof = sterngate_core::VehicleProfile::load_from_file(&gen_profile_path).unwrap();
+        assert_eq!(prof.oem, "Mercedes-Benz");
+        assert!(prof.modules.contains_key("CR4"));
+
+        let gen_smrd_path = temp_out.join("w205_med17_w205.json");
+        assert!(gen_smrd_path.exists());
+        let prof_smrd = sterngate_core::VehicleProfile::load_from_file(&gen_smrd_path).unwrap();
+        assert_eq!(prof_smrd.chassis, "W205");
+
+        let _ = std::fs::remove_dir_all(&temp_in);
+        let _ = std::fs::remove_dir_all(&temp_out);
     }
 }

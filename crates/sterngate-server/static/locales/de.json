@@ -143,6 +143,20 @@
   "modal": {
     "btn_cancel": "Abbrechen",
     "btn_confirm": "Prozedur ausführen"
+  },
+  "quick_mods": {
+    "title": "⚡ Gespeicherte Fahrzeug-Anpassungen (One-Click Quick Mods)",
+    "subtitle": "GIT GARAGE VERWALTET",
+    "desc": "Vorgeprüfte Fahrzeugkonfigurationen. Änderungen werden vor Bus-Übertragung automatisch im lokalen Git gesichert für einfachen Rollback.",
+    "vmax_title": "🏎️ Höchstgeschwindigkeitsbegrenzung (VMax)",
+    "seatbelt_title": "🔔 Akustischer Gurtwarnton",
+    "tank_liters_title": "⛽ Tankinhalt in exakten Litern (Restliter)",
+    "cornering_lights_title": "💡 Intelligentes Abbiegelicht (Front-SAM)"
+  },
+  "vault": {
+    "title": "🏛️ Lokaler Kalibrierungs-Tresor & Firmware-Explorer",
+    "desc": "Durchsucht lokalen Speicher (.bin, .rom, .cff, .smr-f, .fls) ohne Internet-Upload. Vergleicht Bosch HW/SW-Nummern mit verbundenen Steuergeräten und erkennt Software-Updates.",
+    "btn_scan": "🔍 Lokalen Tresor scannen"
   }
 }
 

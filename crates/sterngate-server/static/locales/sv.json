@@ -143,6 +143,20 @@
   "modal": {
     "btn_cancel": "Avbryt",
     "btn_confirm": "Utför procedur"
+  },
+  "quick_mods": {
+    "title": "⚡ Sparade Fordonsanpassningar (One-Click Quick Mods)",
+    "subtitle": "GIT GARAGE SPÅRAD",
+    "desc": "Förtestade fordonskonfigurationer. Ändringar sparas automatiskt i lokal Git-historik före bussöverföring för enkel återställning.",
+    "vmax_title": "🏎️ Maxhastighetsspärr (VMax)",
+    "seatbelt_title": "🔔 Akustisk bältespåminnare",
+    "tank_liters_title": "⛽ Tankvolym i exakta liter (Restliter)",
+    "cornering_lights_title": "💡 Intelligenta kurvdimljus (Front-SAM)"
+  },
+  "vault": {
+    "title": "🏛️ Lokalt Kalibreringsvalv & Firmware-Utforskare",
+    "desc": "Skannar lokal lagring (.bin, .rom, .cff, .smr-f, .fls) utan uppladdning över internet. Jämför Bosch HW/SW med anslutna styrenheter och identifierar mjukvaruuppdateringar.",
+    "btn_scan": "🔍 Skanna lokalt valv"
   }
 }
 

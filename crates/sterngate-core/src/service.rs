@@ -204,3 +204,46 @@ pub struct EgrOptimizationStatus {
     pub module: String,
     pub message: String,
 }
+
+/// Vehicle Maximum Road Speed Limiter (VMax) Configuration Status
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeedLimiterStatus {
+    pub success: bool,
+    pub speed_limit_kmh: u16,
+    pub previous_limit_kmh: Option<u16>,
+    pub module: String,
+    pub did: u16,
+    pub message: String,
+}
+
+/// Instrument Cluster (KI) Seatbelt Warning Chime Configuration Status
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeatbeltChimeStatus {
+    pub success: bool,
+    pub acoustic_chime_enabled: bool,
+    pub visual_warning_lamp_active: bool,
+    pub module: String,
+    pub did: u16,
+    pub message: String,
+}
+
+/// Instrument Cluster (KI) Remaining Fuel Exact Liters (Restliteranzeige) Status
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TankLitersStatus {
+    pub success: bool,
+    pub exact_liters_display_enabled: bool,
+    pub module: String,
+    pub did: u16,
+    pub message: String,
+}
+
+/// Front SAM Intelligent Cornering Fog Lights (Abbiegelicht) Status
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CorneringLightsStatus {
+    pub success: bool,
+    pub cornering_lights_enabled: bool,
+    pub activation_threshold_kmh: u8,
+    pub module: String,
+    pub did: u16,
+    pub message: String,
+}

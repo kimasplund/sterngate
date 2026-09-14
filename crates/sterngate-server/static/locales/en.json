@@ -143,6 +143,20 @@
   "modal": {
     "btn_cancel": "Cancel / Abort",
     "btn_confirm": "Execute Procedure"
+  },
+  "quick_mods": {
+    "title": "⚡ Saved Vehicle Customizations (One-Click Quick Mods)",
+    "subtitle": "GIT GARAGE TRACKED",
+    "desc": "Pre-tested automotive configuration recipes. Modifications are automatically committed to local Git history prior to bus dispatch, allowing single-click rollbacks.",
+    "vmax_title": "🏎️ Vehicle Speed Limiter (VMax)",
+    "seatbelt_title": "🔔 Seatbelt Acoustic Chime",
+    "tank_liters_title": "⛽ Tank Fuel in Exact Liters (Restliter)",
+    "cornering_lights_title": "💡 Cornering Fog Lights (Abbiegelicht)"
+  },
+  "vault": {
+    "title": "🏛️ Local Calibration Vault & Firmware Explorer",
+    "desc": "Scans local storage (.bin, .rom, .cff, .smr-f, .fls) without uploading binaries over the internet. Automatically compares embedded Bosch HW/SW IDs against connected vehicle ECUs and detects software updates.",
+    "btn_scan": "🔍 Scan Local Vault"
   }
 }
 

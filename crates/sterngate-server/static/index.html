@@ -445,6 +445,80 @@
             </div>
             <button class="btn btn-primary" style="width: 100%;" onclick="requestEgrOptimizeSafe()">Optimize EGR Air Mass Offset</button>
           </div>
+
+          <!-- Mod 3: VMax Speed Limiter -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <b style="color: #fff;">🏎️ Vehicle Speed Limiter (VMax)</b>
+              <span class="badge badge-voltage">DID 0x0110</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Reconfigures road speed governor threshold stored in engine management (EDC16/EDC17/ME9).
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select id="vmax-select" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.45rem; border-radius: 6px; flex: 1;">
+                <option value="250">250 km/h (Standard Unrestricted / AMG)</option>
+                <option value="210">210 km/h (Winter Tires / Commercial Limit)</option>
+                <option value="280">280 km/h (Track / High Performance)</option>
+                <option value="300">300 km/h (Unlimited)</option>
+              </select>
+              <button class="btn btn-primary" onclick="requestVmaxSafe()">Program VMax</button>
+            </div>
+          </div>
+
+          <!-- Mod 4: Instrument Cluster Seatbelt Chime -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <b style="color: #fff;">🔔 Seatbelt Acoustic Chime</b>
+              <span class="badge badge-voltage">DID 0x0201</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Mutes repetitive audible buzzer in Instrument Cluster (KI) while preserving dashboard warning lamp & SRS readiness.
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select id="seatbelt-chime-select" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.45rem; border-radius: 6px; flex: 1;">
+                <option value="muted">Acoustic Chime Muted (Visual Lamp Active)</option>
+                <option value="enabled">Acoustic Chime Enabled (Factory Standard)</option>
+              </select>
+              <button class="btn btn-primary" onclick="requestSeatbeltChimeSafe()">Update Chime</button>
+            </div>
+          </div>
+
+          <!-- Mod 5: Remaining Fuel in Liters (Restliteranzeige) -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <b style="color: #fff;">⛽ Tank Fuel in Exact Liters (Restliter)</b>
+              <span class="badge badge-voltage">DID 0x0205</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Enables exact digital remaining fuel volume (e.g. 58L) on the central multifunction instrument cluster trip computer screen.
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select id="tank-liters-select" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.45rem; border-radius: 6px; flex: 1;">
+                <option value="enabled">Enable Exact Liters Display (Restliter)</option>
+                <option value="disabled">Disable (Factory Segment Gauge Only)</option>
+              </select>
+              <button class="btn btn-primary" onclick="requestTankLitersSafe()">Apply Restliter</button>
+            </div>
+          </div>
+
+          <!-- Mod 6: Front SAM Cornering Fog Lights -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <b style="color: #fff;">💡 Cornering Fog Lights (Abbiegelicht)</b>
+              <span class="badge badge-voltage">DID 0x0310</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Programs Front SAM to illuminate fog light into turns when indicator is active or steering angle turns below 40 km/h.
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select id="cornering-lights-select" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.45rem; border-radius: 6px; flex: 1;">
+                <option value="enabled">Enable Intelligent Cornering Lights (&lt; 40 km/h)</option>
+                <option value="disabled">Disable Cornering Lights</option>
+              </select>
+              <button class="btn btn-primary" onclick="requestCorneringLightsSafe()">Configure Lights</button>
+            </div>
+          </div>
         </div>
 
         <div id="quick-mods-logs" class="log-box" style="margin-top: 1rem; height: 80px;">
@@ -547,6 +621,56 @@
         </div>
         <div id="flash-logs" class="log-box" style="height: 140px;">
           [SYSTEM] Flasher daemon ready. Waiting for staged payload.<br>
+        </div>
+      </div>
+
+      <!-- Local Firmware Vault & Calibration Explorer Card -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span>🏛️ Local Calibration Vault & Firmware Explorer</span>
+          <span id="vault-count-badge" class="badge badge-voltage">0 FILES</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Scans local storage (.bin, .rom, .cff, .smr-f, .fls) without uploading binaries over the internet. Automatically compares embedded Bosch HW/SW IDs against connected vehicle ECUs and detects software updates.
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <input id="vault-scan-path" type="text" value="firmware_vault" style="flex: 1; min-width: 240px;" placeholder="Path to local firmware folder (e.g. firmware_vault or profiles)">
+          <button class="btn btn-primary" onclick="scanFirmwareVault()">🔍 Scan Local Vault</button>
+        </div>
+
+        <!-- Upgrade Recommendation Alert Box -->
+        <div id="vault-recommendation-box" style="display: none; background: rgba(56, 139, 253, 0.15); border: 1px solid rgba(56, 139, 253, 0.4); border-radius: 6px; padding: 0.85rem; margin-bottom: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <b style="color: var(--accent);">✨ Recommended Software Calibration Upgrade Found!</b>
+              <div id="vault-recommendation-desc" style="font-size: 0.8rem; color: #fff; margin-top: 0.25rem;"></div>
+            </div>
+            <button id="btn-stage-recommendation" class="btn btn-primary" onclick="">Stage Recommended Calibration</button>
+          </div>
+        </div>
+
+        <!-- Discovered Binaries Table -->
+        <div style="max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Format</th>
+                <th>Bosch HW</th>
+                <th>Software / Version</th>
+                <th>OEM Part #</th>
+                <th>Size</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="vault-files-table">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1rem;">
+                  Click "Scan Local Vault" to discover firmware binaries on local disk.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

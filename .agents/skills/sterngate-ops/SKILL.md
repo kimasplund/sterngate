@@ -391,6 +391,41 @@ sterngate coding diff --vin WDB2112061A000001
 sterngate diag scan --export-html report.html --lang en
 ```
 
+### E. Mercedes One-Click Quick Mods (REST API & Web UI)
+Pre-tested configuration recipes with automated Git garage history tracking:
+```bash
+# 1. VMax Speed Limiter (DID 0x0110)
+curl -s -X POST http://localhost:8080/api/v1/workflow/vmax \
+  -H "Content-Type: application/json" \
+  -d '{"speed_limit_kmh": 250, "vin": "WDB2112061A000001"}' | jq .
+
+# 2. Seatbelt Acoustic Warning Chime (DID 0x0201)
+curl -s -X POST http://localhost:8080/api/v1/workflow/seatbelt-chime \
+  -H "Content-Type: application/json" \
+  -d '{"acoustic_enabled": false, "vin": "WDB2112061A000001"}' | jq .
+
+# 3. Remaining Fuel in Liters / Restliteranzeige (DID 0x0205)
+curl -s -X POST http://localhost:8080/api/v1/workflow/tank-liters \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "vin": "WDB2112061A000001"}' | jq .
+
+# 4. Front SAM Cornering Fog Lights / Abbiegelicht (DID 0x0310)
+curl -s -X POST http://localhost:8080/api/v1/workflow/cornering-lights \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "vin": "WDB2112061A000001"}' | jq .
+```
+
+### F. Local Firmware Vault & Upgrade Scanner (REST API)
+```bash
+# Scan local storage folder for firmware binaries (.bin, .cff, .smr-f, .fls)
+curl -s "http://localhost:8080/api/v1/vault/scan?path=firmware_vault&hw_id=0281012224&sw_id=1037372332" | jq .
+
+# Stage firmware binary for detached flashing sequence
+curl -s -X POST http://localhost:8080/api/v1/vault/stage \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "firmware_vault/W211_OM646_Stage1.bin"}' | jq .
+```
+
 ---
 
 ## 12. Verification Checklist

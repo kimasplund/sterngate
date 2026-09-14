@@ -1,7 +1,8 @@
 use sterngate_core::{
-    AdBlueResetStatus, EcoStartStopMode, EcoStartStopStatus, EgrOptimizationStatus,
-    ImaClassification, Result, SbcServiceAction, SbcServiceStatus, SterngateError,
-    SuspensionCorner, SuspensionCornerAction,
+    AdBlueResetStatus, CorneringLightsStatus, EcoStartStopMode, EcoStartStopStatus,
+    EgrOptimizationStatus, ImaClassification, Result, SbcServiceAction, SbcServiceStatus,
+    SeatbeltChimeStatus, SpeedLimiterStatus, SterngateError, SuspensionCorner,
+    SuspensionCornerAction, TankLitersStatus,
 };
 use sterngate_hal::VehicleInterface;
 use tracing::warn;
@@ -300,6 +301,128 @@ impl ServiceRoutineManager {
             stops_relearned,
             module: "EDC16/EDC17".into(),
             message: "EGR adaptation optimized: +40.0 mg/stroke positive air mass bias applied and lower mechanical stops relearned. Carbon recirculation minimized.".into(),
+        })
+    }
+
+    /// Configure Vehicle Maximum Road Speed Limiter (VMax)
+    pub async fn configure_speed_limiter(
+        interface: &mut dyn VehicleInterface,
+        tx_id: u32,
+        rx_id: u32,
+        speed_limit_kmh: u16,
+    ) -> Result<SpeedLimiterStatus> {
+        let mut uds = UdsClient::new(interface, tx_id, rx_id);
+
+        let _ = uds.diagnostic_session_control(0x03).await;
+
+        let prev_limit = if let Ok(resp) = uds.read_data_by_identifier(0x0110).await {
+            if resp.len() >= 5 {
+                Some(u16::from_be_bytes([resp[3], resp[4]]))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let bytes = speed_limit_kmh.to_be_bytes();
+        uds.write_data_by_identifier(0x0110, &bytes).await?;
+
+        Ok(SpeedLimiterStatus {
+            success: true,
+            speed_limit_kmh,
+            previous_limit_kmh: prev_limit,
+            module: "EDC16/EDC17/ME9".into(),
+            did: 0x0110,
+            message: format!(
+                "Vehicle speed limiter (VMax) configured to {} km/h.",
+                speed_limit_kmh
+            ),
+        })
+    }
+
+    /// Configure Instrument Cluster (KI) Seatbelt Warning Chime
+    pub async fn configure_seatbelt_chime(
+        interface: &mut dyn VehicleInterface,
+        tx_id: u32,
+        rx_id: u32,
+        acoustic_enabled: bool,
+    ) -> Result<SeatbeltChimeStatus> {
+        let mut uds = UdsClient::new(interface, tx_id, rx_id);
+
+        let _ = uds.diagnostic_session_control(0x03).await;
+
+        let val = if acoustic_enabled { 0x01 } else { 0x00 };
+        uds.write_data_by_identifier(0x0201, &[val]).await?;
+
+        Ok(SeatbeltChimeStatus {
+            success: true,
+            acoustic_chime_enabled: acoustic_enabled,
+            visual_warning_lamp_active: true,
+            module: "KI (Instrument Cluster)".into(),
+            did: 0x0201,
+            message: if acoustic_enabled {
+                "Instrument cluster acoustic seatbelt warning chime enabled.".into()
+            } else {
+                "Instrument cluster acoustic seatbelt chime muted (visual warning lamp preserved)."
+                    .into()
+            },
+        })
+    }
+
+    /// Configure Instrument Cluster (KI) Remaining Fuel Exact Liters (Restliteranzeige)
+    pub async fn configure_tank_liters_display(
+        interface: &mut dyn VehicleInterface,
+        tx_id: u32,
+        rx_id: u32,
+        enabled: bool,
+    ) -> Result<TankLitersStatus> {
+        let mut uds = UdsClient::new(interface, tx_id, rx_id);
+
+        let _ = uds.diagnostic_session_control(0x03).await;
+
+        let val = if enabled { 0x01 } else { 0x00 };
+        uds.write_data_by_identifier(0x0205, &[val]).await?;
+
+        Ok(TankLitersStatus {
+            success: true,
+            exact_liters_display_enabled: enabled,
+            module: "KI (Instrument Cluster)".into(),
+            did: 0x0205,
+            message: if enabled {
+                "Instrument cluster exact tank fuel content in liters (Restliteranzeige) enabled."
+                    .into()
+            } else {
+                "Instrument cluster exact tank fuel content display disabled.".into()
+            },
+        })
+    }
+
+    /// Configure Front SAM Intelligent Cornering Fog Lights (Abbiegelicht)
+    pub async fn configure_cornering_lights(
+        interface: &mut dyn VehicleInterface,
+        tx_id: u32,
+        rx_id: u32,
+        enabled: bool,
+    ) -> Result<CorneringLightsStatus> {
+        let mut uds = UdsClient::new(interface, tx_id, rx_id);
+
+        let _ = uds.diagnostic_session_control(0x03).await;
+
+        let val = if enabled { 0x01 } else { 0x00 };
+        uds.write_data_by_identifier(0x0310, &[val]).await?;
+
+        Ok(CorneringLightsStatus {
+            success: true,
+            cornering_lights_enabled: enabled,
+            activation_threshold_kmh: 40,
+            module: "SAM-F (Front SAM)".into(),
+            did: 0x0310,
+            message: if enabled {
+                "Intelligent cornering fog lights enabled (< 40 km/h steering angle & indicator trigger).".into()
+            } else {
+                "Intelligent cornering fog lights disabled.".into()
+            },
         })
     }
 }

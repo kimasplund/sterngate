@@ -103,6 +103,17 @@ Once extracted into native Sterngate JSON, the legacy binary files are discarded
      --output profiles/mercedes/w211_om642_cr4.json
    ```
 
+### Automated Ingestion via Native CLI (`sterngate profile import`)
+Sterngate features an automated CBF & SMR-D batch importer built into the binary:
+```bash
+# Ingest an entire extracted CBF/SMR-D folder or single archive
+sterngate profile import --input /path/to/extracted_cbf --output profiles/
+
+# Ingest single CBF file
+sterngate profile import --input /path/to/CR4.CBF --output profiles/
+```
+The importer extracts all metadata, maps CAN arbitration IDs from the 990-ECU database, extracts DIDs, and generates production-ready JSON profiles.
+
 ---
 
 ---

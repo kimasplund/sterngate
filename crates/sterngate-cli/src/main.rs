@@ -418,6 +418,15 @@ enum ProfileCommands {
         #[arg(long, default_value = "discovered_profile")]
         name: String,
     },
+    /// Ingest and convert OEM database archives (SMR-D, CBF) into Sterngate JSON profiles
+    Import {
+        /// Source path to CBF/SMR-D file or directory containing OEM diagnostics
+        #[arg(short, long)]
+        input: PathBuf,
+        /// Target directory to output Sterngate JSON profiles
+        #[arg(short, long, default_value = "profiles")]
+        output: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1659,6 +1668,42 @@ async fn main() -> Result<()> {
                         profile.modules.len(),
                         out.display()
                     );
+                    return Ok(());
+                }
+                ProfileCommands::Import { input, output } => {
+                    println!("============================================================");
+                    println!("  Sterngate SMR-D & CBF Profile Importer");
+                    println!("============================================================");
+                    println!("  Input:  {}", input.display());
+                    println!("  Output: {}", output.display());
+                    println!("------------------------------------------------------------");
+
+                    let result =
+                        sterngate_protocol::ProfileImporter::import_from_path(&input, &output)?;
+                    println!("  [SUCCESS] Ingestion completed:");
+                    println!(
+                        "    • Total files scanned:   {}",
+                        result.total_files_scanned
+                    );
+                    println!("    • CBF archives found:    {}", result.cbf_files_found);
+                    println!("    • SMR-D archives found:  {}", result.smrd_files_found);
+                    println!(
+                        "    • Profiles generated:    {}",
+                        result.profiles_generated.len()
+                    );
+                    for name in &result.profiles_generated {
+                        println!("      - {}", name);
+                    }
+                    if !result.warnings.is_empty() {
+                        println!("\n    Warnings / Skipped ({}):", result.warnings.len());
+                        for w in result.warnings.iter().take(10) {
+                            println!("      ! {}", w);
+                        }
+                        if result.warnings.len() > 10 {
+                            println!("      ... and {} more warnings", result.warnings.len() - 10);
+                        }
+                    }
+                    println!("============================================================");
                     return Ok(());
                 }
             },

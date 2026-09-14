@@ -231,3 +231,111 @@ pub struct RomInspectionReport {
     pub can_flash: bool,
     pub risk_explanation: String,
 }
+
+/// Entry representing a discovered local firmware binary or container
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirmwareVaultEntry {
+    pub file_path: String,
+    pub filename: String,
+    pub file_size_bytes: usize,
+    pub format: String,
+    pub signatures: FirmwareSignatures,
+}
+
+/// Recommendation generated when comparing connected vehicle ECU against local vault
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirmwareUpgradeRecommendation {
+    pub target_module: String,
+    pub live_hw_id: String,
+    pub live_sw_id: String,
+    pub recommended_file: FirmwareVaultEntry,
+    pub reason: String,
+    pub can_stage: bool,
+}
+
+/// Local Firmware Vault scanner and manager
+pub struct FirmwareVault;
+
+impl FirmwareVault {
+    /// Scan a directory recursively for firmware binaries (.bin, .rom, .cff, .smr-f, .fls)
+    pub fn scan_directory(dir: impl AsRef<std::path::Path>) -> Vec<FirmwareVaultEntry> {
+        let mut results = Vec::new();
+        Self::scan_recursive(dir.as_ref(), &mut results);
+        results
+    }
+
+    fn scan_recursive(dir: &std::path::Path, results: &mut Vec<FirmwareVaultEntry>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_dir() {
+                    Self::scan_recursive(&p, results);
+                } else if p.is_file() {
+                    let ext = p
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if matches!(ext.as_str(), "bin" | "rom" | "cff" | "smr-f" | "fls") {
+                        if let Ok(data) = std::fs::read(&p) {
+                            let sigs = FirmwareSignatures::extract(&data);
+                            let filename = p
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("unknown")
+                                .to_string();
+                            let format = match ext.as_str() {
+                                "bin" | "rom" => "Raw Flash Binary (.bin)",
+                                "cff" => "Caesar Flash Container (.cff)",
+                                "smr-f" => "Modular Flash Container (.smr-f)",
+                                _ => "Binary Calibration (.fls)",
+                            }
+                            .to_string();
+
+                            results.push(FirmwareVaultEntry {
+                                file_path: p.to_string_lossy().to_string(),
+                                filename,
+                                file_size_bytes: data.len(),
+                                format,
+                                signatures: sigs,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Check if any file in the vault matches the connected ECU hardware, and whether it's an upgrade
+    pub fn find_upgrade_recommendation(
+        entries: &[FirmwareVaultEntry],
+        live_hw_id: &str,
+        live_sw_id: &str,
+    ) -> Option<FirmwareUpgradeRecommendation> {
+        for entry in entries {
+            if let Some(entry_hw) = &entry.signatures.bosch_hw_id {
+                let check_len = entry_hw.len().min(live_hw_id.len());
+                if check_len >= 8
+                    && entry_hw[..check_len].eq_ignore_ascii_case(&live_hw_id[..check_len])
+                {
+                    if let Some(entry_sw) = &entry.signatures.bosch_sw_id {
+                        if !entry_sw.eq_ignore_ascii_case(live_sw_id) {
+                            return Some(FirmwareUpgradeRecommendation {
+                                target_module: "EDC16".into(),
+                                live_hw_id: live_hw_id.to_string(),
+                                live_sw_id: live_sw_id.to_string(),
+                                recommended_file: entry.clone(),
+                                reason: format!(
+                                    "Local calibration {} supersedes connected calibration {}",
+                                    entry_sw, live_sw_id
+                                ),
+                                can_stage: true,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+}

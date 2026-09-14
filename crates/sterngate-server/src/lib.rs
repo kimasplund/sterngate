@@ -719,7 +719,7 @@ mod tests {
             .header("Content-Type", "application/json")
             .body(Body::from(serde_json::to_vec(&egr_payload).unwrap()))
             .unwrap();
-        let resp = create_router(state).oneshot(req).await.unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
             .await
@@ -727,6 +727,150 @@ mod tests {
         let egr_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert!(egr_res["success"].as_bool().unwrap());
         assert_eq!(egr_res["air_mass_offset_mg"].as_f64().unwrap(), 40.0);
+
+        // 5. POST /api/v1/workflow/vmax
+        let vmax_payload = json!({
+            "speed_limit_kmh": 250,
+            "vin": "WDB2112061A999888"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/workflow/vmax")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&vmax_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let vmax_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(vmax_res["success"].as_bool().unwrap());
+        assert_eq!(vmax_res["speed_limit_kmh"].as_u64().unwrap(), 250);
+
+        // 6. POST /api/v1/workflow/seatbelt-chime
+        let seatbelt_payload = json!({
+            "acoustic_enabled": false,
+            "vin": "WDB2112061A999888"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/workflow/seatbelt-chime")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&seatbelt_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let seatbelt_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(seatbelt_res["success"].as_bool().unwrap());
+        assert!(!seatbelt_res["acoustic_chime_enabled"].as_bool().unwrap());
+
+        // 7. POST /api/v1/workflow/tank-liters
+        let tank_payload = json!({
+            "enabled": true,
+            "vin": "WDB2112061A999888"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/workflow/tank-liters")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&tank_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let tank_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(tank_res["success"].as_bool().unwrap());
+        assert!(tank_res["exact_liters_display_enabled"].as_bool().unwrap());
+
+        // 8. POST /api/v1/workflow/cornering-lights
+        let cornering_payload = json!({
+            "enabled": true,
+            "vin": "WDB2112061A999888"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/workflow/cornering-lights")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&cornering_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let cornering_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(cornering_res["success"].as_bool().unwrap());
+        assert!(cornering_res["cornering_lights_enabled"].as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_firmware_vault_endpoints() {
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(sim, profile, flasher));
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("sterngate_vault_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let bin_path = temp_dir.join("W211_OM646_Stage1.bin");
+        let mut rom = vec![0xEA; 4096];
+        rom[64..74].copy_from_slice(b"0281012224");
+        rom[128..138].copy_from_slice(b"1037372332");
+        std::fs::write(&bin_path, &rom).unwrap();
+
+        // 1. GET /api/v1/vault/scan
+        let scan_url = format!(
+            "/api/v1/vault/scan?path={}&hw_id=0281012224&sw_id=1037365000",
+            temp_dir.display()
+        );
+        let req = Request::builder()
+            .uri(&scan_url)
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let scan_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(scan_res["success"].as_bool().unwrap());
+        assert_eq!(scan_res["total_files"].as_u64().unwrap(), 1);
+        assert!(scan_res["recommendation"].is_object());
+
+        // 2. POST /api/v1/vault/stage
+        let stage_payload = json!({
+            "file_path": bin_path.to_str().unwrap()
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/vault/stage")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&stage_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let stage_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(stage_res["success"].as_bool().unwrap());
+        assert_eq!(
+            stage_res["manifest"]["expected_hw_id"].as_str().unwrap(),
+            "0281012224"
+        );
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[tokio::test]

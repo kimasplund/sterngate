@@ -329,6 +329,192 @@ function requestEgrOptimizeSafe() {
   });
 }
 
+function requestVmaxSafe() {
+  const select = document.getElementById('vmax-select');
+  const speed = select ? parseInt(select.value, 10) : 250;
+
+  showSafetyModal({
+    title: 'Configure Maximum Speed Limiter (VMax)',
+    badge: 'VEHICLE CODING',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>Engine Road Speed Governor (DID 0x0110):</b><br>
+      Will reprogram engine management system (EDC16/EDC17/ME9) maximum vehicle road speed governor to: <b>${speed} km/h</b>.<br><br>
+      An automated configuration snapshot is committed to local Git garage history before dispatch.
+    `,
+    minVoltage: 12.0,
+    requireEngineOff: true,
+    requireKeyword: null,
+    confirmBtnText: 'Apply VMax Limit',
+    onConfirm: async () => {
+      const logBox = document.getElementById('quick-mods-logs');
+      logBox.innerHTML += `[QUICK MODS] Configuring VMax speed limiter to ${speed} km/h...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/workflow/vmax', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            speed_limit_kmh: speed,
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to configure VMax');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Target Module: ${data.module} (DID 0x${data.did.toString(16).toUpperCase()})<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function requestSeatbeltChimeSafe() {
+  const select = document.getElementById('seatbelt-chime-select');
+  const enabled = select ? select.value === 'enabled' : false;
+  const label = enabled ? 'Acoustic Chime Enabled' : 'Acoustic Chime Muted';
+
+  showSafetyModal({
+    title: 'Configure Seatbelt Acoustic Warning Chime',
+    badge: 'INSTRUMENT CLUSTER',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>Instrument Cluster Coding (DID 0x0201):</b><br>
+      Will configure seatbelt buzzer behavior to: <b>${label}</b>.<br>
+      All dashboard visual safety warning lights and SRS airbag status indicators remain 100% active.<br><br>
+      Configuration snapshot is committed to local Git history prior to writing.
+    `,
+    minVoltage: 12.0,
+    requireEngineOff: false,
+    requireKeyword: null,
+    confirmBtnText: 'Apply Chime Setting',
+    onConfirm: async () => {
+      const logBox = document.getElementById('quick-mods-logs');
+      logBox.innerHTML += `[QUICK MODS] Updating seatbelt warning chime (${label})...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/workflow/seatbelt-chime', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            acoustic_enabled: enabled,
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to update seatbelt chime');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Target Module: ${data.module} (DID 0x${data.did.toString(16).toUpperCase()})<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function requestTankLitersSafe() {
+  const select = document.getElementById('tank-liters-select');
+  const enabled = select ? select.value === 'enabled' : true;
+  const label = enabled ? 'Exact Liters Display Enabled' : 'Disabled (Gauge Only)';
+
+  showSafetyModal({
+    title: 'Configure Exact Tank Fuel in Liters (Restliteranzeige)',
+    badge: 'INSTRUMENT CLUSTER',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>Instrument Cluster Multifunction Screen (DID 0x0205):</b><br>
+      Will configure central trip computer screen to: <b>${label}</b>.<br>
+      Enables exact digital readout of remaining fuel volume in liters directly in the central speedometer display.<br><br>
+      Configuration snapshot is committed to local Git history prior to writing.
+    `,
+    minVoltage: 12.0,
+    requireEngineOff: false,
+    requireKeyword: null,
+    confirmBtnText: 'Apply Restliter Setting',
+    onConfirm: async () => {
+      const logBox = document.getElementById('quick-mods-logs');
+      logBox.innerHTML += `[QUICK MODS] Configuring tank liters display (${label})...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/workflow/tank-liters', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: enabled,
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to configure tank liters display');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Target Module: ${data.module} (DID 0x${data.did.toString(16).toUpperCase()})<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function requestCorneringLightsSafe() {
+  const select = document.getElementById('cornering-lights-select');
+  const enabled = select ? select.value === 'enabled' : true;
+  const label = enabled ? 'Cornering Fog Lights Enabled' : 'Cornering Fog Lights Disabled';
+
+  showSafetyModal({
+    title: 'Configure Cornering Fog Lights (Abbiegelicht)',
+    badge: 'FRONT SAM LIGHTING',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>Front SAM Coding (DID 0x0310):</b><br>
+      Will configure intelligent cornering fog lights to: <b>${label}</b>.<br>
+      When vehicle speed is below 40 km/h, the corresponding fog light illuminates automatically based on turn signal engagement or steering wheel angle.<br><br>
+      Configuration snapshot is committed to local Git history prior to writing.
+    `,
+    minVoltage: 12.0,
+    requireEngineOff: false,
+    requireKeyword: null,
+    confirmBtnText: 'Apply Cornering Lights',
+    onConfirm: async () => {
+      const logBox = document.getElementById('quick-mods-logs');
+      logBox.innerHTML += `[QUICK MODS] Configuring cornering fog lights (${label})...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/workflow/cornering-lights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: enabled,
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to configure cornering lights');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Target Module: ${data.module} (DID 0x${data.did.toString(16).toUpperCase()})<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
 function requestSbcDeactivateSafe() {
   showSafetyModal({
     title: 'Deactivate SBC Hydraulic Pressure (0-Bar Pad Service Mode)',
@@ -560,6 +746,118 @@ function requestStageFlashSafe() {
     confirmBtnText: 'Erase & Flash Firmware',
     onConfirm: async () => {
       await startSimulatedFlash();
+    }
+  });
+}
+
+let currentVaultEntries = [];
+
+async function scanFirmwareVault() {
+  const pathInput = document.getElementById('vault-scan-path');
+  const path = pathInput ? pathInput.value.trim() : 'firmware_vault';
+  const tableBody = document.getElementById('vault-files-table');
+  const countBadge = document.getElementById('vault-count-badge');
+  const recBox = document.getElementById('vault-recommendation-box');
+  const recDesc = document.getElementById('vault-recommendation-desc');
+  const recBtn = document.getElementById('btn-stage-recommendation');
+
+  tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1rem;">Scanning local vault '${path}'...</td></tr>`;
+
+  try {
+    const liveHw = currentInspectedRom?.report?.ecu_hw_id || '0281012224';
+    const liveSw = currentInspectedRom?.report?.ecu_sw_id || '1037372332';
+    const res = await fetch(`/api/v1/vault/scan?path=${encodeURIComponent(path)}&hw_id=${encodeURIComponent(liveHw)}&sw_id=${encodeURIComponent(liveSw)}`);
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.error || 'Failed to scan vault');
+
+    currentVaultEntries = data.entries || [];
+    countBadge.textContent = `${currentVaultEntries.length} FILES`;
+
+    if (data.recommendation && data.recommendation.can_stage) {
+      recBox.style.display = 'block';
+      const rec = data.recommendation;
+      recDesc.innerHTML = `
+        <b>Target Module:</b> ${rec.target_module} (Live HW: <code>${rec.live_hw_id}</code>, SW: <code>${rec.live_sw_id}</code>)<br>
+        <b>Superseding File:</b> <code>${rec.recommended_file.filename}</code> (Cal: <code>${rec.recommended_file.signatures.bosch_sw_id || 'N/A'}</code>)<br>
+        <b>Notice:</b> ${rec.reason}
+      `;
+      recBtn.onclick = () => stageFirmwareFromVault(rec.recommended_file.file_path, rec.recommended_file.filename, rec.recommended_file.signatures.bosch_hw_id, rec.recommended_file.signatures.bosch_sw_id);
+    } else {
+      recBox.style.display = 'none';
+    }
+
+    if (currentVaultEntries.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1rem;">No firmware binaries found in '${path}'. Place .bin, .cff, or .smr-f files in folder and rescan.</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = currentVaultEntries.map(entry => {
+      const sigs = entry.signatures;
+      const sizeKb = (entry.file_size_bytes / 1024).toFixed(1);
+      const isMatch = (sigs.bosch_hw_id && sigs.bosch_hw_id.startsWith(liveHw.substring(0, 8)));
+      const matchBadge = isMatch ? '<span class="badge badge-ready" style="font-size: 0.7rem; margin-left: 0.3rem;">MATCH</span>' : '';
+
+      return `
+        <tr>
+          <td><b style="color: #fff; font-family: monospace;">${entry.filename}</b>${matchBadge}</td>
+          <td><span class="badge badge-voltage" style="font-size: 0.7rem;">${entry.format}</span></td>
+          <td><code>${sigs.bosch_hw_id || '--'}</code></td>
+          <td><code>${sigs.bosch_sw_id || '--'}</code></td>
+          <td><code>${sigs.oem_part_number || '--'}</code></td>
+          <td>${sizeKb} KB</td>
+          <td>
+            <button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="stageFirmwareFromVault('${entry.file_path.replace(/'/g, "\\'")}', '${entry.filename.replace(/'/g, "\\'")}', '${sigs.bosch_hw_id || ''}', '${sigs.bosch_sw_id || ''}')">Stage & Flash</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    tableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 1rem;">Scan error: ${err.message}</td></tr>`;
+  }
+}
+
+function stageFirmwareFromVault(filePath, filename, hwId, swId) {
+  showSafetyModal({
+    title: 'Stage Firmware Binary from Local Vault',
+    badge: 'CRITICAL FLASH WRITE',
+    badgeClass: 'badge-recording',
+    description: `
+      <b>LOCAL FIRMWARE VAULT STAGING:</b><br>
+      <b>Target File:</b> <code>${filename}</code><br>
+      <b>Hardware ID:</b> <code>${hwId || 'Detected in binary'}</code> | <b>Calibration SW:</b> <code>${swId || 'Detected in binary'}</code><br><br>
+      <b>SAFETY INTERLOCK CHECKLIST:</b><br>
+      1. Battery voltage MUST be maintained ≥ 12.50 V (connect battery charger).<br>
+      2. Engine must be completely OFF with Terminal 15 (Ignition) ON.<br>
+      3. Do NOT disconnect CAN interface or cycle ignition during transfer.<br><br>
+      This will initiate sector erase and detached flashing. All diagnostic APIs will be locked (HTTP 423).
+    `,
+    minVoltage: 12.5,
+    requireEngineOff: true,
+    requireKeyword: 'FLASH',
+    confirmBtnText: 'Stage & Flash Binary',
+    onConfirm: async () => {
+      const logBox = document.getElementById('flash-logs');
+      logBox.innerHTML += `[VAULT] Staging firmware from local path: ${filePath}...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/vault/stage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: filePath })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to stage firmware');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Hardware Target: ${data.manifest.expected_hw_id} | Software: ${data.manifest.expected_sw_id}<br>`;
+        logBox.innerHTML += `• CRC32: 0x${data.manifest.crc32_checksum.toString(16).toUpperCase()} | Size: ${data.manifest.flash_length} bytes<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
     }
   });
 }

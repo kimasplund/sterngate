@@ -13,9 +13,9 @@ use sha2::Digest;
 use std::sync::Arc;
 use sterngate_core::{
     lookup_routine_name, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc,
-    EcoStartStopMode, EcuCatalog, FlashPackageManifest, FlashProgress, Language, SbcServiceAction,
-    SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample,
-    TelemetrySnapshot, VehicleGarage, VehicleProfile,
+    EcoStartStopMode, EcuCatalog, FirmwareSignatures, FirmwareVault, FlashPackageManifest,
+    FlashProgress, Language, SbcServiceAction, SuspensionCorner, SuspensionCornerAction,
+    SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot, VehicleGarage, VehicleProfile,
 };
 use sterngate_protocol::{BusDiscoverer, ServiceRoutineManager, UdsClient, VehicleScanner};
 
@@ -86,6 +86,18 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             post(workflow_eco_start_stop),
         )
         .route("/api/v1/workflow/egr-optimize", post(workflow_egr_optimize))
+        .route("/api/v1/workflow/vmax", post(workflow_vmax))
+        .route(
+            "/api/v1/workflow/seatbelt-chime",
+            post(workflow_seatbelt_chime),
+        )
+        .route("/api/v1/workflow/tank-liters", post(workflow_tank_liters))
+        .route(
+            "/api/v1/workflow/cornering-lights",
+            post(workflow_cornering_lights),
+        )
+        .route("/api/v1/vault/scan", get(vault_scan))
+        .route("/api/v1/vault/stage", post(vault_stage))
         .route("/api/v1/workflows", get(get_workflows_list))
         .with_state(state)
 }
@@ -1734,8 +1746,454 @@ async fn get_workflows_list() -> impl IntoResponse {
             "min_voltage": 12.5,
             "requires_engine_off": true,
             "description": "Depressurizes ~160 bar accumulator into reservoir, retracts pistons, and suppresses all wake-up triggers to safely replace brake pads without amputation hazard."
+        },
+        {
+            "id": "vmax_speed_limiter",
+            "name": "Vehicle Maximum Road Speed Limiter (VMax)",
+            "category": "Vehicle Customization",
+            "risk_level": "low",
+            "min_voltage": 12.0,
+            "requires_engine_off": true,
+            "description": "Reads and configures road speed governor threshold (DID 0x0110) in engine management system (e.g. 210, 250 km/h or custom limit)."
+        },
+        {
+            "id": "seatbelt_acoustic_chime",
+            "name": "Instrument Cluster Seatbelt Acoustic Warning Chime",
+            "category": "Vehicle Customization",
+            "risk_level": "low",
+            "min_voltage": 12.0,
+            "requires_engine_off": false,
+            "description": "Mutes repetitive audible buzzer in Instrument Cluster (KI DID 0x0201) while preserving all dashboard visual safety lamps and restraint system readiness."
+        },
+        {
+            "id": "tank_liters_display",
+            "name": "Remaining Fuel in Liters (Restliteranzeige)",
+            "category": "Vehicle Customization",
+            "risk_level": "low",
+            "min_voltage": 12.0,
+            "requires_engine_off": false,
+            "description": "Enables exact digital remaining fuel volume in liters display on the central multifunction instrument cluster trip computer screen (DID 0x0205)."
+        },
+        {
+            "id": "cornering_fog_lights",
+            "name": "Front SAM Intelligent Cornering Fog Lights (Abbiegelicht)",
+            "category": "Lighting & Safety",
+            "risk_level": "low",
+            "min_voltage": 12.0,
+            "requires_engine_off": false,
+            "description": "Programs Front SAM (DID 0x0310) to automatically illuminate corresponding fog light when turning indicator is active or steering angle exceeds threshold below 40 km/h."
         }
     ]);
 
     (StatusCode::OK, Json(workflows))
+}
+
+#[derive(Deserialize)]
+struct VmaxPayload {
+    speed_limit_kmh: u16,
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    ecu_tx: Option<u32>,
+    #[serde(default)]
+    ecu_rx: Option<u32>,
+}
+
+async fn workflow_vmax(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<VmaxPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let ecu_tx = payload.ecu_tx.unwrap_or(0x7E0);
+    let ecu_rx = payload.ecu_rx.unwrap_or(0x7E8);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::configure_speed_limiter(
+        &mut **iface,
+        ecu_tx,
+        ecu_rx,
+        payload.speed_limit_kmh,
+    )
+    .await
+    {
+        Ok(status) => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+            let note = format!(
+                "VMax speed limiter configured to {} km/h",
+                payload.speed_limit_kmh
+            );
+            let _ = garage.save_coding(
+                vin,
+                &status.module,
+                &format!("VMAX_{}KMH", payload.speed_limit_kmh),
+                None,
+                &note,
+            );
+
+            (StatusCode::OK, Json(serde_json::to_value(status).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("VMax speed limiter configuration failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SeatbeltChimePayload {
+    acoustic_enabled: bool,
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    ic_tx: Option<u32>,
+    #[serde(default)]
+    ic_rx: Option<u32>,
+}
+
+async fn workflow_seatbelt_chime(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SeatbeltChimePayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let ic_tx = payload.ic_tx.unwrap_or(0x7E4);
+    let ic_rx = payload.ic_rx.unwrap_or(0x7EC);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::configure_seatbelt_chime(
+        &mut **iface,
+        ic_tx,
+        ic_rx,
+        payload.acoustic_enabled,
+    )
+    .await
+    {
+        Ok(status) => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+            let note = format!(
+                "Instrument cluster seatbelt acoustic warning chime {}",
+                if payload.acoustic_enabled {
+                    "enabled"
+                } else {
+                    "muted"
+                }
+            );
+            let _ = garage.save_coding(
+                vin,
+                &status.module,
+                if payload.acoustic_enabled {
+                    "CHIME_ON"
+                } else {
+                    "CHIME_MUTED"
+                },
+                None,
+                &note,
+            );
+
+            (StatusCode::OK, Json(serde_json::to_value(status).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Seatbelt chime configuration failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct TankLitersPayload {
+    enabled: bool,
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    ic_tx: Option<u32>,
+    #[serde(default)]
+    ic_rx: Option<u32>,
+}
+
+async fn workflow_tank_liters(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<TankLitersPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let ic_tx = payload.ic_tx.unwrap_or(0x7E4);
+    let ic_rx = payload.ic_rx.unwrap_or(0x7EC);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::configure_tank_liters_display(
+        &mut **iface,
+        ic_tx,
+        ic_rx,
+        payload.enabled,
+    )
+    .await
+    {
+        Ok(status) => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+            let note = format!(
+                "Instrument cluster exact tank liters display (Restliteranzeige) {}",
+                if payload.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            );
+            let _ = garage.save_coding(
+                vin,
+                &status.module,
+                if payload.enabled {
+                    "RESTLITER_ON"
+                } else {
+                    "RESTLITER_OFF"
+                },
+                None,
+                &note,
+            );
+
+            (StatusCode::OK, Json(serde_json::to_value(status).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Tank liters display configuration failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct CorneringLightsPayload {
+    enabled: bool,
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    sam_tx: Option<u32>,
+    #[serde(default)]
+    sam_rx: Option<u32>,
+}
+
+async fn workflow_cornering_lights(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CorneringLightsPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let sam_tx = payload.sam_tx.unwrap_or(0x7E2);
+    let sam_rx = payload.sam_rx.unwrap_or(0x7EA);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::configure_cornering_lights(
+        &mut **iface,
+        sam_tx,
+        sam_rx,
+        payload.enabled,
+    )
+    .await
+    {
+        Ok(status) => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+            let note = format!(
+                "Front SAM intelligent cornering fog lights {}",
+                if payload.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            );
+            let _ = garage.save_coding(
+                vin,
+                &status.module,
+                if payload.enabled {
+                    "CORNERING_FOG_ON"
+                } else {
+                    "CORNERING_FOG_OFF"
+                },
+                None,
+                &note,
+            );
+
+            (StatusCode::OK, Json(serde_json::to_value(status).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Cornering lights configuration failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct VaultScanQuery {
+    path: Option<String>,
+    hw_id: Option<String>,
+    sw_id: Option<String>,
+}
+
+async fn vault_scan(Query(query): Query<VaultScanQuery>) -> impl IntoResponse {
+    let scan_path = query.path.unwrap_or_else(|| "firmware_vault".to_string());
+    let entries = FirmwareVault::scan_directory(&scan_path);
+
+    let recommendation = if let (Some(hw), Some(sw)) = (&query.hw_id, &query.sw_id) {
+        FirmwareVault::find_upgrade_recommendation(&entries, hw, sw)
+    } else {
+        None
+    };
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "scan_path": scan_path,
+            "total_files": entries.len(),
+            "entries": entries,
+            "recommendation": recommendation,
+        })),
+    )
+}
+
+#[derive(Deserialize)]
+struct VaultStagePayload {
+    file_path: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    target_tx: Option<u32>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    target_rx: Option<u32>,
+}
+
+async fn vault_stage(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<VaultStagePayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let rom_data = match std::fs::read(&payload.file_path) {
+        Ok(d) => d,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Failed to read firmware binary '{}': {}", payload.file_path, e),
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let sigs = FirmwareSignatures::extract(&rom_data);
+    let filename = std::path::Path::new(&payload.file_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("firmware.bin")
+        .to_string();
+
+    let target_hw = sigs
+        .bosch_hw_id
+        .clone()
+        .unwrap_or_else(|| "0281013352".into());
+    let target_sw = sigs
+        .bosch_sw_id
+        .clone()
+        .unwrap_or_else(|| "1037386738".into());
+
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(&rom_data);
+    let sha256 = format!("{:x}", hasher.finalize());
+    let crc = crc32fast::hash(&rom_data);
+
+    let manifest = FlashPackageManifest {
+        target_module: "EDC16".into(),
+        expected_hw_id: target_hw,
+        expected_sw_id: target_sw,
+        sha256_checksum: sha256,
+        crc32_checksum: crc,
+        flash_start_address: 0x00040000,
+        flash_length: rom_data.len() as u32,
+        block_size: 4096,
+    };
+
+    let flasher = state.flasher.clone();
+    let iface = state.interface.clone();
+    let m_clone = manifest.clone();
+
+    tokio::spawn(async move {
+        let _ = flasher.execute_flash(m_clone, rom_data, 13.8, iface).await;
+    });
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "filename": filename,
+            "message": "Firmware staged from local vault. Safe detached flashing sequence initiated.",
+            "manifest": manifest,
+            "signatures": sigs,
+        })),
+    )
+        .into_response()
 }

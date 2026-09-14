@@ -102,4 +102,18 @@ sterngate flash start --manifest /var/run/sterngate/flash_manifest.json --yes
 sterngate flash status
 ```
 
+---
+
+## 6. Local Firmware Vault & Calibration Upgrade Scanner
+
+Sterngate keeps all firmware binaries strictly decoupled from remote networks and Git repositories:
+1. **Local Vault Scanning**:
+   - `GET /api/v1/vault/scan?path=<PATH>&hw_id=<HW>&sw_id=<SW>` scans local directories for `.bin`, `.rom`, `.cff`, `.smr-f`, and `.fls` files.
+   - Extracts Bosch HW/SW IDs, OEM part numbers, and SHA256 hashes directly from raw binary headers.
+2. **Auto-Matched Upgrade Recommendation**:
+   - If a discovered binary matches the connected vehicle ECU hardware ID (`DID 0xF192`) but contains a newer calibration version (`DID 0xF194`), Sterngate generates a verified upgrade recommendation.
+3. **One-Click Staging**:
+   - `POST /api/v1/vault/stage` takes `file_path`, verifies the safety interlocks, computes CRC32/SHA256, and stages the firmware for flashing without streaming bytes over the network.
+
+
 

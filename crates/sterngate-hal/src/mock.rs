@@ -258,6 +258,26 @@ impl VirtualCanInterface {
                         resp_id as u16,
                         &[0x05, 0x62, 0x02, 0x40, 0x01, 0x90, 0xAA, 0xAA],
                     )),
+                    // Speed Limiter VMax (0x0110) -> 250 km/h (0x00, 0xFA)
+                    0x0110 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x05, 0x62, 0x01, 0x10, 0x00, 0xFA, 0xAA, 0xAA],
+                    )),
+                    // Seatbelt Acoustic Warning Chime (0x0201) -> 0x01 (Enabled)
+                    0x0201 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x04, 0x62, 0x02, 0x01, 0x01, 0xAA, 0xAA, 0xAA],
+                    )),
+                    // Remaining Fuel Exact Liters (0x0205) -> 0x01 (Enabled)
+                    0x0205 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x04, 0x62, 0x02, 0x05, 0x01, 0xAA, 0xAA, 0xAA],
+                    )),
+                    // Intelligent Cornering Fog Lights (0x0310) -> 0x01 (Enabled)
+                    0x0310 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x04, 0x62, 0x03, 0x10, 0x01, 0xAA, 0xAA, 0xAA],
+                    )),
                     _ => {
                         Some(CanFrame::new_standard(
                             resp_id as u16,

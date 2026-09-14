@@ -29,8 +29,9 @@ pub use command::{CommandEnvelope, CommandValidationReport};
 pub use dtc::Dtc;
 pub use error::{Result, SterngateError};
 pub use flash::{
-    FirmwareSignatures, FlashPackageManifest, FlashProgress, FlashState, PreFlightReport,
-    RomCompatibilityVerdict, RomInspectionReport,
+    FirmwareSignatures, FirmwareUpgradeRecommendation, FirmwareVault, FirmwareVaultEntry,
+    FlashPackageManifest, FlashProgress, FlashState, PreFlightReport, RomCompatibilityVerdict,
+    RomInspectionReport,
 };
 pub use frame::CanFrame;
 pub use garage::{DecodedVin, GitCommitInfo, VehicleEcuSnapshot, VehicleGarage, VehicleRecord};
@@ -38,9 +39,10 @@ pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
 pub use service::{
-    AdBlueResetStatus, DiscoveredEcu, EcoStartStopMode, EcoStartStopStatus, EgrOptimizationStatus,
-    ImaClassification, SbcServiceAction, SbcServiceStatus, SuspensionCorner,
-    SuspensionCornerAction,
+    AdBlueResetStatus, CorneringLightsStatus, DiscoveredEcu, EcoStartStopMode, EcoStartStopStatus,
+    EgrOptimizationStatus, ImaClassification, SbcServiceAction, SbcServiceStatus,
+    SeatbeltChimeStatus, SpeedLimiterStatus, SuspensionCorner, SuspensionCornerAction,
+    TankLitersStatus,
 };
 
 #[cfg(test)]
@@ -594,5 +596,84 @@ mod tests {
         );
         assert_eq!(sig.file_size_bytes, 4096);
         assert_ne!(sig.sha256_checksum, "");
+    }
+
+    #[test]
+    fn test_firmware_vault_scanning_and_recommendation() {
+        let temp_dir = std::env::temp_dir().join("sterngate_test_vault");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Write a mock EDC16 upgrade binary
+        let mut rom = vec![0xFF; 2048];
+        rom[100..110].copy_from_slice(b"0281012224");
+        rom[200..210].copy_from_slice(b"1037389123");
+        rom[300..315].copy_from_slice(b"A 646 150 20 79");
+
+        let file_path = temp_dir.join("OM646_EDC16_Update.bin");
+        std::fs::write(&file_path, &rom).unwrap();
+
+        let entries = FirmwareVault::scan_directory(&temp_dir);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0].signatures.bosch_hw_id.as_deref(),
+            Some("0281012224")
+        );
+        assert_eq!(
+            entries[0].signatures.bosch_sw_id.as_deref(),
+            Some("1037389123")
+        );
+
+        // Live car has older calibration 1037372332
+        let rec = FirmwareVault::find_upgrade_recommendation(&entries, "0281012224", "1037372332");
+        assert!(rec.is_some());
+        let r = rec.unwrap();
+        assert_eq!(r.live_hw_id, "0281012224");
+        assert_eq!(r.recommended_file.filename, "OM646_EDC16_Update.bin");
+        assert!(r.can_stage);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_quick_mod_status_models() {
+        let v = SpeedLimiterStatus {
+            success: true,
+            speed_limit_kmh: 250,
+            previous_limit_kmh: Some(210),
+            module: "EDC16".into(),
+            did: 0x0110,
+            message: "Speed limiter adjusted".into(),
+        };
+        assert_eq!(v.speed_limit_kmh, 250);
+
+        let s = SeatbeltChimeStatus {
+            success: true,
+            acoustic_chime_enabled: false,
+            visual_warning_lamp_active: true,
+            module: "KI".into(),
+            did: 0x0201,
+            message: "Muted".into(),
+        };
+        assert!(!s.acoustic_chime_enabled);
+
+        let t = TankLitersStatus {
+            success: true,
+            exact_liters_display_enabled: true,
+            module: "KI".into(),
+            did: 0x0205,
+            message: "Restliteranzeige active".into(),
+        };
+        assert!(t.exact_liters_display_enabled);
+
+        let c = CorneringLightsStatus {
+            success: true,
+            cornering_lights_enabled: true,
+            activation_threshold_kmh: 40,
+            module: "SAM-F".into(),
+            did: 0x0310,
+            message: "Cornering fog lights enabled".into(),
+        };
+        assert!(c.cornering_lights_enabled);
     }
 }
