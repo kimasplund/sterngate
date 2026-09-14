@@ -35,7 +35,8 @@ pub async fn handle_command(cmd: Commands, cli: &Cli) -> Result<()> {
             let _ = iface.open().await;
             let profile = common::load_profile_safe(&cli.profile);
             let flasher = Arc::new(FlashingWorker::new());
-            let state = Arc::new(AppState::new(iface, profile, flasher));
+            let state =
+                Arc::new(AppState::new(iface, profile, flasher).with_vault_root(cli.vault.clone()));
             run_server(state, cli.bind, port).await?;
         }
         Commands::Diag { action } => diag::execute(action, cli).await?,

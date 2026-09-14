@@ -175,7 +175,7 @@ The ECU was interrupted during OBD flashing. The application firmware is corrupt
    ```
 4. Find the matching stock firmware binary in your local vault:
    ```bash
-   sterngate flash vault-scan --path firmware_vault --hw-id 0281013
+   sterngate flash vault-scan --hw-id 0281013
    ```
 5. Initiate safe recovery flash with forced power supply override:
    ```bash

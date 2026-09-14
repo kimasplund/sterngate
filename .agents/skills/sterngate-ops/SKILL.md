@@ -442,8 +442,15 @@ curl -s -X POST http://localhost:8080/api/v1/workflow/cornering-lights \
 
 ### F. Local Firmware Vault & Upgrade Scanner (REST API)
 ```bash
-# Scan local storage folder for firmware binaries (.bin, .cff, .smr-f, .fls)
-curl -s "http://localhost:8080/api/v1/vault/scan?path=firmware_vault&hw_id=0281012224&sw_id=1037372332" | jq .
+# The vault root is configured once, in precedence order:
+#   --vault <DIR>  >  STERNGATE_VAULT_ROOT  >  ./firmware_vault
+# Both vault routes are confined to that root, so `path` and `file_path` are
+# interpreted inside it and anything resolving outside (../, absolute paths,
+# symlinks) is rejected with 400.
+
+# Scan the whole vault (blank path), or pass a subfolder inside it
+curl -s "http://localhost:8080/api/v1/vault/scan?path=&hw_id=0281012224&sw_id=1037372332" | jq .
+curl -s "http://localhost:8080/api/v1/vault/scan?path=w211/edc16" | jq .
 
 # Stage firmware binary for detached flashing sequence.
 # measured_voltage is mandatory and must come from a real hardware reading
@@ -451,7 +458,9 @@ curl -s "http://localhost:8080/api/v1/vault/scan?path=firmware_vault&hw_id=02810
 # that would always satisfy the >= 12.5 V interlock.
 curl -s -X POST http://localhost:8080/api/v1/vault/stage \
   -H "Content-Type: application/json" \
-  -d '{"file_path": "firmware_vault/W211_OM646_Stage1.bin", "measured_voltage": 13.4}' | jq .
+  -d '{"file_path": "W211_OM646_Stage1.bin", "measured_voltage": 13.4}' | jq .
+# file_path is resolved inside the vault root, so it is given relative to it
+# (an absolute path is accepted only while it still resolves inside the root).
 ```
 
 ---

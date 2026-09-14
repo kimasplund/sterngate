@@ -722,7 +722,7 @@
           Scans local storage (.bin, .rom, .cff, .smr-f, .fls) without uploading binaries over the internet. Automatically compares embedded Bosch HW/SW IDs against connected vehicle ECUs and detects software updates.
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
-          <input id="vault-scan-path" type="text" value="firmware_vault" style="flex: 1; min-width: 240px;" placeholder="Path to local firmware folder (e.g. firmware_vault or profiles)">
+          <input id="vault-scan-path" type="text" value="" style="flex: 1; min-width: 240px;" placeholder="Subfolder inside the firmware vault (optional — blank scans the whole vault)">
           <button class="btn btn-primary" onclick="scanFirmwareVault()">🔍 Scan Local Vault</button>
         </div>
 

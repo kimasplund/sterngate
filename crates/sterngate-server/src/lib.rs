@@ -889,7 +889,6 @@ mod tests {
         )
         .unwrap();
         let flasher = Arc::new(FlashingWorker::new());
-        let state = Arc::new(AppState::new(sim, profile, flasher));
 
         let temp_dir =
             std::env::temp_dir().join(format!("sterngate_vault_{}", uuid::Uuid::new_v4()));
@@ -900,13 +899,14 @@ mod tests {
         rom[128..138].copy_from_slice(b"1037372332");
         std::fs::write(&bin_path, &rom).unwrap();
 
-        // 1. GET /api/v1/vault/scan
-        let scan_url = format!(
-            "/api/v1/vault/scan?path={}&hw_id=0281012224&sw_id=1037365000",
-            temp_dir.display()
-        );
+        // The vault is confined to a configured root; point it at the fixture.
+        let state =
+            Arc::new(AppState::new(sim, profile, flasher).with_vault_root(Some(temp_dir.clone())));
+
+        // 1. GET /api/v1/vault/scan - a blank path scans the whole vault
+        let scan_url = "/api/v1/vault/scan?path=&hw_id=0281012224&sw_id=1037365000";
         let req = Request::builder()
-            .uri(&scan_url)
+            .uri(scan_url)
             .body(Body::empty())
             .unwrap();
         let resp = create_router(state.clone()).oneshot(req).await.unwrap();
@@ -919,7 +919,33 @@ mod tests {
         assert_eq!(scan_res["total_files"].as_u64().unwrap(), 1);
         assert!(scan_res["recommendation"].is_object());
 
-        // 2. POST /api/v1/vault/stage without a measured voltage is refused:
+        // 2. Paths outside the vault root are refused however they are spelled,
+        // so a caller can never reach arbitrary files on the host.
+        for escape in ["../../../etc/hostname", "/etc/hostname"] {
+            let payload = json!({ "file_path": escape, "measured_voltage": 13.4 });
+            let req = Request::builder()
+                .method("POST")
+                .uri("/api/v1/vault/stage")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+                .unwrap();
+            let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+            assert_eq!(
+                resp.status(),
+                StatusCode::BAD_REQUEST,
+                "vault escape was allowed: {escape}"
+            );
+        }
+
+        let escape_scan = "/api/v1/vault/scan?path=../../../etc";
+        let req = Request::builder()
+            .uri(escape_scan)
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        // 3. POST /api/v1/vault/stage without a measured voltage is refused:
         // staging begins a flash, and the >= 12.5 V interlock means nothing if
         // the server supplies the reading itself.
         let unmeasured_payload = json!({

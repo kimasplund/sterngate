@@ -102,8 +102,9 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
             let scan_path = arguments
                 .get("path")
                 .and_then(|v| v.as_str())
-                .unwrap_or("firmware_vault");
-            let entries = FirmwareVault::scan_directory(scan_path);
+                .map(str::to_string)
+                .unwrap_or_else(|| FirmwareVault::default_root().display().to_string());
+            let entries = FirmwareVault::scan_directory(&scan_path);
             let hw_id = arguments.get("hw_id").and_then(|v| v.as_str());
             let sw_id = arguments.get("sw_id").and_then(|v| v.as_str());
             let recommendation = if let (Some(hw), Some(sw)) = (hw_id, sw_id) {

@@ -47,10 +47,16 @@ pub struct Cli {
     #[arg(short, long, default_value_t = 8080)]
     pub port: u16,
 
+    /// Root directory for the local firmware vault. Vault scans and firmware
+    /// staging are confined to it. Overrides STERNGATE_VAULT_ROOT, which in
+    /// turn overrides the default of ./firmware_vault
+    #[arg(long, global = true)]
+    pub vault: Option<PathBuf>,
+
     /// Address to bind the Web UI and diagnostic API to. Defaults to loopback:
     /// the API is unauthenticated and can actuate the vehicle, so expose it on
     /// 0.0.0.0 only deliberately.
-    #[arg(long, default_value = "127.0.0.1")]
+    #[arg(long, default_value = "127.0.0.1", global = true)]
     pub bind: std::net::IpAddr,
 
     /// P2P node ticket to dial (Technician mode)
@@ -233,9 +239,9 @@ pub enum FlashCommands {
     Status,
     /// Scan local firmware vault for matching flash files
     VaultScan {
-        /// Vault directory path
-        #[arg(short, long, default_value = "firmware_vault")]
-        path: PathBuf,
+        /// Vault directory path (defaults to --vault, then STERNGATE_VAULT_ROOT)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
         /// Filter by target ECU Hardware ID
         #[arg(long)]
         hw_id: Option<String>,

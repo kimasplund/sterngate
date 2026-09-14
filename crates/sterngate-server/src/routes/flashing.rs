@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
+use std::path::PathBuf;
 use std::sync::Arc;
 use sterngate_core::{FirmwareSignatures, FirmwareVault, FlashPackageManifest, FlashProgress};
 
@@ -199,8 +200,38 @@ struct VaultScanQuery {
     sw_id: Option<String>,
 }
 
-async fn vault_scan(Query(query): Query<VaultScanQuery>) -> impl IntoResponse {
-    let scan_path = query.path.unwrap_or_else(|| "firmware_vault".to_string());
+/// Resolve a caller-supplied path inside the configured vault root.
+///
+/// Returns `None` when the target does not exist or escapes the root, so
+/// traversal (`../`), absolute paths and symlinks out of the vault are all
+/// rejected by the same check.
+fn resolve_in_vault(root: &std::path::Path, requested: Option<&str>) -> Option<PathBuf> {
+    let root = root.canonicalize().ok()?;
+    let candidate = match requested {
+        None | Some("") => root.clone(),
+        Some(path) => root.join(path),
+    };
+    let candidate = candidate.canonicalize().ok()?;
+    candidate.starts_with(&root).then_some(candidate)
+}
+
+async fn vault_scan(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<VaultScanQuery>,
+) -> impl IntoResponse {
+    let Some(scan_path) = resolve_in_vault(&state.vault_root, query.path.as_deref()) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!(
+                    "Path is outside the configured firmware vault ('{}') or does not exist.",
+                    state.vault_root.display()
+                ),
+            })),
+        );
+    };
+
     let entries = FirmwareVault::scan_directory(&scan_path);
 
     let recommendation = if let (Some(hw), Some(sw)) = (&query.hw_id, &query.sw_id) {
@@ -213,7 +244,7 @@ async fn vault_scan(Query(query): Query<VaultScanQuery>) -> impl IntoResponse {
         StatusCode::OK,
         Json(serde_json::json!({
             "success": true,
-            "scan_path": scan_path,
+            "scan_path": scan_path.display().to_string(),
             "total_files": entries.len(),
             "entries": entries,
             "recommendation": recommendation,
@@ -265,14 +296,30 @@ async fn vault_stage(
             .into_response();
     };
 
-    let rom_data = match std::fs::read(&payload.file_path) {
+    // Staging reads from disk, so the path must stay inside the vault root.
+    let Some(rom_file) = resolve_in_vault(&state.vault_root, Some(&payload.file_path)) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!(
+                    "Refusing to stage: '{}' is outside the configured firmware vault ('{}') or does not exist.",
+                    payload.file_path,
+                    state.vault_root.display()
+                ),
+            })),
+        )
+            .into_response();
+    };
+
+    let rom_data = match std::fs::read(&rom_file) {
         Ok(d) => d,
         Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({
                     "success": false,
-                    "error": format!("Failed to read firmware binary '{}': {}", payload.file_path, e),
+                    "error": format!("Failed to read firmware binary '{}': {}", rom_file.display(), e),
                 })),
             )
                 .into_response();
@@ -280,7 +327,7 @@ async fn vault_stage(
     };
 
     let sigs = FirmwareSignatures::extract(&rom_data);
-    let filename = std::path::Path::new(&payload.file_path)
+    let filename = rom_file
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("firmware.bin")

@@ -258,6 +258,16 @@ pub struct FirmwareVault;
 
 impl FirmwareVault {
     /// Scan a directory recursively for firmware binaries (.bin, .rom, .cff, .smr-f, .fls)
+    /// Default firmware vault root (`firmware_vault`), overridable by the
+    /// `STERNGATE_VAULT_ROOT` environment variable, mirroring how the ECU
+    /// catalog, DTC database and vehicle garage resolve their locations.
+    pub fn default_root() -> std::path::PathBuf {
+        if let Ok(env_path) = std::env::var("STERNGATE_VAULT_ROOT") {
+            return std::path::PathBuf::from(env_path);
+        }
+        std::path::PathBuf::from("firmware_vault")
+    }
+
     pub fn scan_directory(dir: impl AsRef<std::path::Path>) -> Vec<FirmwareVaultEntry> {
         let mut results = Vec::new();
         Self::scan_recursive(dir.as_ref(), &mut results);

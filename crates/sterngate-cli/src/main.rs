@@ -76,7 +76,8 @@ async fn main() -> Result<()> {
 
             let profile = load_profile_safe(&cli.profile);
             let flasher = Arc::new(FlashingWorker::new());
-            let state = Arc::new(AppState::new(iface, profile, flasher));
+            let state =
+                Arc::new(AppState::new(iface, profile, flasher).with_vault_root(cli.vault.clone()));
             run_server(state, cli.bind, cli.port).await?;
         }
         OperatingMode::Bridge => {
@@ -125,7 +126,8 @@ async fn main() -> Result<()> {
             let iface = Box::new(VirtualCanInterface::new());
             let profile = load_profile_safe(&cli.profile);
             let flasher = Arc::new(FlashingWorker::new());
-            let state = Arc::new(AppState::new(iface, profile, flasher));
+            let state =
+                Arc::new(AppState::new(iface, profile, flasher).with_vault_root(cli.vault.clone()));
             run_server(state, cli.bind, cli.port).await?;
         }
     }

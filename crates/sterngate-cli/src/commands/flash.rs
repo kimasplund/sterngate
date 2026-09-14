@@ -227,6 +227,11 @@ pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
             Ok(())
         }
         FlashCommands::VaultScan { path, hw_id, sw_id } => {
+            // One source of truth: explicit --path, then the global --vault,
+            // then STERNGATE_VAULT_ROOT, then ./firmware_vault
+            let path = path
+                .or_else(|| cli.vault.clone())
+                .unwrap_or_else(FirmwareVault::default_root);
             println!("============================================================");
             println!("  LOCAL FIRMWARE VAULT SCANNER");
             println!("============================================================");
