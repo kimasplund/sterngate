@@ -42,6 +42,17 @@ To run Sterngate against `vcan0`:
 cargo run --package sterngate-cli -- --local --can-interface vcan0 --port 8080
 ```
 
+> [!IMPORTANT]
+> The dashboard binds to `127.0.0.1` by default. The diagnostic API has no
+> authentication and can actuate the vehicle (SBC depressurisation, compressor
+> inhibit, variant coding, flashing), so only expose it deliberately:
+> ```bash
+> # Reachable from other devices on the workshop network - do this knowingly
+> cargo run --package sterngate-cli -- --local --can-interface can0 --bind 0.0.0.0 --port 8080
+> ```
+> For remote access prefer `--bridge` / `--tech`, which tunnel over encrypted
+> Iroh P2P instead of exposing the listener.
+
 ---
 
 ## 3. Running Standalone Mock Simulation
@@ -434,10 +445,13 @@ curl -s -X POST http://localhost:8080/api/v1/workflow/cornering-lights \
 # Scan local storage folder for firmware binaries (.bin, .cff, .smr-f, .fls)
 curl -s "http://localhost:8080/api/v1/vault/scan?path=firmware_vault&hw_id=0281012224&sw_id=1037372332" | jq .
 
-# Stage firmware binary for detached flashing sequence
+# Stage firmware binary for detached flashing sequence.
+# measured_voltage is mandatory and must come from a real hardware reading
+# (e.g. OpenPort Pin 16). Omitting it returns 400 rather than assuming a value
+# that would always satisfy the >= 12.5 V interlock.
 curl -s -X POST http://localhost:8080/api/v1/vault/stage \
   -H "Content-Type: application/json" \
-  -d '{"file_path": "firmware_vault/W211_OM646_Stage1.bin"}' | jq .
+  -d '{"file_path": "firmware_vault/W211_OM646_Stage1.bin", "measured_voltage": 13.4}' | jq .
 ```
 
 ---
@@ -523,25 +537,30 @@ sterngate tune checksum --rom /path/to/modified_rom.bin --fix --output /path/to/
 
 ### REST API Endpoints
 ```bash
+# These routes take the ROM in the request body only. They deliberately accept
+# no filesystem path: the HTTP API is reachable by any client that can open the
+# port, so a caller-supplied path would be an arbitrary file read/write.
+ROM_B64=$(base64 -w0 /path/to/stock.bin)
+
 # Scan ROM
 curl -s -X POST http://localhost:8080/api/v1/tuning/scan \
   -H "Content-Type: application/json" \
-  -d '{"rom_path": "/path/to/stock.bin"}' | jq .
+  -d "{\"rom_base64\": \"$ROM_B64\"}" | jq .
 
 # Generate Stage 1 Tune
 curl -s -X POST http://localhost:8080/api/v1/tuning/stage1 \
   -H "Content-Type: application/json" \
-  -d '{"rom_path": "/path/to/stock.bin", "chassis": "W211 E280 CDI", "ecu_name": "EDC16CP31"}' | jq .
+  -d "{\"rom_base64\": \"$ROM_B64\", \"chassis\": \"W211 E280 CDI\", \"ecu_name\": \"EDC16CP31\"}" | jq .
 
 # Suppress DTC Error Masks
 curl -s -X POST http://localhost:8080/api/v1/tuning/dtc/kill \
   -H "Content-Type: application/json" \
-  -d '{"rom_path": "/path/to/stock.bin", "p_codes": ["P0401", "P2002"]}' | jq .
+  -d "{\"rom_base64\": \"$ROM_B64\", \"p_codes\": [\"P0401\", \"P2002\"]}" | jq .
 
-# Verify & Recalculate Checksums
+# Verify & Recalculate Checksums (corrected ROM is returned as fixed_base64)
 curl -s -X POST http://localhost:8080/api/v1/tuning/checksum/fix \
   -H "Content-Type: application/json" \
-  -d '{"rom_path": "/path/to/modified.bin", "output_path": "/path/to/fixed.bin"}' | jq .
+  -d "{\"rom_base64\": \"$ROM_B64\"}" | jq -r .fixed_base64 | base64 -d > /path/to/fixed.bin
 ```
 
 ---

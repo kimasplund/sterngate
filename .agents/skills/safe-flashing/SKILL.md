@@ -113,7 +113,8 @@ Sterngate keeps all firmware binaries strictly decoupled from remote networks an
 2. **Auto-Matched Upgrade Recommendation**:
    - If a discovered binary matches the connected vehicle ECU hardware ID (`DID 0xF192`) but contains a newer calibration version (`DID 0xF194`), Sterngate generates a verified upgrade recommendation.
 3. **One-Click Staging**:
-   - `POST /api/v1/vault/stage` takes `file_path`, verifies the safety interlocks, computes CRC32/SHA256, and stages the firmware for flashing without streaming bytes over the network.
+   - `POST /api/v1/vault/stage` takes `file_path` and a mandatory `measured_voltage`, verifies the safety interlocks, computes CRC32/SHA256, and stages the firmware for flashing without streaming bytes over the network.
+   - `measured_voltage` must come from an actual hardware reading. Both staging routes (`/api/v1/flash/stage` and `/api/v1/vault/stage`) return `400` when it is absent: the server has no voltage sensor of its own, and substituting a plausible constant would make the $\ge 12.5\text{ V}$ interlock impossible to fail.
 
 
 

@@ -101,6 +101,10 @@ sterngate --local --can-interface can0 --port 8080
 
 # Using native Linux Tactrix OpenPort 2.0 (USB bulk interface)
 sterngate --local --openport --port 8080
+
+# The dashboard binds to 127.0.0.1 by default. The diagnostic API is
+# unauthenticated and can actuate the vehicle, so expose it deliberately:
+sterngate --local --can-interface can0 --bind 0.0.0.0 --port 8080
 ```
 
 #### B. Car-Side Diagnostic Bridge & P2P Host (`--bridge` / `--car`)
