@@ -5,17 +5,26 @@ pub mod state;
 pub mod ws;
 
 use anyhow::Result;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 
 pub use recorder::{FlightRecorder, FlightRecorderStatus};
 pub use routes::create_router;
 pub use state::AppState;
 
-pub async fn run_server(state: Arc<AppState>, port: u16) -> Result<()> {
+pub async fn run_server(state: Arc<AppState>, bind: IpAddr, port: u16) -> Result<()> {
     let app = create_router(state.clone());
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::new(bind, port);
+
+    if !bind.is_loopback() {
+        warn!(
+            "Dashboard bound to {}: the diagnostic API is reachable from the \
+             network and has no authentication. Anyone who can reach this port \
+             can actuate the vehicle. Bind 127.0.0.1 unless that is intended.",
+            bind
+        );
+    }
     info!("Sterngate Web Dashboard listening on http://{}", addr);
 
     // Background periodic telemetry sampler (10 Hz)

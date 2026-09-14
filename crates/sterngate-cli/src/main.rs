@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
             let profile = load_profile_safe(&cli.profile);
             let flasher = Arc::new(FlashingWorker::new());
             let state = Arc::new(AppState::new(iface, profile, flasher));
-            run_server(state, cli.port).await?;
+            run_server(state, cli.bind, cli.port).await?;
         }
         OperatingMode::Bridge => {
             info!("============================================================");
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
             let profile = load_profile_safe(&cli.profile);
             let flasher = Arc::new(FlashingWorker::new());
             let state = Arc::new(AppState::new(iface, profile, flasher));
-            run_server(state, cli.port).await?;
+            run_server(state, cli.bind, cli.port).await?;
         }
     }
 

@@ -47,6 +47,12 @@ pub struct Cli {
     #[arg(short, long, default_value_t = 8080)]
     pub port: u16,
 
+    /// Address to bind the Web UI and diagnostic API to. Defaults to loopback:
+    /// the API is unauthenticated and can actuate the vehicle, so expose it on
+    /// 0.0.0.0 only deliberately.
+    #[arg(long, default_value = "127.0.0.1")]
+    pub bind: std::net::IpAddr,
+
     /// P2P node ticket to dial (Technician mode)
     #[arg(short, long)]
     pub ticket: Option<String>,
