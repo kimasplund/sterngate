@@ -138,7 +138,7 @@
     "workshop": "Verkstadsprocedurer",
     "coding": "Snabbkodning & Anpassningar",
     "flashing": "Säker ECU-programmering",
-    "catalog": "Styrdonskatalog"
+    "catalog": "ECU-katalog"
   },
   "modal": {
     "btn_cancel": "Avbryt",
