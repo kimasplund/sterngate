@@ -56,7 +56,9 @@ async fn mods_inspect(
         &mut **iface,
         &modpack,
         payload.vin.as_deref(),
-        payload.battery_voltage.or(Some(12.6)),
+        // Pass the reading through unchanged: an absent voltage must be
+        // reported as unverified, not substituted with a passing default.
+        payload.battery_voltage,
     )
     .await
     {
@@ -121,7 +123,20 @@ async fn mods_apply(
     };
 
     let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
-    let voltage = payload.battery_voltage.unwrap_or(12.6);
+
+    // Every mod declares its own min_battery_voltage. Defaulting here made
+    // that interlock unfailable on a vehicle nothing had measured.
+    let Some(voltage) = payload.battery_voltage else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Refusing to apply: no measured battery voltage supplied. \
+                          Send 'battery_voltage' from a real hardware reading.",
+            })),
+        )
+            .into_response();
+    };
 
     let mut iface = state.interface.lock().await;
     match ModRunner::apply_mod(&mut **iface, &mut modpack, vin, voltage, payload.force).await {
