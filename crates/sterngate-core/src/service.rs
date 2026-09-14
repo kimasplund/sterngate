@@ -137,3 +137,70 @@ pub struct DiscoveredEcu {
     /// Matched ECU catalog definition (from Sterngate catalog database)
     pub matched_catalog_name: Option<String>,
 }
+
+/// AdBlue / SCR System Countdown & Lockout Reset Status
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AdBlueResetStatus {
+    pub success: bool,
+    pub security_unlocked: bool,
+    pub countdown_reset: bool,
+    pub adaptations_cleared: bool,
+    pub level_sensor_calibrated: bool,
+    pub remaining_distance_km: Option<u32>,
+    pub message: String,
+}
+
+/// ECO Start-Stop Operating Preference
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EcoStartStopMode {
+    /// Factory standard: Always active on engine start
+    AlwaysOn,
+    /// Enthusiast preference: Remember last user button state across ignition cycles
+    RememberLastState,
+    /// Inverted: Default to disabled on start, driver must manually press to enable
+    DefaultOff,
+}
+
+impl EcoStartStopMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EcoStartStopMode::AlwaysOn => "Always On (Factory Default)",
+            EcoStartStopMode::RememberLastState => "Remember Last State (Memory Mode)",
+            EcoStartStopMode::DefaultOff => "Default Disabled",
+        }
+    }
+
+    pub fn parse_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "always-on" | "always_on" | "on" | "factory" => Some(EcoStartStopMode::AlwaysOn),
+            "memory" | "remember" | "remember_last_state" | "last_state" => {
+                Some(EcoStartStopMode::RememberLastState)
+            }
+            "off" | "disabled" | "default_off" | "default-off" => {
+                Some(EcoStartStopMode::DefaultOff)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// ECO Start-Stop Configuration Status
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EcoStartStopStatus {
+    pub mode: EcoStartStopMode,
+    pub success: bool,
+    pub previous_mode: Option<EcoStartStopMode>,
+    pub module: String,
+    pub did: u16,
+    pub message: String,
+}
+
+/// EGR (Exhaust Gas Recirculation) Adaptation Soot Reduction Optimization Status
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EgrOptimizationStatus {
+    pub success: bool,
+    pub air_mass_offset_mg: f64,
+    pub stops_relearned: bool,
+    pub module: String,
+    pub message: String,
+}

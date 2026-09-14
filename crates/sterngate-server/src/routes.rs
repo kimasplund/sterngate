@@ -13,9 +13,9 @@ use sha2::Digest;
 use std::sync::Arc;
 use sterngate_core::{
     lookup_routine_name, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc,
-    EcuCatalog, FlashPackageManifest, FlashProgress, Language, SbcServiceAction, SuspensionCorner,
-    SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot,
-    VehicleGarage, VehicleProfile,
+    EcoStartStopMode, EcuCatalog, FlashPackageManifest, FlashProgress, Language, SbcServiceAction,
+    SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample,
+    TelemetrySnapshot, VehicleGarage, VehicleProfile,
 };
 use sterngate_protocol::{BusDiscoverer, ServiceRoutineManager, UdsClient, VehicleScanner};
 
@@ -78,6 +78,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/service/suspension", post(service_suspension))
         .route("/api/v1/diag/discover", post(diag_discover))
         .route("/api/v1/diag/report.html", get(get_diag_report_html))
+        .route("/api/v1/workflow/adblue-reset", post(workflow_adblue_reset))
+        .route(
+            "/api/v1/workflow/eco-start-stop",
+            post(workflow_eco_start_stop),
+        )
+        .route("/api/v1/workflow/egr-optimize", post(workflow_egr_optimize))
+        .route("/api/v1/workflows", get(get_workflows_list))
         .with_state(state)
 }
 
@@ -1332,4 +1339,220 @@ async fn get_diag_report_html(
         )
             .into_response(),
     }
+}
+
+#[derive(Deserialize)]
+struct AdBlueResetPayload {
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    ecu_tx: Option<u32>,
+    #[serde(default)]
+    ecu_rx: Option<u32>,
+}
+
+async fn workflow_adblue_reset(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AdBlueResetPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let ecu_tx = payload.ecu_tx.unwrap_or(0x7E0);
+    let ecu_rx = payload.ecu_rx.unwrap_or(0x7E8);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::reset_adblue_countdown(&mut **iface, ecu_tx, ecu_rx).await {
+        Ok(status) => {
+            if status.success {
+                let garage = VehicleGarage::new(VehicleGarage::default_path());
+                let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+                let note = "AdBlue / SCR emergency 800km countdown and lockout reset executed";
+                let _ = garage.save_coding(vin, "SCR_DIAG", "0x0218_RESET_OK", None, note);
+            }
+            (StatusCode::OK, Json(serde_json::to_value(status).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("AdBlue reset procedure failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct EcoStartStopPayload {
+    mode: String,
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    ecu_tx: Option<u32>,
+    #[serde(default)]
+    ecu_rx: Option<u32>,
+}
+
+async fn workflow_eco_start_stop(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<EcoStartStopPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let mode = match EcoStartStopMode::parse_str(&payload.mode) {
+        Some(m) => m,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!(
+                        "Invalid ECO mode '{}'. Valid options: 'always_on', 'remember', 'disabled'",
+                        payload.mode
+                    ),
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let ecu_tx = payload.ecu_tx.unwrap_or(0x7E0);
+    let ecu_rx = payload.ecu_rx.unwrap_or(0x7E8);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::configure_eco_start_stop(&mut **iface, ecu_tx, ecu_rx, mode).await
+    {
+        Ok(status) => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+            let note = format!("Updated ECO Start-Stop configuration: {}", mode.as_str());
+            let _ = garage.save_coding(
+                vin,
+                &status.module,
+                &format!("{:02X}", status.did),
+                None,
+                &note,
+            );
+
+            (StatusCode::OK, Json(serde_json::to_value(status).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("ECO Start-Stop configuration failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct EgrOptimizePayload {
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    ecu_tx: Option<u32>,
+    #[serde(default)]
+    ecu_rx: Option<u32>,
+}
+
+async fn workflow_egr_optimize(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<EgrOptimizePayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let ecu_tx = payload.ecu_tx.unwrap_or(0x7E0);
+    let ecu_rx = payload.ecu_rx.unwrap_or(0x7E8);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::optimize_egr_adaptation(&mut **iface, ecu_tx, ecu_rx).await {
+        Ok(status) => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+            let note = "EGR adaptation optimized (+40 mg soot reduction offset applied)";
+            let _ = garage.save_coding(vin, &status.module, "EGR_AIRMASS_+40MG", None, note);
+
+            (StatusCode::OK, Json(serde_json::to_value(status).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("EGR optimization failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_workflows_list() -> impl IntoResponse {
+    let workflows = serde_json::json!([
+        {
+            "id": "adblue_countdown_reset",
+            "name": "AdBlue / SCR 800km Emergency Lockout Reset",
+            "category": "Workshop Maintenance",
+            "risk_level": "high",
+            "min_voltage": 12.5,
+            "requires_engine_off": true,
+            "description": "Unlocks engine ECU with Daimler cryptographic Seed-Key (Level 01/0B), wipes permanent SCR start-lockout counter, resets NOx sensor adaptations, and relearns ultrasonic tank level."
+        },
+        {
+            "id": "eco_start_stop_memory",
+            "name": "ECO Start-Stop Last State Memory",
+            "category": "Vehicle Customization",
+            "risk_level": "moderate",
+            "min_voltage": 12.0,
+            "requires_engine_off": true,
+            "description": "Programs engine controller or Front SAM (DID 0x0320) to remember driver's last button selection across ignition cycles instead of defaulting to enabled."
+        },
+        {
+            "id": "egr_soot_optimization",
+            "name": "EGR Adaptation Soot Reduction",
+            "category": "Powertrain Optimization",
+            "risk_level": "moderate",
+            "min_voltage": 12.0,
+            "requires_engine_off": true,
+            "description": "Applies factory-tolerated +40 mg/stroke positive air mass adaptation bias and relearns lower mechanical stops to minimize intake manifold carbon fouling."
+        },
+        {
+            "id": "sbc_brake_pad_service",
+            "name": "SBC Hydraulic 0-Bar Pad Service Mode",
+            "category": "Workshop Safety",
+            "risk_level": "high",
+            "min_voltage": 12.5,
+            "requires_engine_off": true,
+            "description": "Depressurizes ~160 bar accumulator into reservoir, retracts pistons, and suppresses all wake-up triggers to safely replace brake pads without amputation hazard."
+        }
+    ]);
+
+    (StatusCode::OK, Json(workflows))
 }

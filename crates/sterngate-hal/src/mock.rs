@@ -84,6 +84,11 @@ impl VirtualCanInterface {
                     &[0x06, 0x50, sub, 0x00, 0x32, 0x01, 0xF4],
                 ))
             }
+            // ECUReset (0x11)
+            0x11 => {
+                let sub = if payload.len() > 2 { payload[2] } else { 0x01 };
+                Some(CanFrame::new_standard(resp_id as u16, &[0x02, 0x51, sub]))
+            }
             // SecurityAccess
             0x27 => {
                 let sub = if payload.len() > 2 { payload[2] } else { 0x01 };
@@ -233,6 +238,16 @@ impl VirtualCanInterface {
                         resp_id as u16,
                         &[0x07, 0x62, 0x20, 0x33, b'5', b'J', b'7', b'T'],
                     )),
+                    // ECO Start-Stop Memory Mode (0x0320) -> 0x01 (Remember last state)
+                    0x0320 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x04, 0x62, 0x03, 0x20, 0x01, 0xAA, 0xAA, 0xAA],
+                    )),
+                    // EGR Adaptation Air Mass Offset (0x0240) -> +40 mg (0x0190)
+                    0x0240 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x05, 0x62, 0x02, 0x40, 0x01, 0x90, 0xAA, 0xAA],
+                    )),
                     _ => {
                         Some(CanFrame::new_standard(
                             resp_id as u16,
@@ -296,10 +311,12 @@ impl VirtualCanInterface {
                         // 0x0220: ABC System Pressure Fallback Dump (120 bar)
                         // 0x0221: ABC Strut Isolation Valve Lock
                         // 0x0222: ABC Normal Active Suspension Restore
-                        // 0xFF00: Erase Flash Routine
+                        // 0x0218: Reset SCR Warning & Start Lockout Counter (AdBlue 800km countdown)
+                        // 0x0219: Reset SCR Catalyst & NOx Quality Adaptation
+                        // 0x021A: AdBlue Tank Level Ultrasonic Re-teach
                         0xFF01 | 0x0201 | 0x0202 | 0x0203 | 0x0205 | 0x0206 | 0x0207 | 0x0210
-                        | 0x0211 | 0x0212 | 0x0213 | 0x0214 | 0x0215 | 0x0220 | 0x0221 | 0x0222
-                        | 0xFF00 => Some(CanFrame::new_standard(
+                        | 0x0211 | 0x0212 | 0x0213 | 0x0214 | 0x0215 | 0x0218 | 0x0219 | 0x021A
+                        | 0x0220 | 0x0221 | 0x0222 | 0xFF00 => Some(CanFrame::new_standard(
                             resp_id as u16,
                             &[0x05, 0x71, sub_fn, r_hi, r_lo, 0x00],
                         )),

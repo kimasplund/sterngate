@@ -250,7 +250,7 @@ mod tests {
         assert_eq!(ima_write.code, "A8B12F");
 
         // 4. Air suspension corner actuation
-        use sterngate_core::{SuspensionCorner, SuspensionCornerAction};
+        use sterngate_core::{EcoStartStopMode, SuspensionCorner, SuspensionCornerAction};
         let act = ServiceRoutineManager::actuate_suspension_corner(
             &mut sim,
             0x7E4,
@@ -262,6 +262,34 @@ mod tests {
         .unwrap();
         assert!(act.contains("Rear-Left"));
         assert!(act.contains("0x0213"));
+
+        // 5. AdBlue / SCR 800km Emergency Countdown & Lockout Reset
+        let adblue = ServiceRoutineManager::reset_adblue_countdown(&mut sim, 0x7E0, 0x7E8)
+            .await
+            .unwrap();
+        assert!(adblue.success);
+        assert!(adblue.countdown_reset);
+        assert!(adblue.level_sensor_calibrated);
+
+        // 6. ECO Start-Stop Memory Mode Configuration
+        let eco = ServiceRoutineManager::configure_eco_start_stop(
+            &mut sim,
+            0x7E0,
+            0x7E8,
+            EcoStartStopMode::RememberLastState,
+        )
+        .await
+        .unwrap();
+        assert!(eco.success);
+        assert_eq!(eco.mode, EcoStartStopMode::RememberLastState);
+
+        // 7. EGR Soot Optimization Relearn
+        let egr = ServiceRoutineManager::optimize_egr_adaptation(&mut sim, 0x7E0, 0x7E8)
+            .await
+            .unwrap();
+        assert!(egr.success);
+        assert_eq!(egr.air_mass_offset_mg, 40.0);
+        assert!(egr.stops_relearned);
     }
 
     #[tokio::test]

@@ -643,4 +643,89 @@ mod tests {
         assert!(html_str.contains("<!DOCTYPE html>"));
         assert!(html_str.contains("Sterngate"));
     }
+
+    #[tokio::test]
+    async fn test_guided_workflows_endpoints() {
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(sim, profile, flasher));
+
+        // 1. GET /api/v1/workflows
+        let req = Request::builder()
+            .uri("/api/v1/workflows")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let workflows: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(workflows.as_array().unwrap().len() >= 4);
+
+        // 2. POST /api/v1/workflow/adblue-reset
+        let adblue_payload = json!({
+            "vin": "WDB2112061A999888",
+            "ecu_tx": 2016, // 0x7E0
+            "ecu_rx": 2024  // 0x7E8
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/workflow/adblue-reset")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&adblue_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let adblue_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(adblue_res["success"].as_bool().unwrap());
+        assert!(adblue_res["countdown_reset"].as_bool().unwrap());
+
+        // 3. POST /api/v1/workflow/eco-start-stop
+        let eco_payload = json!({
+            "mode": "remember",
+            "vin": "WDB2112061A999888"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/workflow/eco-start-stop")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&eco_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let eco_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(eco_res["success"].as_bool().unwrap());
+
+        // 4. POST /api/v1/workflow/egr-optimize
+        let egr_payload = json!({
+            "vin": "WDB2112061A999888"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/workflow/egr-optimize")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&egr_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let egr_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(egr_res["success"].as_bool().unwrap());
+        assert_eq!(egr_res["air_mass_offset_mg"].as_f64().unwrap(), 40.0);
+    }
 }

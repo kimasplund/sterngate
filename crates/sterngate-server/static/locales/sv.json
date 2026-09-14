@@ -131,6 +131,19 @@
     "title": "🚨 Mercedes 'Cascade of Death' Tidigt Varningscenter",
     "subtitle": "13 ökända haverikaskader övervakade",
     "desc": "Upptäcker billiga slitagedelar för 20–150 kr (O-ringar, kopparbrickor, kväveackumulatorer, mikromotorer) innan de eskalerar till styrenhetshaverier på 25 000+ kr."
+  },
+  "tabs": {
+    "telemetry": "Realtidstelemetri",
+    "health": "Fordonshälsa & Felkoder",
+    "workshop": "Verkstadsprocedurer",
+    "coding": "Snabbkodning & Anpassningar",
+    "flashing": "Säker ECU-programmering",
+    "catalog": "Styrdonskatalog"
+  },
+  "modal": {
+    "btn_cancel": "Avbryt",
+    "btn_confirm": "Utför procedur"
   }
 }
+
 

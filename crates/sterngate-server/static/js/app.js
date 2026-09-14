@@ -3,6 +3,522 @@
  */
 
 let lastTelemetrySnap = null;
+let activeVehicleVin = null;
+let currentSafetyOptions = null;
+
+// --- Tab Navigation ---
+function switchTab(tabId) {
+  const tabs = ['telemetry', 'health', 'workshop', 'coding', 'flashing', 'catalog'];
+  if (!tabs.includes(tabId)) tabId = 'telemetry';
+
+  document.querySelectorAll('.nav-tabs .tab-btn').forEach(btn => {
+    if (btn.getAttribute('data-tab') === tabId) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    if (pane.id === `tab-pane-${tabId}`) {
+      pane.classList.add('active');
+    } else {
+      pane.classList.remove('active');
+    }
+  });
+
+  try {
+    localStorage.setItem('sterngate_active_tab', tabId);
+  } catch (e) {}
+}
+
+// --- Two-Tier Safety Interlock Modal Logic ---
+function showSafetyModal(options) {
+  currentSafetyOptions = options;
+
+  const modal = document.getElementById('safety-modal');
+  const title = document.getElementById('safety-modal-title');
+  const badge = document.getElementById('safety-modal-badge');
+  const desc = document.getElementById('safety-modal-desc');
+  const confirmBtn = document.getElementById('safety-modal-btn-confirm');
+  const kwContainer = document.getElementById('safety-modal-keyword-container');
+  const kwCode = document.getElementById('safety-modal-keyword');
+  const kwInput = document.getElementById('safety-modal-input');
+
+  title.textContent = options.title || 'Safety Interlock Confirmation';
+  badge.textContent = options.badge || 'HIGH RISK / DESTRUCTIVE';
+  badge.className = `badge ${options.badgeClass || 'badge-recording'}`;
+  desc.innerHTML = options.description || '';
+
+  // Interlock check: Voltage
+  const minVolts = options.minVoltage !== undefined ? options.minVoltage : 12.5;
+  document.getElementById('gate-voltage-target').textContent = `≥ ${minVolts.toFixed(2)} V`;
+
+  const liveVolts = (lastTelemetrySnap && lastTelemetrySnap.battery_voltage !== null && lastTelemetrySnap.battery_voltage !== undefined)
+    ? lastTelemetrySnap.battery_voltage
+    : 13.8;
+  const voltSpan = document.getElementById('gate-voltage-live');
+  if (voltSpan) voltSpan.textContent = `${liveVolts.toFixed(1)}V`;
+
+  const voltStatus = document.getElementById('gate-voltage-status');
+  const voltPass = liveVolts >= minVolts;
+  if (voltPass) {
+    voltStatus.textContent = 'PASS ✓';
+    voltStatus.className = 'badge badge-ready';
+  } else {
+    voltStatus.textContent = `FAIL (${liveVolts.toFixed(1)}V < ${minVolts}V)`;
+    voltStatus.className = 'badge badge-recording';
+  }
+
+  // Interlock check: Ignition / Engine stopped
+  const ignStatus = document.getElementById('gate-ignition-status');
+  const rpm = (lastTelemetrySnap && lastTelemetrySnap.engine_rpm) ? lastTelemetrySnap.engine_rpm : 0;
+  let ignPass = true;
+  if (options.requireEngineOff && rpm > 200) {
+    ignPass = false;
+    ignStatus.textContent = `FAIL (ENGINE RUNNING ${Math.round(rpm)} RPM)`;
+    ignStatus.className = 'badge badge-recording';
+  } else {
+    ignStatus.textContent = 'PASS ✓';
+    ignStatus.className = 'badge badge-ready';
+  }
+
+  // Interlock check: Keyword Confirmation
+  if (options.requireKeyword) {
+    kwContainer.style.display = 'block';
+    kwCode.textContent = options.requireKeyword;
+    kwInput.value = '';
+    confirmBtn.disabled = true;
+  } else {
+    kwContainer.style.display = 'none';
+    confirmBtn.disabled = !(voltPass && ignPass);
+  }
+
+  confirmBtn.textContent = options.confirmBtnText || (window.i18n ? i18n.t('modal.btn_confirm', 'Execute Procedure') : 'Execute Procedure');
+  modal.style.display = 'flex';
+
+  if (options.requireKeyword && kwInput) {
+    setTimeout(() => kwInput.focus(), 50);
+  }
+}
+
+function closeSafetyModal() {
+  const modal = document.getElementById('safety-modal');
+  if (modal) modal.style.display = 'none';
+  currentSafetyOptions = null;
+}
+
+function checkSafetyModalKeyword(e) {
+  if (!currentSafetyOptions) return;
+  const input = document.getElementById('safety-modal-input');
+  const confirmBtn = document.getElementById('safety-modal-btn-confirm');
+  const target = (currentSafetyOptions.requireKeyword || '').toUpperCase();
+  const entered = (input.value || '').trim().toUpperCase();
+
+  const minVolts = currentSafetyOptions.minVoltage !== undefined ? currentSafetyOptions.minVoltage : 12.5;
+  const liveVolts = (lastTelemetrySnap && lastTelemetrySnap.battery_voltage) ? lastTelemetrySnap.battery_voltage : 13.8;
+  const voltPass = liveVolts >= minVolts;
+
+  const rpm = (lastTelemetrySnap && lastTelemetrySnap.engine_rpm) ? lastTelemetrySnap.engine_rpm : 0;
+  const ignPass = !(currentSafetyOptions.requireEngineOff && rpm > 200);
+
+  confirmBtn.disabled = !(entered === target && voltPass && ignPass);
+
+  if (e && e.key === 'Enter' && !confirmBtn.disabled) {
+    executeSafetyConfirmedAction();
+  }
+}
+
+async function executeSafetyConfirmedAction() {
+  if (!currentSafetyOptions || !currentSafetyOptions.onConfirm) return;
+  const action = currentSafetyOptions.onConfirm;
+  closeSafetyModal();
+  try {
+    await action();
+  } catch (err) {
+    console.error('Safety procedure execution error:', err);
+    alert(`Error executing procedure: ${err.message || err}`);
+  }
+}
+
+// --- Safe Action Triggers ---
+function requestClearDtcSafe() {
+  showSafetyModal({
+    title: (window.i18n ? i18n.t('dtc.title', 'Diagnostic Fault Codes') : 'Diagnostic Fault Codes') + ' - Clear All',
+    badge: 'MODERATE RISK',
+    badgeClass: 'badge-voltage',
+    description: 'Clearing fault codes resets emission readiness monitors, freeze-frame diagnostic snapshots, and historical fault counters across all gateway ECUs.',
+    minVoltage: 11.5,
+    requireEngineOff: true,
+    requireKeyword: null,
+    confirmBtnText: (window.i18n ? i18n.t('dtc.btn_clear', 'Clear All DTCs') : 'Clear All DTCs'),
+    onConfirm: async () => {
+      await clearDtc();
+    }
+  });
+}
+
+function requestAdBlueResetSafe() {
+  showSafetyModal({
+    title: 'AdBlue / SCR 800km Emergency Countdown & Lockout Reset',
+    badge: 'HIGH RISK / DESTRUCTIVE',
+    badgeClass: 'badge-recording',
+    description: `
+      <b>Cryptographic ECU Access & EEPROM Write:</b><br>
+      This guided workflow unlocks the Engine Control Module using Daimler Level 01 / Level 0B Seed-Key cryptographic derivation, executes UDS Routine <code>0x0218</code> to purge the permanent EEPROM start-lockout counter, clears catalyst NOx adaptation histories (<code>0x0219</code>), relearns the ultrasonic DEF tank level (<code>0x021A</code>), and performs an ECU soft reset (<code>0x11 01</code>).<br><br>
+      <b>Prerequisites:</b> DEF tank must contain at least 5 liters of AdBlue. Battery voltage must remain strictly ≥ 12.50V. Terminal 15 ON, engine stopped.
+    `,
+    minVoltage: 12.5,
+    requireEngineOff: true,
+    requireKeyword: 'UNLOCK',
+    confirmBtnText: 'Execute AdBlue Reset',
+    onConfirm: async () => {
+      const logBox = document.getElementById('adblue-workflow-logs');
+      logBox.innerHTML += `[ADBLUE WIZARD] Initiating Seed-Key unlock and SCR register purge...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/workflow/adblue-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to reset AdBlue lockout');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Security Access: Level 0x${data.security_level.toString(16).toUpperCase()} Unlocked<br>`;
+        logBox.innerHTML += `• Lockout Counter Cleared: ${data.lockout_counter_cleared ? 'YES' : 'NO'}<br>`;
+        logBox.innerHTML += `• NOx History Reset: ${data.nox_history_reset ? 'YES' : 'NO'}<br>`;
+        logBox.innerHTML += `• Tank Level Relearned: ${data.tank_level_relearned ? 'YES' : 'NO'}<br>`;
+        logBox.innerHTML += `• ECU Reset: ${data.ecu_reset_performed ? 'COMPLETED' : 'PENDING'}<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function requestEcoStartStopSafe() {
+  const modeSelect = document.getElementById('eco-mode-select');
+  const mode = modeSelect ? modeSelect.value : 'remember';
+  const modeLabel = modeSelect ? modeSelect.options[modeSelect.selectedIndex].text : mode;
+
+  showSafetyModal({
+    title: 'Configure ECO Start-Stop Memory Mode',
+    badge: 'VEHICLE CODING',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>Variant Coding Write (DID 0x0320):</b><br>
+      Will reprogram engine controller / Front SAM to set ECO Start-Stop behavior to: <b>${modeLabel}</b>.<br><br>
+      Prior to dispatch, an automated snapshot of the current coding configuration will be committed to the local Git garage repository.
+    `,
+    minVoltage: 12.0,
+    requireEngineOff: true,
+    requireKeyword: null,
+    confirmBtnText: 'Apply ECO Configuration',
+    onConfirm: async () => {
+      const logBox = document.getElementById('quick-mods-logs');
+      logBox.innerHTML += `[QUICK MODS] Programming ECO Start-Stop mode: ${mode}...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/workflow/eco-start-stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: mode,
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to update ECO mode');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Target Module: ${data.module} (DID 0x${data.did.toString(16).toUpperCase()})<br>`;
+        logBox.innerHTML += `• Raw Value Written: 0x${data.raw_value.toString(16).toUpperCase()}<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function requestEgrOptimizeSafe() {
+  showSafetyModal({
+    title: 'EGR Adaptation Soot Reduction Offset',
+    badge: 'POWERTRAIN OPTIMIZATION',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>EGR Adaptation Write (DID 0x0240):</b><br>
+      Applies OEM positive air mass adaptation bias (+40 mg/stroke) and relearns mechanical end stops to prevent intake carbon fouling and swirl flap clogging while remaining 100% compliant with OBD emission monitors.<br><br>
+      An automated snapshot of previous calibration is committed to Git garage history.
+    `,
+    minVoltage: 12.0,
+    requireEngineOff: true,
+    requireKeyword: null,
+    confirmBtnText: 'Apply EGR Optimization',
+    onConfirm: async () => {
+      const logBox = document.getElementById('quick-mods-logs');
+      logBox.innerHTML += `[QUICK MODS] Applying EGR air mass adaptation offset (+40 mg/stroke)...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/workflow/egr-optimize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success && !res.ok) throw new Error(data.error || 'Failed to optimize EGR adaptation');
+
+        logBox.innerHTML += `<span style="color: var(--success);">[SUCCESS] ${data.message}</span><br>`;
+        logBox.innerHTML += `• Offset Applied: +${data.offset_applied_mg} mg/stroke<br>`;
+        logBox.innerHTML += `• Lower Stop Relearn: ${data.lower_stop_relearned ? 'PASSED' : 'SKIPPED'}<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function requestSbcDeactivateSafe() {
+  showSafetyModal({
+    title: 'Deactivate SBC Hydraulic Pressure (0-Bar Pad Service Mode)',
+    badge: 'HIGH RISK / AMPUTATION HAZARD',
+    badgeClass: 'badge-recording',
+    description: `
+      <b>CRITICAL WORKSHOP SAFETY WARNING:</b><br>
+      The Sensotronic Brake Control (SBC) hydraulic accumulator stores ~160 bar of brake fluid pressure. It will automatically actuate brake calipers without warning upon door open, key detection, or wake-up bus activity.<br><br>
+      This routine dumps accumulator pressure into the reservoir (0 bar), retracts pistons, and locks out brake wake-up so calipers and pads can be safely serviced without finger injury.<br><br>
+      <b>Do NOT step on brake pedal while deactivated.</b>
+    `,
+    minVoltage: 12.5,
+    requireEngineOff: true,
+    requireKeyword: 'SBC',
+    confirmBtnText: 'Deactivate SBC (0 bar)',
+    onConfirm: async () => {
+      const badge = document.getElementById('sbc-state-badge');
+      const logBox = document.getElementById('sbc-logs');
+      logBox.innerHTML += `[SBC] Depressurizing accumulator to 0 bar...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/service/sbc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deactivate' })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to deactivate SBC');
+
+        badge.textContent = '0 BAR (PAD SERVICE MODE)';
+        badge.className = 'badge badge-recording pulse';
+        logBox.innerHTML += `<span style="color: #3fb950;">[SBC] Depressurized successfully. Safe to service pads and calipers.</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function requestSbcReactivateSafe() {
+  showSafetyModal({
+    title: 'Reactivate SBC Hydraulic Pressure',
+    badge: 'WORKSHOP SERVICE',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>SBC System Reactivation & Pressure Bleed:</b><br>
+      Pressurizes the SBC high-pressure accumulator back to ~160 bar and performs automated stroke/pressure tests.<br><br>
+      <b>Verification:</b> Ensure all brake calipers, pads, and hydraulic connections are securely assembled and torqued before reactivation.
+    `,
+    minVoltage: 12.5,
+    requireEngineOff: true,
+    requireKeyword: null,
+    confirmBtnText: 'Reactivate SBC (160 bar)',
+    onConfirm: async () => {
+      const badge = document.getElementById('sbc-state-badge');
+      const logBox = document.getElementById('sbc-logs');
+      logBox.innerHTML += `[SBC] Pressurizing accumulator and bleeding system...<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      try {
+        const res = await fetch('/api/v1/service/sbc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reactivate' })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to reactivate SBC');
+
+        badge.textContent = '160 BAR (ACTIVE)';
+        badge.className = 'badge badge-ready';
+        logBox.innerHTML += `<span style="color: #3fb950;">[SBC] Reactivated successfully. System pressure restored to 160 bar.</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      } catch (err) {
+        logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+  });
+}
+
+function actuateSuspensionCornerSafe(action) {
+  const select = document.getElementById('susp-corner-select');
+  const corner = select ? select.value : 'rear';
+  const cornerLabel = select ? select.options[select.selectedIndex].text : corner;
+
+  const doActuate = async () => {
+    const logBox = document.getElementById('susp-act-logs');
+    logBox.innerHTML += `[SUSPENSION] Actuating corner ${cornerLabel}: action=${action}...<br>`;
+    logBox.scrollTop = logBox.scrollHeight;
+
+    try {
+      const res = await fetch('/api/v1/service/suspension', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ corner, action })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to actuate suspension');
+
+      logBox.innerHTML += `<span style="color: #3fb950;">[SUSPENSION] ${data.message}</span><br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    } catch (err) {
+      logBox.innerHTML += `<span style="color: var(--danger);">[ERROR] ${err.message}</span><br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+  };
+
+  if (action === 'calibrate') {
+    showSafetyModal({
+      title: `Air Suspension Zero-Height Calibration (${cornerLabel})`,
+      badge: 'CHASSIS CALIBRATION',
+      badgeClass: 'badge-voltage',
+      description: `
+        <b>Suspension Level Calibration:</b><br>
+        Stores current ride height sensors as baseline level for <b>${cornerLabel}</b>.<br><br>
+        Vehicle must be parked on a completely level surface with tire pressures at OEM specification.
+      `,
+      minVoltage: 12.0,
+      requireEngineOff: false,
+      requireKeyword: null,
+      confirmBtnText: 'Calibrate Zero-Height',
+      onConfirm: doActuate
+    });
+  } else {
+    doActuate();
+  }
+}
+
+async function fetchImaCodes() {
+  const display = document.getElementById('ima-display-grid');
+  display.innerHTML = '<span style="color: var(--text-muted);">Reading injector classification codes (DIDs 0x2030..0x2037)...</span>';
+
+  try {
+    const res = await fetch('/api/v1/service/ima?cylinder_count=4');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to read IMA codes');
+
+    display.innerHTML = data.injectors.map(inj => `
+      <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; text-align: center;">
+        <div style="font-size: 0.75rem; color: var(--text-muted);">Cylinder ${inj.cylinder}</div>
+        <div style="font-family: monospace; font-size: 1.1rem; color: var(--accent); font-weight: bold;">${inj.code}</div>
+        <div style="font-size: 0.7rem; color: #3fb950;">${inj.classification_type || 'IMA'}</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    display.innerHTML = `<span style="color: var(--danger);">Error reading IMA codes: ${err.message}</span>`;
+  }
+}
+
+function requestWriteImaCodeSafe() {
+  const cylInput = document.getElementById('ima-cyl-input');
+  const codeInput = document.getElementById('ima-code-input');
+  const cylinder = parseInt(cylInput.value, 10);
+  const code = (codeInput.value || '').trim().toUpperCase();
+
+  if (!cylinder || cylinder < 1 || cylinder > 8) {
+    alert('Please enter a valid cylinder number (1-8).');
+    return;
+  }
+  if (!code || (code.length !== 6 && code.length !== 7)) {
+    alert('Please enter a valid 6 or 7-character alphanumeric IMA injector code (e.g. 7B8HNA).');
+    return;
+  }
+
+  showSafetyModal({
+    title: `Program Cylinder ${cylinder} Injector IMA Code`,
+    badge: 'EEPROM PROGRAMMING',
+    badgeClass: 'badge-voltage',
+    description: `
+      <b>Common Rail Injector Calibration:</b><br>
+      Programs injector tolerance compensation code <code>${code}</code> to Cylinder ${cylinder} in EDC16/EDC17 non-volatile EEPROM.<br><br>
+      An automated snapshot will be committed to the Git garage repository before writing.
+    `,
+    minVoltage: 12.0,
+    requireEngineOff: true,
+    requireKeyword: null,
+    confirmBtnText: 'Program Code',
+    onConfirm: async () => {
+      try {
+        const res = await fetch('/api/v1/service/ima', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cylinder,
+            code,
+            vin: activeVehicleVin || 'WDB2112061A000001'
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to write IMA code');
+
+        alert(`✓ ${data.message}`);
+        fetchImaCodes();
+      } catch (err) {
+        alert(`Error writing IMA code: ${err.message}`);
+      }
+    }
+  });
+}
+
+function requestStageFlashSafe() {
+  showSafetyModal({
+    title: 'Autonomous ECU Firmware Flash Execution',
+    badge: 'CRITICAL / DESTRUCTIVE',
+    badgeClass: 'badge-recording',
+    description: `
+      <b>ECU FLASH SECTOR ERASE & REPROGRAMMING:</b><br>
+      This will initiate the detached asynchronous Flashing State Machine. All diagnostic reads and APIs will be locked (HTTP 423) during flash execution.<br><br>
+      <b>CRITICAL SAFETY RULES:</b><br>
+      1. Battery voltage MUST be maintained ≥ 12.50 V (connect battery maintainer).<br>
+      2. Engine must be completely OFF with Terminal 15 (Ignition) ON.<br>
+      3. Do NOT disconnect CAN interface or cycle ignition until flashing completes.<br><br>
+      Failure during erase or write may brick the ECU, requiring bench recovery (BDM/JTAG).
+    `,
+    minVoltage: 12.5,
+    requireEngineOff: true,
+    requireKeyword: 'FLASH',
+    confirmBtnText: 'Erase & Flash Firmware',
+    onConfirm: async () => {
+      await startSimulatedFlash();
+    }
+  });
+}
+
 
 function updateCylBar(idVal, idBar, val) {
   if (val !== null && val !== undefined) {
@@ -357,8 +873,6 @@ function closeInspect() {
 }
 
 // --- Vehicle Garage & Analytics Logic ---
-let activeVehicleVin = null;
-
 async function scanVehicleQuick() {
   const vinBadge = document.getElementById('garage-vin-badge');
   const modelBadge = document.getElementById('garage-model-badge');
@@ -817,6 +1331,11 @@ async function pollCascadeStatus() {
 
 // Initial triggers
 document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const savedTab = localStorage.getItem('sterngate_active_tab') || 'telemetry';
+    switchTab(savedTab);
+  } catch (e) {}
+
   setupTelemetryWebSocket();
   pollRecorderStatus();
   pollCompressorStatus();
@@ -824,5 +1343,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(pollCompressorStatus, 5000);
   setInterval(pollCascadeStatus, 10000);
 });
+
 
 

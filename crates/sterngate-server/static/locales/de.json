@@ -131,6 +131,19 @@
     "title": "🚨 Mercedes 'Cascade of Death' Frühwarnzentrum",
     "subtitle": "13 berüchtigte Kettenreaktionsschäden überwacht",
     "desc": "Erkennt günstige 2–15 € Verschleißteile (O-Ringe, Kupferdichtringe, Druckspeicher, Kleinmotoren), bevor sie zu 2.500 €+ zerstörten Steuergeräten oder Getriebeschäden führen."
+  },
+  "tabs": {
+    "telemetry": "Echtzeit-Telemetrie",
+    "health": "Fahrzeugzustand & DTCs",
+    "workshop": "Werkstatt-Prozeduren",
+    "coding": "Schnell-Codierung & Mods",
+    "flashing": "Sicheres ECU-Flashen",
+    "catalog": "Steuergeräte-Katalog"
+  },
+  "modal": {
+    "btn_cancel": "Abbrechen",
+    "btn_confirm": "Prozedur ausführen"
   }
 }
+
 

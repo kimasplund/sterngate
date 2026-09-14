@@ -35,7 +35,8 @@ pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
 pub use service::{
-    DiscoveredEcu, ImaClassification, SbcServiceAction, SbcServiceStatus, SuspensionCorner,
+    AdBlueResetStatus, DiscoveredEcu, EcoStartStopMode, EcoStartStopStatus, EgrOptimizationStatus,
+    ImaClassification, SbcServiceAction, SbcServiceStatus, SuspensionCorner,
     SuspensionCornerAction,
 };
 

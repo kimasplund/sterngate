@@ -31,97 +31,291 @@
     </div>
   </header>
 
-  <div class="grid">
-    <!-- Live Telemetry Cluster -->
-    <div class="card" style="grid-column: span 2;">
-      <div class="card-title">
-        <span data-i18n="telemetry.title">Live Powertrain Telemetry</span>
-        <button class="btn" onclick="fetchTelemetry()" data-i18n="telemetry.refresh">Refresh</button>
-      </div>
-      <div class="gauge-grid">
-        <div class="gauge">
-          <div class="gauge-label" data-i18n="telemetry.rpm_label">ENGINE RPM</div>
-          <div id="val-rpm" class="gauge-val">820</div>
-          <div class="gauge-label" data-i18n="telemetry.rpm_sub">OM646 Idle Speed</div>
+  <!-- Top Navigation Tabs -->
+  <nav class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('telemetry')" data-tab="telemetry">
+      <span>📊</span> <span data-i18n="tabs.telemetry">Live Telemetry</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('health')" data-tab="health">
+      <span>🩺</span> <span data-i18n="tabs.health">Vehicle Health & DTCs</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('workshop')" data-tab="workshop">
+      <span>🔧</span> <span data-i18n="tabs.workshop">Workshop Procedures</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('coding')" data-tab="coding">
+      <span>⚡</span> <span data-i18n="tabs.coding">Quick Mods & Coding</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('flashing')" data-tab="flashing">
+      <span>💾</span> <span data-i18n="tabs.flashing">Safe ECU Flashing</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('catalog')" data-tab="catalog">
+      <span>📚</span> <span data-i18n="tabs.catalog">ECU Catalog</span>
+    </button>
+  </nav>
+
+  <!-- TAB 1: LIVE TELEMETRY -->
+  <div id="tab-pane-telemetry" class="tab-pane active">
+    <div class="grid">
+      <!-- Live Telemetry Cluster -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span data-i18n="telemetry.title">Live Powertrain Telemetry</span>
+          <button class="btn" onclick="fetchTelemetry()" data-i18n="telemetry.refresh">Refresh</button>
         </div>
-        <div class="gauge">
-          <div class="gauge-label" data-i18n="telemetry.coolant_label">COOLANT TEMP</div>
-          <div id="val-coolant" class="gauge-val">88°C</div>
-          <div class="gauge-label" data-i18n="telemetry.coolant_sub">Target: 85–92°C</div>
-        </div>
-        <div class="gauge">
-          <div class="gauge-label" data-i18n="telemetry.trans_label">TRANSMISSION FLUID (722.6)</div>
-          <div id="val-trans-temp" class="gauge-val" style="color: var(--accent);">80°C</div>
-          <div id="badge-trans-status" class="badge badge-ready pulse" style="display: inline-block; margin-top: 0.35rem; font-size: 0.7rem;">
-            ★ READY AT 80°C: MEASURE DIPSTICK (SPEC 54-65mm) ★
+        <div class="gauge-grid">
+          <div class="gauge">
+            <div class="gauge-label" data-i18n="telemetry.rpm_label">ENGINE RPM</div>
+            <div id="val-rpm" class="gauge-val">820</div>
+            <div class="gauge-label" data-i18n="telemetry.rpm_sub">OM646 Idle Speed</div>
           </div>
-          <div class="gauge-label" style="margin-top: 0.25rem;" data-i18n="telemetry.trans_sub">722.6 / NAG1 ATF Level Assistant</div>
+          <div class="gauge">
+            <div class="gauge-label" data-i18n="telemetry.coolant_label">COOLANT TEMP</div>
+            <div id="val-coolant" class="gauge-val">88°C</div>
+            <div class="gauge-label" data-i18n="telemetry.coolant_sub">Target: 85–92°C</div>
+          </div>
+          <div class="gauge">
+            <div class="gauge-label" data-i18n="telemetry.trans_label">TRANSMISSION FLUID (722.6)</div>
+            <div id="val-trans-temp" class="gauge-val" style="color: var(--accent);">80°C</div>
+            <div id="badge-trans-status" class="badge badge-ready pulse" style="display: inline-block; margin-top: 0.35rem; font-size: 0.7rem;">
+              ★ READY AT 80°C: MEASURE DIPSTICK (SPEC 54-65mm) ★
+            </div>
+            <div class="gauge-label" style="margin-top: 0.25rem;" data-i18n="telemetry.trans_sub">722.6 / NAG1 ATF Level Assistant</div>
+          </div>
+          <div class="gauge">
+            <div class="gauge-label" data-i18n="telemetry.rail_label">COMMON RAIL PRESSURE</div>
+            <div id="val-rail" class="gauge-val">320.0 bar</div>
+            <div class="gauge-label" data-i18n="telemetry.rail_sub">EDC16 CDI Target: 300–1600 bar</div>
+          </div>
+          <div class="gauge">
+            <div class="gauge-label" data-i18n="telemetry.boost_label">BOOST PRESSURE (MAP)</div>
+            <div id="val-boost" class="gauge-val">1040 hPa</div>
+            <div class="gauge-label" data-i18n="telemetry.boost_sub">Atmospheric + VNT Boost</div>
+          </div>
+          <div class="gauge">
+            <div class="gauge-label" data-i18n="telemetry.tcc_label">TCC LOCKUP SLIP</div>
+            <div id="val-tcc" class="gauge-val">16 RPM</div>
+            <div class="gauge-label" data-i18n="telemetry.tcc_sub">Torque Converter Clutch</div>
+          </div>
         </div>
-        <div class="gauge">
-          <div class="gauge-label" data-i18n="telemetry.rail_label">COMMON RAIL PRESSURE</div>
-          <div id="val-rail" class="gauge-val">320.0 bar</div>
-          <div class="gauge-label" data-i18n="telemetry.rail_sub">EDC16 CDI Target: 300–1600 bar</div>
+      </div>
+
+      <!-- Smooth Running Cylinder Balancing -->
+      <div class="card">
+        <div class="card-title" data-i18n="cylinders.title">Cylinder Smooth Running</div>
+        <div class="cyl-bars">
+          <div class="cyl-row">
+            <span data-i18n="cylinders.cyl1">Cyl 1</span>
+            <div class="bar-wrap"><div id="bar-cyl1" class="bar-fill" style="width: 52%; background: var(--success);"></div></div>
+            <span id="val-cyl1">+0.20 mm³</span>
+          </div>
+          <div class="cyl-row">
+            <span data-i18n="cylinders.cyl2">Cyl 2</span>
+            <div class="bar-wrap"><div id="bar-cyl2" class="bar-fill" style="width: 48%; background: var(--success);"></div></div>
+            <span id="val-cyl2">-0.15 mm³</span>
+          </div>
+          <div class="cyl-row">
+            <span data-i18n="cylinders.cyl3">Cyl 3</span>
+            <div class="bar-wrap"><div id="bar-cyl3" class="bar-fill" style="width: 46%; background: var(--success);"></div></div>
+            <span id="val-cyl3">-0.32 mm³</span>
+          </div>
+          <div class="cyl-row">
+            <span data-i18n="cylinders.cyl4">Cyl 4</span>
+            <div class="bar-wrap"><div id="bar-cyl4" class="bar-fill" style="width: 53%; background: var(--success);"></div></div>
+            <span id="val-cyl4">+0.25 mm³</span>
+          </div>
         </div>
-        <div class="gauge">
-          <div class="gauge-label" data-i18n="telemetry.boost_label">BOOST PRESSURE (MAP)</div>
-          <div id="val-boost" class="gauge-val">1040 hPa</div>
-          <div class="gauge-label" data-i18n="telemetry.boost_sub">Atmospheric + VNT Boost</div>
+        <small style="display: block; margin-top: 1rem; color: var(--text-muted);" data-i18n="cylinders.threshold">
+          Threshold: ±2.0 mm³/stroke. Values outside ±3.0 indicate injector wear or nozzle fouling.
+        </small>
+      </div>
+
+      <!-- Continuous Flight Telemetry Recorder -->
+      <div class="card">
+        <div class="card-title">
+          <span data-i18n="recorder.title">Flight Telemetry Recorder</span>
+          <span id="rec-status-badge" class="badge" style="background: #21262d; color: var(--text-muted); border: 1px solid var(--border);" data-i18n="recorder.status_idle">IDLE</span>
         </div>
-        <div class="gauge">
-          <div class="gauge-label" data-i18n="telemetry.tcc_label">TCC LOCKUP SLIP</div>
-          <div id="val-tcc" class="gauge-val">16 RPM</div>
-          <div class="gauge-label" data-i18n="telemetry.tcc_sub">Torque Converter Clutch</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;" data-i18n="recorder.desc">
+          Continuous 10–50Hz CSV logging for track, tow, dyno, and road testing.
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <input id="rec-filename" type="text" placeholder="Custom log name (optional)" data-i18n-placeholder="recorder.placeholder" style="flex: 1;">
+          <button id="btn-rec-toggle" class="btn btn-primary" onclick="toggleFlightRecorder()" data-i18n="recorder.btn_start">Start Recording</button>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.35rem;">
+          <div><span data-i18n="recorder.active_file">Active File:</span> <span id="rec-file-path" style="color: var(--accent); font-family: monospace;" data-i18n="recorder.none">None</span></div>
+          <div><span data-i18n="recorder.captured_rows">Captured Rows:</span> <b id="rec-rows-count" style="color: #fff;">0</b> | <span data-i18n="recorder.elapsed">Elapsed:</span> <span id="rec-elapsed">0s</span></div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Vehicle Quick Scan & Git Garage -->
-    <div class="card" style="grid-column: span 2;">
-      <div class="card-title">
-        <span data-i18n="garage.title">Vehicle Quick Scan & Git-Tracked Garage</span>
-        <div class="badges">
-          <span id="garage-vin-badge" class="badge badge-voltage">VIN: NOT SCANNED</span>
-          <span id="garage-model-badge" class="badge badge-ready">READY</span>
+  <!-- TAB 2: VEHICLE HEALTH & DTCS -->
+  <div id="tab-pane-health" class="tab-pane">
+    <div class="grid">
+      <!-- Vehicle Quick Scan & Git Garage Overview -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span data-i18n="garage.title">Vehicle Quick Scan & Git-Tracked Garage</span>
+          <div class="badges">
+            <span id="garage-vin-badge" class="badge badge-voltage">VIN: NOT SCANNED</span>
+            <span id="garage-model-badge" class="badge badge-ready">READY</span>
+          </div>
         </div>
-      </div>
-      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem;" data-i18n="garage.desc">
-        Comprehensive vehicle interrogation across all gateway ECUs. Decodes chassis/engine specs and maintains an atomic Git version history of all variant coding and adaptation states.
-      </div>
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.85rem; flex-wrap: wrap;">
-        <button class="btn btn-primary" onclick="scanVehicleQuick()" data-i18n="garage.btn_scan">⚡ Interrogate Vehicle (Quick Scan)</button>
-        <button class="btn" onclick="checkCascadesLive()" data-i18n="garage.btn_cascades" style="border-color: #d29922; color: #e3b341;">⚠️ Check Cascades of Death</button>
-        <button class="btn" onclick="loadGarageHistory()" data-i18n="garage.btn_history">📜 View Git History</button>
-        <button class="btn" onclick="analyzeSuspensionLive()" data-i18n="garage.btn_suspension">🎈 S211 Air Suspension Leak Test</button>
-        <button class="btn" onclick="compareDriveBenchmarkLive()" data-i18n="garage.btn_compare">📈 A/B Drive Benchmark</button>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem;" data-i18n="garage.desc">
+          Comprehensive vehicle interrogation across all gateway ECUs. Decodes chassis/engine specs and maintains an atomic Git version history of all variant coding and adaptation states.
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.85rem; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="scanVehicleQuick()" data-i18n="garage.btn_scan">⚡ Interrogate Vehicle (Quick Scan)</button>
+          <button class="btn" onclick="checkCascadesLive()" data-i18n="garage.btn_cascades" style="border-color: #d29922; color: #e3b341;">⚠️ Check Cascades of Death</button>
+          <button class="btn" onclick="loadGarageHistory()" data-i18n="garage.btn_history">📜 View Git History</button>
+          <button class="btn" onclick="analyzeSuspensionLive()" data-i18n="garage.btn_suspension">🎈 S211 Air Suspension Leak Test</button>
+          <button class="btn" onclick="compareDriveBenchmarkLive()" data-i18n="garage.btn_compare">📈 A/B Drive Benchmark</button>
+        </div>
+
+        <!-- Vehicle Overview Grid -->
+        <div id="vehicle-overview-panel" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
+            <div><b data-i18n="garage.col_vin">VIN:</b> <span id="v-vin" style="font-family: monospace; color: var(--accent);">--</span></div>
+            <div><b data-i18n="garage.col_model">Model:</b> <span id="v-model">--</span></div>
+            <div><b data-i18n="garage.col_chassis">Chassis / Body:</b> <span id="v-chassis">--</span></div>
+            <div><b data-i18n="garage.col_engine">Powertrain:</b> <span id="v-engine">--</span></div>
+            <div><b data-i18n="garage.col_voltage">Battery / Alternator:</b> <span id="v-voltage">--</span></div>
+            <div><b data-i18n="garage.col_modules">Modules Responding:</b> <span id="v-modules">--</span></div>
+          </div>
+          <div id="v-issues" style="font-size: 0.85rem; line-height: 1.5; margin-top: 0.5rem;"></div>
+        </div>
+
+        <!-- Git History & Analytics Modal Panel -->
+        <div id="garage-details-panel" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4 id="garage-panel-title" style="color: var(--accent);">Git Configuration History</h4>
+            <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeGaragePanel()">✕ Close</button>
+          </div>
+          <div id="garage-panel-content" style="font-size: 0.85rem; line-height: 1.6;"></div>
+        </div>
       </div>
 
       <!-- Mercedes 'Cascade of Death' Early Warning Center -->
-      <div id="cascade-warning-card" style="background: rgba(30, 20, 15, 0.6); border: 1px solid rgba(248, 81, 73, 0.4); border-radius: 6px; padding: 0.85rem; margin-bottom: 0.85rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <b style="color: #f85149;" data-i18n="cascades.title">🚨 Mercedes 'Cascade of Death' Early Warning Center</b>
+            <span style="color: #f85149;" data-i18n="cascades.title">🚨 Mercedes 'Cascade of Death' Early Warning Center</span>
             <span id="cascade-status-badge" class="badge badge-ready">ALL SYSTEMS NORMAL</span>
           </div>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">
-            <span data-i18n="cascades.subtitle">13 Notorious Cascades Monitored</span>
-          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" data-i18n="cascades.subtitle">13 Notorious Cascades Monitored</span>
         </div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem;" data-i18n="cascades.desc">
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem;" data-i18n="cascades.desc">
           Detects inexpensive $2–$15 wear items (O-rings, copper washers, nitrogen spheres, micro-motors) before they snowball into $2,500+ destroyed ECUs or mechanical lockouts.
         </div>
         <div id="cascade-alerts-container" style="display: none; font-size: 0.85rem; line-height: 1.5; margin-top: 0.5rem;"></div>
       </div>
 
-      <!-- S211 Air Suspension Compressor Protection & Kill-Switch -->
-      <div style="background: rgba(22, 27, 34, 0.8); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem; margin-bottom: 0.85rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+      <!-- DTC Scanner & Clear -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span data-i18n="dtc.title">Diagnostic Fault Codes</span>
+          <div>
+            <button class="btn" onclick="scanDtc()" data-i18n="dtc.btn_scan">Scan</button>
+            <button class="btn btn-danger" onclick="requestClearDtcSafe()" data-i18n="dtc.btn_clear">Clear All</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="dtc.col_code">Code</th>
+              <th data-i18n="dtc.col_module">Module</th>
+              <th data-i18n="dtc.col_desc">Description</th>
+              <th data-i18n="dtc.col_status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="dtc-table">
+            <tr>
+              <td><b>P0100</b></td>
+              <td>EDC16</td>
+              <td>Mass Air Flow (MAF) Circuit</td>
+              <td><span style="color: var(--warning)" data-i18n="dtc.confirmed">Confirmed</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: WORKSHOP PROCEDURES & GUIDED ROUTINES -->
+  <div id="tab-pane-workshop" class="tab-pane">
+    <div class="grid">
+      <!-- AdBlue / SCR 800km Countdown & Lockout Reset Wizard -->
+      <div class="card" style="grid-column: span 2; border-color: rgba(88, 166, 255, 0.4);">
+        <div class="card-title">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <b style="color: var(--accent);" data-i18n="garage.compressor_title">🛡️ S211 Air Suspension Compressor Guard</b>
-            <span id="compressor-state-badge" class="badge badge-ready">COMPRESSOR: IDLE</span>
+            <span style="color: var(--accent);">🛡️ AdBlue / SCR 800km Emergency Countdown Reset</span>
+            <span class="badge badge-voltage">UDS 0x27 UNLOCK + ROUTINE 0x0218</span>
           </div>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">
-            <span data-i18n="garage.watchdog_status">Thermal Watchdog: 40s Auto-Cutoff</span>
-          </div>
+          <span class="badge badge-ready">NO DEALER ONLINE ACCOUNT REQUIRED</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Resolves the non-resettable "Engine Start Not Possible in 800 km" (or remaining start counter) lockout caused by NOx sensor drift, heater faults, or urea depletion. Derives cryptographic Seed-Key access, wipes the permanent EEPROM start-lockout register, clears catalyst quality adaptation history, and relearns the ultrasonic tank fill level.
+        </div>
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <button class="btn btn-primary" onclick="requestAdBlueResetSafe()">🚀 Execute AdBlue Lockout & Countdown Reset</button>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Prerequisites: Ignition ON (Terminal 15), Engine OFF, Stabilized Power ≥ 12.5V</span>
+        </div>
+        <div id="adblue-workflow-logs" class="log-box" style="height: 90px;">
+          [ADBLUE WIZARD] Ready. Click above to initiate cryptographic Seed-Key unlock and SCR counter purge.<br>
+        </div>
+      </div>
+
+      <!-- SBC (Sensotronic Brake Control) Service Mode -->
+      <div class="card">
+        <div class="card-title">
+          <span style="color: #f85149;">🚨 SBC Brake Pad Service Mode</span>
+          <span id="sbc-state-badge" class="badge badge-voltage">160 BAR (ACTIVE)</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Finger & Pad Safety: The ~160 bar accumulator will automatically clamp pistons without warning when doors open or key is detected. Deactivate before removing wheels or servicing calipers.
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <button class="btn btn-danger" onclick="requestSbcDeactivateSafe()">🛑 Deactivate SBC (0 bar Pad Mode)</button>
+          <button class="btn btn-primary" onclick="requestSbcReactivateSafe()">🔄 Reactivate & Pressure Bleed</button>
+        </div>
+        <div id="sbc-logs" class="log-box" style="height: 80px;">
+          [SBC CONTROLLER] High-pressure hydraulic accumulator active (160 bar).<br>
+        </div>
+      </div>
+
+      <!-- Air Suspension (ENR / AIRMATIC) Corner Control -->
+      <div class="card">
+        <div class="card-title">
+          <span style="color: var(--accent);">🎈 Air Suspension Corner Actuation</span>
+          <span class="badge badge-ready">CALIBRATION & INFLATION</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Independently actuate pneumatic valve blocks to diagnose corner leaks, inflate bellows after strut replacement, or store vehicle level zero-height.
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <select id="susp-corner-select" style="background: #0d1117; border: 1px solid var(--border); color: var(--text); padding: 0.45rem; border-radius: 6px;">
+            <option value="rl">Rear Left (RL)</option>
+            <option value="rr">Rear Right (RR)</option>
+            <option value="rear">Both Rear Axle</option>
+            <option value="fl">Front Left (FL)</option>
+            <option value="fr">Front Right (FR)</option>
+            <option value="all">All 4 Corners</option>
+          </select>
+          <button class="btn" onclick="actuateSuspensionCornerSafe('inflate')">⬆ Inflate</button>
+          <button class="btn" onclick="actuateSuspensionCornerSafe('deflate')">⬇ Deflate</button>
+          <button class="btn btn-primary" onclick="actuateSuspensionCornerSafe('calibrate')">📐 Calibrate Zero-Height</button>
+        </div>
+        <div id="susp-act-logs" class="log-box" style="height: 80px;">
+          [SUSPENSION ACTUATOR] Select a corner and action above.<br>
+        </div>
+      </div>
+
+      <!-- S211 Air Suspension Compressor Protection Guard -->
+      <div class="card">
+        <div class="card-title">
+          <b style="color: var(--accent);" data-i18n="garage.compressor_title">🛡️ S211 Air Suspension Compressor Guard</b>
+          <span id="compressor-state-badge" class="badge badge-ready">IDLE</span>
         </div>
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem;" data-i18n="garage.compressor_burnout_notice">
           Burnout Prevention: When an air spring leaks, the compressor runs continuously until the motor melts or relay A 002 542 72 19 welds shut. Inhibit compressor to safely drive home or to a workshop.
@@ -134,15 +328,10 @@
       </div>
 
       <!-- ABC (Active Body Control) Hydraulic Surge Limiter -->
-      <div style="background: rgba(22, 27, 34, 0.8); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem; margin-bottom: 0.85rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <b style="color: #58a6ff;">🛡️ ABC Hydraulic Shockwave & Surge Limiter</b>
-            <span id="abc-state-badge" class="badge badge-ready">ABC: NOMINAL (200 BAR)</span>
-          </div>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">
-            <span>Rupture Prevention: Routine 0x0220 / 0x0221</span>
-          </div>
+      <div class="card">
+        <div class="card-title">
+          <b style="color: #58a6ff;">🛡️ ABC Hydraulic Shockwave & Surge Limiter</b>
+          <span id="abc-state-badge" class="badge badge-ready">NOMINAL (200 BAR)</span>
         </div>
         <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.6rem;">
           Hydraulic Containment: When the pulsation damper sphere ruptures, 300+ bar shockwaves fracture tandem pump shafts and burst lines over hot exhaust. Actuate pressure dump (120 bar) or lock strut valves to limp safely without fire or pump destruction.
@@ -154,194 +343,236 @@
         </div>
       </div>
 
-      <!-- Vehicle Overview Grid -->
-      <div id="vehicle-overview-panel" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 0.75rem;">
-          <div><b data-i18n="garage.col_vin">VIN:</b> <span id="v-vin" style="font-family: monospace; color: var(--accent);">--</span></div>
-          <div><b data-i18n="garage.col_model">Model:</b> <span id="v-model">--</span></div>
-          <div><b data-i18n="garage.col_chassis">Chassis / Body:</b> <span id="v-chassis">--</span></div>
-          <div><b data-i18n="garage.col_engine">Powertrain:</b> <span id="v-engine">--</span></div>
-          <div><b data-i18n="garage.col_voltage">Battery / Alternator:</b> <span id="v-voltage">--</span></div>
-          <div><b data-i18n="garage.col_modules">Modules Responding:</b> <span id="v-modules">--</span></div>
+      <!-- Standard Diagnostic & Actuator Routines (UDS 0x31) -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span data-i18n="routines.title">Actuator & Diagnostic Routines (UDS 0x31)</span>
+          <span class="badge" style="background: rgba(188, 140, 255, 0.2); color: var(--purple); border: 1px solid var(--purple);" data-i18n="badge.zero_trust">Zero-Trust Protected</span>
         </div>
-        <div id="v-issues" style="font-size: 0.85rem; line-height: 1.5; margin-top: 0.5rem;"></div>
-      </div>
-
-      <!-- Git History & Analytics Modal Panel -->
-      <div id="garage-details-panel" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <h4 id="garage-panel-title" style="color: var(--accent);">Git Configuration History</h4>
-          <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeGaragePanel()">✕ Close</button>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;" data-i18n="routines.desc">
+          Execute vehicle routines via CommandEnvelope verification. Fast actuators prime fuel rails, reset adaptation curves, and bleed hydraulics.
         </div>
-        <div id="garage-panel-content" style="font-size: 0.85rem; line-height: 1.6;"></div>
+        <div class="btn-group">
+          <button class="btn" onclick="triggerQuickRoutine('0xFF01', 'EDC16', 'Fuel Pump Prime')" data-i18n="routines.btn_prime">⚡ Prime Fuel Pump (10s Bleed)</button>
+          <button class="btn" onclick="triggerQuickRoutine('0x0201', 'EDC16', 'Reset NMK')" data-i18n="routines.btn_nmk">🔄 Reset NMK Adaptations</button>
+          <button class="btn" onclick="triggerQuickRoutine('0x0203', 'EDC16', 'Throttle/EGR Relearn')" data-i18n="routines.btn_throttle">📐 Throttle/EGR Stop Relearn</button>
+          <button class="btn" onclick="triggerQuickRoutine('0x0202', 'EDC16', 'DPF Regen')" data-i18n="routines.btn_dpf">🔥 Trigger DPF Regeneration</button>
+          <button class="btn" onclick="triggerQuickRoutine('0x0205', 'EDC16', 'SBC Bleed')" data-i18n="routines.btn_sbc">🛑 SBC Brake Hydraulic Bleed</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap;">
+          <input id="custom-mod" type="text" placeholder="Module (EDC16)" data-i18n-placeholder="routines.ph_mod" value="EDC16" style="width: 130px;">
+          <input id="custom-routine-id" type="text" placeholder="Routine ID (e.g. 0xFF01)" data-i18n-placeholder="routines.ph_routine" style="width: 170px;">
+          <input id="custom-subfn" type="text" placeholder="SubFn (1=Start)" data-i18n-placeholder="routines.ph_subfn" value="1" style="width: 120px;">
+          <input id="custom-opts" type="text" placeholder="Option Hex (optional)" data-i18n-placeholder="routines.ph_opts" style="flex: 1; min-width: 160px;">
+          <button class="btn btn-primary" onclick="triggerCustomRoutine()" data-i18n="routines.btn_execute">Execute Routine</button>
+        </div>
+        <div id="routine-logs" class="log-box" style="height: 90px;">
+          [SYSTEM] Routine controller ready. Select a quick actuator or input custom routine ID.<br>
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- Smooth Running Cylinder Balancing -->
-    <div class="card">
-      <div class="card-title" data-i18n="cylinders.title">Cylinder Smooth Running</div>
-      <div class="cyl-bars">
-        <div class="cyl-row">
-          <span data-i18n="cylinders.cyl1">Cyl 1</span>
-          <div class="bar-wrap"><div id="bar-cyl1" class="bar-fill" style="width: 52%; background: var(--success);"></div></div>
-          <span id="val-cyl1">+0.20 mm³</span>
+  <!-- TAB 4: QUICK MODS & VARIANT CODING -->
+  <div id="tab-pane-coding" class="tab-pane">
+    <div class="grid">
+      <!-- One-Click Customizations & Saved Workflows -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span style="color: var(--accent);">⚡ Saved Vehicle Customizations (One-Click Quick Mods)</span>
+          <span class="badge badge-ready">GIT GARAGE TRACKED</span>
         </div>
-        <div class="cyl-row">
-          <span data-i18n="cylinders.cyl2">Cyl 2</span>
-          <div class="bar-wrap"><div id="bar-cyl2" class="bar-fill" style="width: 48%; background: var(--success);"></div></div>
-          <span id="val-cyl2">-0.15 mm³</span>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Pre-tested automotive configuration recipes. Modifications are automatically committed to local Git history prior to bus dispatch, allowing single-click rollbacks.
         </div>
-        <div class="cyl-row">
-          <span data-i18n="cylinders.cyl3">Cyl 3</span>
-          <div class="bar-wrap"><div id="bar-cyl3" class="bar-fill" style="width: 46%; background: var(--success);"></div></div>
-          <span id="val-cyl3">-0.32 mm³</span>
-        </div>
-        <div class="cyl-row">
-          <span data-i18n="cylinders.cyl4">Cyl 4</span>
-          <div class="bar-wrap"><div id="bar-cyl4" class="bar-fill" style="width: 53%; background: var(--success);"></div></div>
-          <span id="val-cyl4">+0.25 mm³</span>
-        </div>
-      </div>
-      <small style="display: block; margin-top: 1rem; color: var(--text-muted);" data-i18n="cylinders.threshold">
-        Threshold: ±2.0 mm³/stroke. Values outside ±3.0 indicate injector wear or nozzle fouling.
-      </small>
-    </div>
 
-    <!-- Continuous Flight Telemetry Recorder -->
-    <div class="card">
-      <div class="card-title">
-        <span data-i18n="recorder.title">Flight Telemetry Recorder</span>
-        <span id="rec-status-badge" class="badge" style="background: #21262d; color: var(--text-muted); border: 1px solid var(--border);" data-i18n="recorder.status_idle">IDLE</span>
-      </div>
-      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;" data-i18n="recorder.desc">
-        Continuous 10–50Hz CSV logging for track, tow, dyno, and road testing.
-      </div>
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-        <input id="rec-filename" type="text" placeholder="Custom log name (optional)" data-i18n-placeholder="recorder.placeholder" style="flex: 1;">
-        <button id="btn-rec-toggle" class="btn btn-primary" onclick="toggleFlightRecorder()" data-i18n="recorder.btn_start">Start Recording</button>
-      </div>
-      <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.35rem;">
-        <div><span data-i18n="recorder.active_file">Active File:</span> <span id="rec-file-path" style="color: var(--accent); font-family: monospace;" data-i18n="recorder.none">None</span></div>
-        <div><span data-i18n="recorder.captured_rows">Captured Rows:</span> <b id="rec-rows-count" style="color: #fff;">0</b> | <span data-i18n="recorder.elapsed">Elapsed:</span> <span id="rec-elapsed">0s</span></div>
-      </div>
-    </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem;">
+          <!-- Mod 1: ECO Start-Stop Memory Mode -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <b style="color: #fff;">🛑 ECO Start-Stop Memory Mode</b>
+              <span class="badge badge-voltage">DID 0x0320</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Prevents the engine from automatically switching ECO Start/Stop back to ON at every ignition cycle. Remembers driver's last selected state.
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select id="eco-mode-select" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.45rem; border-radius: 6px; flex: 1;">
+                <option value="remember">Remember Last User State (Recommended)</option>
+                <option value="disabled">Default Disabled (Inverted Mode)</option>
+                <option value="always_on">Always On (Factory Standard)</option>
+              </select>
+              <button class="btn btn-primary" onclick="requestEcoStartStopSafe()">Apply Mode</button>
+            </div>
+          </div>
 
-    <!-- Actuator & Diagnostic Routines -->
-    <div class="card" style="grid-column: span 2;">
-      <div class="card-title">
-        <span data-i18n="routines.title">Actuator & Diagnostic Routines (UDS 0x31)</span>
-        <span class="badge" style="background: rgba(188, 140, 255, 0.2); color: var(--purple); border: 1px solid var(--purple);" data-i18n="badge.zero_trust">Zero-Trust Protected</span>
+          <!-- Mod 2: EGR Soot Reduction -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <b style="color: #fff;">🍃 EGR Adaptation Soot Reduction</b>
+              <span class="badge badge-voltage">+40 mg/stroke</span>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Applies maximum OEM positive air mass adaptation bias and relearns lower stops to reduce soot fouling in the intake manifold while remaining 100% within OBD limits.
+            </div>
+            <button class="btn btn-primary" style="width: 100%;" onclick="requestEgrOptimizeSafe()">Optimize EGR Air Mass Offset</button>
+          </div>
+        </div>
+
+        <div id="quick-mods-logs" class="log-box" style="margin-top: 1rem; height: 80px;">
+          [QUICK MODS] Select a vehicle customization above to configure parameters safely.<br>
+        </div>
       </div>
-      <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;" data-i18n="routines.desc">
-        Execute vehicle routines via CommandEnvelope verification. Fast actuators prime fuel rails, reset adaptation curves, and bleed hydraulics.
-      </div>
-      <div class="btn-group">
-        <button class="btn" onclick="triggerQuickRoutine('0xFF01', 'EDC16', 'Fuel Pump Prime')" data-i18n="routines.btn_prime">⚡ Prime Fuel Pump (10s Bleed)</button>
-        <button class="btn" onclick="triggerQuickRoutine('0x0201', 'EDC16', 'Reset NMK')" data-i18n="routines.btn_nmk">🔄 Reset NMK Adaptations</button>
-        <button class="btn" onclick="triggerQuickRoutine('0x0203', 'EDC16', 'Throttle/EGR Relearn')" data-i18n="routines.btn_throttle">📐 Throttle/EGR Stop Relearn</button>
-        <button class="btn" onclick="triggerQuickRoutine('0x0202', 'EDC16', 'DPF Regen')" data-i18n="routines.btn_dpf">🔥 Trigger DPF Regeneration</button>
-        <button class="btn" onclick="triggerQuickRoutine('0x0205', 'EDC16', 'SBC Bleed')" data-i18n="routines.btn_sbc">🛑 SBC Brake Hydraulic Bleed</button>
-      </div>
-      <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap;">
-        <input id="custom-mod" type="text" placeholder="Module (EDC16)" data-i18n-placeholder="routines.ph_mod" value="EDC16" style="width: 130px;">
-        <input id="custom-routine-id" type="text" placeholder="Routine ID (e.g. 0xFF01)" data-i18n-placeholder="routines.ph_routine" style="width: 170px;">
-        <input id="custom-subfn" type="text" placeholder="SubFn (1=Start)" data-i18n-placeholder="routines.ph_subfn" value="1" style="width: 120px;">
-        <input id="custom-opts" type="text" placeholder="Option Hex (optional)" data-i18n-placeholder="routines.ph_opts" style="flex: 1; min-width: 160px;">
-        <button class="btn btn-primary" onclick="triggerCustomRoutine()" data-i18n="routines.btn_execute">Execute Routine</button>
-      </div>
-      <div id="routine-logs" class="log-box" style="height: 100px;">
-        [SYSTEM] Routine controller ready. Select a quick actuator or input custom routine ID.<br>
+
+      <!-- Common Rail Injector IMA Classification Coding -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span>💉 Common Rail Injector IMA / EMA Classification Coding</span>
+          <span class="badge badge-voltage">DIDs 0x2030..0x2037</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Production tolerance compensation for Common Rail solenoid and piezo injectors (OM646, OM642, OM651). Reads and programs 6 or 7-character calibration codes directly to EDC16/EDC17 EEPROM.
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <button class="btn" onclick="fetchImaCodes()">Read All Cylinders (1-4)</button>
+          <input id="ima-cyl-input" type="number" min="1" max="8" value="1" style="width: 80px;" placeholder="Cyl #">
+          <input id="ima-code-input" type="text" placeholder="Alphanumeric Code (e.g. 7B8HNA)" style="flex: 1; min-width: 200px;">
+          <button class="btn btn-primary" onclick="requestWriteImaCodeSafe()">Program Injector Code</button>
+        </div>
+        <div id="ima-display-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; margin-bottom: 0.5rem;"></div>
       </div>
     </div>
+  </div>
 
-    <!-- DTC Scanner -->
-    <div class="card">
-      <div class="card-title">
-        <span data-i18n="dtc.title">Diagnostic Fault Codes</span>
-        <div>
-          <button class="btn" onclick="scanDtc()" data-i18n="dtc.btn_scan">Scan</button>
-          <button class="btn btn-danger" onclick="clearDtc()" data-i18n="dtc.btn_clear">Clear All</button>
+  <!-- TAB 5: SAFE ECU FLASHING -->
+  <div id="tab-pane-flashing" class="tab-pane">
+    <div class="grid">
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span data-i18n="flasher.title">Autonomous Safe Flasher (Decoupled Worker)</span>
+          <span id="flash-state-badge" class="badge badge-voltage">IDLE</span>
         </div>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="dtc.col_code">Code</th>
-            <th data-i18n="dtc.col_module">Module</th>
-            <th data-i18n="dtc.col_desc">Description</th>
-            <th data-i18n="dtc.col_status">Status</th>
-          </tr>
-        </thead>
-        <tbody id="dtc-table">
-          <tr>
-            <td><b>P0100</b></td>
-            <td>EDC16</td>
-            <td>Mass Air Flow (MAF) Circuit</td>
-            <td><span style="color: var(--warning)" data-i18n="dtc.confirmed">Confirmed</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Safe Flasher Staging -->
-    <div class="card">
-      <div class="card-title">
-        <span data-i18n="flasher.title">Autonomous Safe Flasher (Decoupled Worker)</span>
-        <span id="flash-state-badge" class="badge badge-voltage">IDLE</span>
-      </div>
-      <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem;">
-        <button class="btn btn-primary" onclick="startSimulatedFlash()" data-i18n="flasher.btn_stage">Stage & Execute Flash</button>
-      </div>
-      <span style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;" data-i18n="flasher.safety_notice">
-        Safety Gate: Battery >= 12.5V, SHA256 & CRC verified, API Lockout active
-      </span>
-      <div class="progress-bar">
-        <div id="flash-progress" class="progress-fill"></div>
-      </div>
-      <div id="flash-logs" class="log-box">
-        [SYSTEM] Flasher daemon ready. Waiting for staged payload.<br>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Sterngate firmware flashing engine runs detached in an isolated real-time thread with active API lockout (HTTP 423) and continuous ISO 14229 Session Keep-Alive ($S_3$). Never streams binaries over WebSocket or WiFi; all firmware is staged and cryptographically verified on local disk prior to sector erase.
+        </div>
+        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem;">
+          <button class="btn btn-danger" onclick="requestStageFlashSafe()" data-i18n="flasher.btn_stage">Stage & Execute Flash</button>
+        </div>
+        <span style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;" data-i18n="flasher.safety_notice">
+          Safety Gate: Battery ≥ 12.5V, SHA256 & CRC verified, API Lockout active
+        </span>
+        <div class="progress-bar">
+          <div id="flash-progress" class="progress-fill"></div>
+        </div>
+        <div id="flash-logs" class="log-box" style="height: 140px;">
+          [SYSTEM] Flasher daemon ready. Waiting for staged payload.<br>
+        </div>
       </div>
     </div>
+  </div>
 
-    <!-- Daimler ECU Database & CBF Catalog Explorer -->
-    <div class="card" style="grid-column: span 2;">
-      <div class="card-title">
-        <span data-i18n="cbf.title">Daimler ECU Database & CBF Catalog Explorer</span>
-        <div class="badges">
-          <span id="cbf-stat-badge" class="badge badge-voltage" data-i18n="cbf.stats_badge">990 Canonical ECUs</span>
-          <span class="badge badge-online" data-i18n="cbf.redundancy_badge">ACTIVE JSON ROUTING</span>
+  <!-- TAB 6: ECU CATALOG EXPLORER -->
+  <div id="tab-pane-catalog" class="tab-pane">
+    <div class="grid">
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span data-i18n="cbf.title">Daimler ECU Database & Catalog Explorer</span>
+          <div class="badges">
+            <span id="cbf-stat-badge" class="badge badge-voltage" data-i18n="cbf.stats_badge">990 Canonical ECUs</span>
+            <span class="badge badge-online" data-i18n="cbf.redundancy_badge">ACTIVE JSON ROUTING</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+          <input type="text" id="cbf-search-input" placeholder="Search ECU or chassis (e.g. EGS, VGSNAG, W211, ME97, CR4)..." data-i18n-placeholder="cbf.search_ph" style="flex: 1; min-width: 240px;" onkeyup="handleCbfSearch(event)">
+          <button class="btn btn-primary" onclick="searchCbf()" data-i18n="cbf.btn_search">Search</button>
+          <button class="btn" onclick="searchCbfPreset('EGS')">EGS (722.6)</button>
+          <button class="btn" onclick="searchCbfPreset('VGS')">VGS (7G/9G)</button>
+          <button class="btn" onclick="searchCbfPreset('W211')">W211</button>
+          <button class="btn" onclick="searchCbfPreset('ME97')">ME97 (V8)</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="cbf.col_name">ECU Name</th>
+              <th data-i18n="cbf.col_proto">Protocol</th>
+              <th data-i18n="cbf.col_can">CAN (Tx / Rx)</th>
+              <th data-i18n="cbf.col_func">Functional ID</th>
+              <th data-i18n="cbf.col_dtcs">DTCs</th>
+              <th data-i18n="cbf.col_chassis">Chassis / Platform</th>
+              <th data-i18n="cbf.col_action">Action</th>
+            </tr>
+          </thead>
+          <tbody id="cbf-results-table">
+            <tr><td colspan="7" style="color: var(--text-muted); text-align: center;" data-i18n="cbf.prompt">Enter an ECU or chassis name above to search 990 canonical Mercedes ECUs.</td></tr>
+          </tbody>
+        </table>
+        <div id="cbf-inspect-modal" style="display: none; margin-top: 1rem; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4 id="cbf-inspect-title" style="color: var(--accent);">ECU Diagnostic Definition</h4>
+            <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeInspect()" data-i18n="cbf.btn_close">✕ Close</button>
+          </div>
+          <div id="cbf-inspect-content" style="font-size: 0.85rem; line-height: 1.6; color: var(--text);"></div>
         </div>
       </div>
-      <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-        <input type="text" id="cbf-search-input" placeholder="Search ECU or chassis (e.g. EGS, VGSNAG, W211, ME97, CR4)..." data-i18n-placeholder="cbf.search_ph" style="flex: 1; min-width: 240px;" onkeyup="handleCbfSearch(event)">
-        <button class="btn btn-primary" onclick="searchCbf()" data-i18n="cbf.btn_search">Search</button>
-        <button class="btn" onclick="searchCbfPreset('EGS')">EGS (722.6)</button>
-        <button class="btn" onclick="searchCbfPreset('VGS')">VGS (7G/9G)</button>
-        <button class="btn" onclick="searchCbfPreset('W211')">W211</button>
-        <button class="btn" onclick="searchCbfPreset('ME97')">ME97 (V8)</button>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="cbf.col_name">ECU Name</th>
-            <th data-i18n="cbf.col_proto">Protocol</th>
-            <th data-i18n="cbf.col_can">CAN (Tx / Rx)</th>
-            <th data-i18n="cbf.col_func">Functional ID</th>
-            <th data-i18n="cbf.col_dtcs">DTCs</th>
-            <th data-i18n="cbf.col_chassis">Chassis / Platform</th>
-            <th data-i18n="cbf.col_action">Action</th>
-          </tr>
-        </thead>
-        <tbody id="cbf-results-table">
-          <tr><td colspan="7" style="color: var(--text-muted); text-align: center;" data-i18n="cbf.prompt">Enter an ECU or chassis name above to search 990 canonical Mercedes ECUs.</td></tr>
-        </tbody>
-      </table>
-      <div id="cbf-inspect-modal" style="display: none; margin-top: 1rem; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <h4 id="cbf-inspect-title" style="color: var(--accent);">ECU Diagnostic Definition</h4>
-          <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeInspect()" data-i18n="cbf.btn_close">✕ Close</button>
+    </div>
+  </div>
+
+  <!-- Reusable Two-Tier Safety Interlock Modal -->
+  <div id="safety-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span id="safety-modal-badge" class="badge badge-recording">HIGH RISK / DESTRUCTIVE</span>
+          <h3 id="safety-modal-title" style="font-size: 1.1rem; color: #fff;">Safety Interlock Confirmation</h3>
         </div>
-        <div id="cbf-inspect-content" style="font-size: 0.85rem; line-height: 1.6; color: var(--text);"></div>
+        <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeSafetyModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="safety-modal-desc" style="color: var(--text); margin-bottom: 1rem;"></div>
+
+        <!-- Hardware & Environmental Interlock Gates -->
+        <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem;">
+          <b style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">Pre-Flight Hardware Interlocks</b>
+          
+          <div class="safety-check-item">
+            <span id="gate-voltage-icon" class="safety-check-icon">⚡</span>
+            <div style="flex: 1;">
+              <span>System Voltage Requirement: <b id="gate-voltage-target">≥ 12.50 V</b></span>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">Live measured voltage: <b id="gate-voltage-live" style="color: var(--accent);">13.8V</b></div>
+            </div>
+            <span id="gate-voltage-status" class="badge badge-ready">PASS ✓</span>
+          </div>
+
+          <div class="safety-check-item">
+            <span id="gate-ignition-icon" class="safety-check-icon">🔑</span>
+            <div style="flex: 1;">
+              <span>Terminal 15 (Ignition ON, Engine OFF)</span>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">Engine must not be running during procedure.</div>
+            </div>
+            <span id="gate-ignition-status" class="badge badge-ready">PASS ✓</span>
+          </div>
+
+          <div class="safety-check-item">
+            <span id="gate-backup-icon" class="safety-check-icon">📜</span>
+            <div style="flex: 1;">
+              <span>Automated Git Configuration Snapshot</span>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">State snapshot will be committed to garage history before write.</div>
+            </div>
+            <span class="badge badge-ready">READY ✓</span>
+          </div>
+        </div>
+
+        <!-- Keyword Confirmation Container -->
+        <div id="safety-modal-keyword-container" style="display: none; margin-bottom: 0.5rem;">
+          <div style="font-size: 0.85rem; color: var(--warning); margin-bottom: 0.4rem;">
+            Type <code id="safety-modal-keyword" style="color: var(--danger); font-weight: bold;">CONFIRM</code> to unlock execution:
+          </div>
+          <input type="text" id="safety-modal-input" placeholder="Type confirmation keyword..." style="width: 100%;" onkeyup="checkSafetyModalKeyword(event)">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeSafetyModal()" data-i18n="modal.btn_cancel">Cancel / Abort</button>
+        <button id="safety-modal-btn-confirm" class="btn btn-danger" onclick="executeSafetyConfirmedAction()" data-i18n="modal.btn_confirm">Execute Procedure</button>
       </div>
     </div>
   </div>
@@ -351,4 +582,3 @@
   <script src="/static/js/app.js"></script>
 </body>
 </html>
-
