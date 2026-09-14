@@ -304,4 +304,55 @@ mod tests {
         assert!(html.contains(&report.vin));
         assert!(html.contains("System Voltage"));
     }
+
+    #[tokio::test]
+    async fn test_rom_signature_inspection_and_hardware_matching() {
+        use sterngate_core::RomCompatibilityVerdict;
+
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        let flasher = FlashingWorker::new();
+
+        // 1. Test Matching ROM (Bosch HW 0281012224 matches virtual EDC16 HW)
+        let mut match_rom = vec![0xEA; 4096];
+        let hw_match = b"0281012224";
+        let sw_match = b"1037372332";
+        match_rom[64..64 + hw_match.len()].copy_from_slice(hw_match);
+        match_rom[128..128 + sw_match.len()].copy_from_slice(sw_match);
+
+        let report_match = flasher
+            .inspect_rom(&mut sim, 0x7E0, 0x7E8, &match_rom)
+            .await
+            .unwrap();
+
+        assert!(report_match.can_flash);
+        assert_eq!(
+            report_match.signatures.bosch_hw_id.as_deref(),
+            Some("0281012224")
+        );
+        assert_ne!(
+            report_match.verdict,
+            RomCompatibilityVerdict::HardwareMismatch
+        );
+
+        // 2. Test Mismatched ROM (Bosch HW 0281013345 does NOT match virtual EDC16 HW 0281012224)
+        let mut mismatch_rom = vec![0xEA; 4096];
+        let hw_mismatch = b"0281013345";
+        mismatch_rom[64..64 + hw_mismatch.len()].copy_from_slice(hw_mismatch);
+
+        let report_mismatch = flasher
+            .inspect_rom(&mut sim, 0x7E0, 0x7E8, &mismatch_rom)
+            .await
+            .unwrap();
+
+        assert!(!report_mismatch.can_flash);
+        assert_eq!(
+            report_mismatch.verdict,
+            RomCompatibilityVerdict::HardwareMismatch
+        );
+        assert!(report_mismatch
+            .risk_explanation
+            .contains("CRITICAL HARDWARE MISMATCH"));
+    }
 }

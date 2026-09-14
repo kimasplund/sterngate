@@ -216,6 +216,16 @@ impl VirtualCanInterface {
                         resp_id as u16,
                         &[0x07, 0x62, 0xF1, 0x91, 0x00, 0x01, 0x53, 0x54],
                     )),
+                    // System Supplier Hardware Number (0xF192) -> Bosch HW 0281012224
+                    0xF192 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x92, 0x02, 0x81, 0x01, 0x22],
+                    )),
+                    // System Supplier Software Number (0xF194) -> Bosch SW 1037372332
+                    0xF194 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x94, 0x10, 0x37, 0x37, 0x23],
+                    )),
                     // System Name (0xF197) -> "CR4 "
                     0xF197 => Some(CanFrame::new_standard(
                         resp_id as u16,

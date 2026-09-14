@@ -78,3 +78,156 @@ pub struct PreFlightReport {
     pub checksum_match: bool,
     pub details: Vec<String>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirmwareSignatures {
+    pub bosch_hw_id: Option<String>,
+    pub bosch_sw_id: Option<String>,
+    pub oem_part_number: Option<String>,
+    pub project_name: Option<String>,
+    pub file_size_bytes: usize,
+    pub sha256_checksum: String,
+    pub crc32_checksum: u32,
+}
+
+impl FirmwareSignatures {
+    pub fn extract(data: &[u8]) -> Self {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        let sha256_checksum = format!("{:x}", hasher.finalize());
+        let crc32_checksum = crc32fast::hash(data);
+
+        let mut bosch_hw_id = None;
+        let mut bosch_sw_id = None;
+        let mut oem_part_number = None;
+        let mut project_name = None;
+
+        let len = data.len();
+        let scan_limit = len.min(1024 * 1024);
+
+        // 1. Scan for Bosch HW (10 digits starting with 0281 or 0261)
+        // 2. Scan for Bosch SW (10 digits starting with 1037 or 1039)
+        let mut i = 0;
+        while i + 10 <= scan_limit {
+            let slice = &data[i..i + 10];
+            if bosch_hw_id.is_none()
+                && (slice.starts_with(b"0281") || slice.starts_with(b"0261"))
+                && slice.iter().all(|b| b.is_ascii_digit())
+            {
+                if let Ok(s) = std::str::from_utf8(slice) {
+                    bosch_hw_id = Some(s.to_string());
+                }
+            } else if bosch_sw_id.is_none()
+                && (slice.starts_with(b"1037") || slice.starts_with(b"1039"))
+                && slice.iter().all(|b| b.is_ascii_digit())
+            {
+                if let Ok(s) = std::str::from_utf8(slice) {
+                    bosch_sw_id = Some(s.to_string());
+                }
+            }
+            i += 1;
+        }
+
+        // 3. Scan for Mercedes OEM part number (e.g. "A 646 150 08 79" (15 bytes) or "A6461500879" (11 bytes))
+        i = 0;
+        while i + 15 <= scan_limit {
+            if data[i] == b'A' && data[i + 1] == b' ' {
+                let s = &data[i..i + 15];
+                if oem_part_number.is_none()
+                    && s[2].is_ascii_digit()
+                    && s[3].is_ascii_digit()
+                    && s[4].is_ascii_digit()
+                    && s[5] == b' '
+                    && s[6].is_ascii_digit()
+                    && s[7].is_ascii_digit()
+                    && s[8].is_ascii_digit()
+                    && s[9] == b' '
+                    && s[10].is_ascii_digit()
+                    && s[11].is_ascii_digit()
+                    && s[12] == b' '
+                    && s[13].is_ascii_digit()
+                    && s[14].is_ascii_digit()
+                {
+                    if let Ok(num) = std::str::from_utf8(s) {
+                        oem_part_number = Some(num.trim().to_string());
+                    }
+                }
+            }
+            i += 1;
+        }
+
+        if oem_part_number.is_none() {
+            i = 0;
+            while i + 11 <= scan_limit {
+                if data[i] == b'A' && data[i + 1..i + 11].iter().all(|b| b.is_ascii_digit()) {
+                    if let Ok(num) = std::str::from_utf8(&data[i..i + 11]) {
+                        oem_part_number = Some(num.to_string());
+                        break;
+                    }
+                }
+                i += 1;
+            }
+        }
+
+        // 4. Scan for project name (e.g. "CR4-", "CR3-", "EDC16", "EDC17", "ME9.")
+        let prefixes: &[&[u8]] = &[
+            b"CR4-", b"CR3-", b"CR5-", b"CR6-", b"EDC16", b"EDC17", b"ME9.", b"CRD2",
+        ];
+        for &prefix in prefixes {
+            if let Some(pos) = data[..scan_limit]
+                .windows(prefix.len())
+                .position(|w| w == prefix)
+            {
+                let mut end = pos;
+                while end < len
+                    && end < pos + 40
+                    && data[end] >= 0x20
+                    && data[end] <= 0x7E
+                    && data[end] != b';'
+                    && data[end] != b'\0'
+                {
+                    end += 1;
+                }
+                if end > pos + prefix.len() {
+                    if let Ok(p) = std::str::from_utf8(&data[pos..end]) {
+                        project_name = Some(p.trim().to_string());
+                        break;
+                    }
+                }
+            }
+        }
+
+        Self {
+            bosch_hw_id,
+            bosch_sw_id,
+            oem_part_number,
+            project_name,
+            file_size_bytes: len,
+            sha256_checksum,
+            crc32_checksum,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RomCompatibilityVerdict {
+    Match,
+    CalibrationUpdate,
+    HardwareMismatch,
+    EngineMismatch,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RomInspectionReport {
+    pub signatures: FirmwareSignatures,
+    pub ecu_hw_id: Option<String>,
+    pub ecu_sw_id: Option<String>,
+    pub ecu_oem_num: Option<String>,
+    pub verdict: RomCompatibilityVerdict,
+    pub can_flash: bool,
+    pub risk_explanation: String,
+}

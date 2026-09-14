@@ -728,4 +728,70 @@ mod tests {
         assert!(egr_res["success"].as_bool().unwrap());
         assert_eq!(egr_res["air_mass_offset_mg"].as_f64().unwrap(), 40.0);
     }
+
+    #[tokio::test]
+    async fn test_rom_inspection_and_profile_selection_endpoints() {
+        use base64::Engine as _;
+
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(sim, profile, flasher));
+
+        // 1. POST /api/v1/flash/inspect-rom with matching demo binary
+        let mut rom = vec![0xEA; 4096];
+        let hw = b"0281012224";
+        let sw = b"1037372332";
+        let oem = b"A 646 150 08 79";
+        rom[64..64 + hw.len()].copy_from_slice(hw);
+        rom[128..128 + sw.len()].copy_from_slice(sw);
+        rom[256..256 + oem.len()].copy_from_slice(oem);
+        let b64_rom = base64::engine::general_purpose::STANDARD.encode(&rom);
+
+        let inspect_payload = json!({
+            "rom_base64": b64_rom
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/flash/inspect-rom")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&inspect_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let inspect_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(inspect_res["success"].as_bool().unwrap());
+        let report = &inspect_res["report"];
+        assert!(report["can_flash"].as_bool().unwrap());
+        assert_eq!(
+            report["signatures"]["bosch_hw_id"].as_str().unwrap(),
+            "0281012224"
+        );
+
+        // 2. POST /api/v1/profile/select
+        let select_payload = json!({
+            "name": "w211_om648_edc16"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/profile/select")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&select_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let select_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(select_res["success"].as_bool().unwrap());
+    }
 }

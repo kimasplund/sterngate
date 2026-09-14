@@ -35,7 +35,9 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/dtc/clear", post(clear_dtcs))
         .route("/api/v1/profile", get(get_profile))
         .route("/api/v1/profiles", get(get_all_profiles))
+        .route("/api/v1/profile/select", post(select_profile_endpoint))
         .route("/api/v1/flash/progress", get(get_flash_progress))
+        .route("/api/v1/flash/inspect-rom", post(inspect_rom_endpoint))
         .route("/api/v1/flash/stage", post(stage_flash))
         .route("/api/v1/coding", post(write_coding))
         .route("/api/v1/routine", post(execute_routine))
@@ -218,14 +220,100 @@ async fn get_flash_progress(State(state): State<Arc<AppState>>) -> Json<FlashPro
 #[derive(Deserialize)]
 struct StageFlashPayload {
     manifest: FlashPackageManifest,
-    #[allow(dead_code)]
+    #[serde(default)]
+    rom_base64: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct InspectRomPayload {
     rom_base64: String,
+    #[serde(default)]
+    target_tx: Option<u32>,
+    #[serde(default)]
+    target_rx: Option<u32>,
 }
 
 #[derive(Serialize)]
 struct GenericResponse {
     success: bool,
     message: String,
+}
+
+async fn inspect_rom_endpoint(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<InspectRomPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    use base64::Engine as _;
+    let rom_bytes = if payload.rom_base64 == "dummy_rom_data" {
+        let mut rom = vec![0xEA; 4096];
+        let hw = b"0281012224";
+        let sw = b"1037372332";
+        let oem = b"A 646 150 08 79";
+        let prj = b"CR4-646-43W2-211-100kW";
+        rom[64..64 + hw.len()].copy_from_slice(hw);
+        rom[128..128 + sw.len()].copy_from_slice(sw);
+        rom[256..256 + oem.len()].copy_from_slice(oem);
+        rom[512..512 + prj.len()].copy_from_slice(prj);
+        rom
+    } else {
+        match base64::engine::general_purpose::STANDARD.decode(&payload.rom_base64) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                if let Ok(bytes) =
+                    base64::engine::general_purpose::STANDARD_NO_PAD.decode(&payload.rom_base64)
+                {
+                    bytes
+                } else {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({
+                            "success": false,
+                            "error": "Invalid base64 encoding in rom_base64",
+                        })),
+                    )
+                        .into_response();
+                }
+            }
+        }
+    };
+
+    let tx_id = payload.target_tx.unwrap_or(0x7E0);
+    let rx_id = payload.target_rx.unwrap_or(0x7E8);
+
+    let mut iface = state.interface.lock().await;
+    match state
+        .flasher
+        .inspect_rom(&mut **iface, tx_id, rx_id, &rom_bytes)
+        .await
+    {
+        Ok(report) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "report": report,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("ROM inspection failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
 }
 
 async fn stage_flash(
@@ -242,20 +330,27 @@ async fn stage_flash(
         );
     }
 
-    let dummy_rom = vec![0xAA; 4096];
+    use base64::Engine as _;
+    let rom_data = match payload.rom_base64.as_deref() {
+        Some("dummy_rom_data") | None => vec![0xAA; 4096],
+        Some(b64) => base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(b64))
+            .unwrap_or_else(|_| vec![0xAA; 4096]),
+    };
+
     let mut manifest = payload.manifest;
-    manifest.crc32_checksum = crc32fast::hash(&dummy_rom);
+    manifest.crc32_checksum = crc32fast::hash(&rom_data);
     let mut hasher = sha2::Sha256::new();
-    sha2::Digest::update(&mut hasher, &dummy_rom);
+    sha2::Digest::update(&mut hasher, &rom_data);
     manifest.sha256_checksum = format!("{:x}", sha2::Digest::finalize(hasher));
+    manifest.flash_length = rom_data.len() as u32;
 
     let flasher = state.flasher.clone();
     let iface = state.interface.clone();
 
     tokio::spawn(async move {
-        let _ = flasher
-            .execute_flash(manifest, dummy_rom, 13.8, iface)
-            .await;
+        let _ = flasher.execute_flash(manifest, rom_data, 13.8, iface).await;
     });
 
     (
@@ -265,6 +360,94 @@ async fn stage_flash(
             message: "ROM verified and staged. Safe detached flashing sequence initiated.".into(),
         }),
     )
+}
+
+#[derive(Deserialize)]
+struct SelectProfilePayload {
+    name: String,
+}
+
+async fn select_profile_endpoint(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SelectProfilePayload>,
+) -> impl IntoResponse {
+    let candidates = ["profiles", "../../profiles", "../profiles"];
+    let mut found_path = None;
+
+    for dir in candidates {
+        let base = std::path::Path::new(dir);
+        if !base.exists() {
+            continue;
+        }
+
+        let direct = base.join(&payload.name);
+        if direct.exists() {
+            found_path = Some(direct);
+            break;
+        }
+
+        let with_json = base.join(format!("{}.json", payload.name));
+        if with_json.exists() {
+            found_path = Some(with_json);
+            break;
+        }
+
+        let profiles = VehicleProfile::discover(base);
+        for prof in profiles {
+            if prof.profile_name.eq_ignore_ascii_case(&payload.name)
+                || prof
+                    .profile_name
+                    .to_lowercase()
+                    .contains(&payload.name.to_lowercase())
+            {
+                *state.profile.write().await = prof.clone();
+                return (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "success": true,
+                        "profile_name": prof.profile_name,
+                        "message": format!("Active vehicle profile switched to {}", prof.profile_name),
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    if let Some(path) = found_path {
+        match VehicleProfile::load_from_file(&path) {
+            Ok(prof) => {
+                let name = prof.profile_name.clone();
+                *state.profile.write().await = prof;
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "success": true,
+                        "profile_name": name,
+                        "message": format!("Active vehicle profile switched to {}", name),
+                    })),
+                )
+                    .into_response()
+            }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Failed to parse profile {}: {}", path.display(), e),
+                })),
+            )
+                .into_response(),
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Profile '{}' not found", payload.name),
+            })),
+        )
+            .into_response()
+    }
 }
 
 #[derive(Deserialize)]

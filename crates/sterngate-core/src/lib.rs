@@ -28,7 +28,10 @@ pub use catalog::{
 pub use command::{CommandEnvelope, CommandValidationReport};
 pub use dtc::Dtc;
 pub use error::{Result, SterngateError};
-pub use flash::{FlashPackageManifest, FlashProgress, FlashState, PreFlightReport};
+pub use flash::{
+    FirmwareSignatures, FlashPackageManifest, FlashProgress, FlashState, PreFlightReport,
+    RomCompatibilityVerdict, RomInspectionReport,
+};
 pub use frame::CanFrame;
 pub use garage::{DecodedVin, GitCommitInfo, VehicleEcuSnapshot, VehicleGarage, VehicleRecord};
 pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
@@ -565,5 +568,31 @@ mod tests {
             Some(SuspensionCorner::FrontRight)
         );
         assert_eq!(SuspensionCorner::RearLeft.as_str(), "Rear-Left");
+    }
+
+    #[test]
+    fn test_firmware_signatures_extraction() {
+        // Construct a synthetic Bosch EDC16 ROM header
+        let mut rom = vec![0xEA; 4096];
+        let hw_bytes = b"0281012224";
+        let sw_bytes = b"1037372332";
+        let oem_bytes = b"A 646 150 08 79";
+        let prj_bytes = b"CR4-646-43W2-211-100kW-47D-EU4-02-004";
+
+        rom[128..128 + hw_bytes.len()].copy_from_slice(hw_bytes);
+        rom[256..256 + sw_bytes.len()].copy_from_slice(sw_bytes);
+        rom[512..512 + oem_bytes.len()].copy_from_slice(oem_bytes);
+        rom[1024..1024 + prj_bytes.len()].copy_from_slice(prj_bytes);
+
+        let sig = FirmwareSignatures::extract(&rom);
+        assert_eq!(sig.bosch_hw_id.as_deref(), Some("0281012224"));
+        assert_eq!(sig.bosch_sw_id.as_deref(), Some("1037372332"));
+        assert_eq!(sig.oem_part_number.as_deref(), Some("A 646 150 08 79"));
+        assert_eq!(
+            sig.project_name.as_deref(),
+            Some("CR4-646-43W2-211-100kW-47D-EU4-02-004")
+        );
+        assert_eq!(sig.file_size_bytes, 4096);
+        assert_ne!(sig.sha256_checksum, "");
     }
 }

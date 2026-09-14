@@ -3,7 +3,8 @@ use crate::uds::UdsClient;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use sterngate_core::{
-    FlashPackageManifest, FlashProgress, FlashState, PreFlightReport, Result, SterngateError,
+    FirmwareSignatures, FlashPackageManifest, FlashProgress, FlashState, PreFlightReport, Result,
+    RomCompatibilityVerdict, RomInspectionReport, SterngateError,
 };
 use sterngate_hal::VehicleInterface;
 use tokio::sync::{watch, Mutex};
@@ -117,6 +118,135 @@ impl FlashingWorker {
             hw_id_match: hw_match,
             checksum_match: sha256_ok && crc32_ok,
             details,
+        })
+    }
+
+    /// Inspect a firmware ROM binary, extract embedded markers, query connected ECU over CAN,
+    /// and evaluate whether the firmware is safe to flash to the vehicle.
+    pub async fn inspect_rom(
+        &self,
+        interface: &mut dyn VehicleInterface,
+        tx_id: u32,
+        rx_id: u32,
+        rom_data: &[u8],
+    ) -> Result<RomInspectionReport> {
+        let signatures = FirmwareSignatures::extract(rom_data);
+
+        // Read Live ECU identification DIDs if connected
+        let (ecu_hw_id, ecu_sw_id, ecu_oem_num) = if interface.is_connected() {
+            let mut uds = UdsClient::new(interface, tx_id, rx_id);
+
+            // Read HW Number (DID 0xF192 or fallback 0xF191)
+            let hw = match uds.read_data_by_identifier(0xF192).await {
+                Ok(resp) if resp.len() >= 4 => {
+                    let raw = &resp[3..];
+                    if raw.iter().all(|b| b.is_ascii_graphic()) {
+                        String::from_utf8(raw.to_vec()).ok()
+                    } else {
+                        Some(raw.iter().map(|b| format!("{:02X}", b)).collect::<String>())
+                    }
+                }
+                _ => match uds.read_data_by_identifier(0xF191).await {
+                    Ok(resp) if resp.len() >= 4 => Some(
+                        resp[3..]
+                            .iter()
+                            .map(|b| format!("{:02X}", b))
+                            .collect::<String>(),
+                    ),
+                    _ => None,
+                },
+            };
+
+            // Read SW Number (DID 0xF194 or fallback 0xF189)
+            let sw = match uds.read_data_by_identifier(0xF194).await {
+                Ok(resp) if resp.len() >= 4 => {
+                    let raw = &resp[3..];
+                    if raw.iter().all(|b| b.is_ascii_graphic()) {
+                        String::from_utf8(raw.to_vec()).ok()
+                    } else {
+                        Some(raw.iter().map(|b| format!("{:02X}", b)).collect::<String>())
+                    }
+                }
+                _ => None,
+            };
+
+            // Read OEM Number (DID 0xF187)
+            let oem = match uds.read_data_by_identifier(0xF187).await {
+                Ok(resp) if resp.len() >= 4 => {
+                    let raw = &resp[3..];
+                    if raw.iter().all(|b| b.is_ascii_graphic()) {
+                        String::from_utf8(raw.to_vec()).ok()
+                    } else {
+                        Some(raw.iter().map(|b| format!("{:02X}", b)).collect::<String>())
+                    }
+                }
+                _ => None,
+            };
+
+            (hw, sw, oem)
+        } else {
+            (None, None, None)
+        };
+
+        // Determine compatibility verdict
+        let mut verdict = RomCompatibilityVerdict::Unknown;
+        let mut can_flash = true;
+        let explanation;
+
+        if let (Some(sig_hw), Some(live_hw)) = (&signatures.bosch_hw_id, &ecu_hw_id) {
+            let check_len = sig_hw.len().min(live_hw.len());
+            let hw_matches =
+                check_len >= 8 && sig_hw[..check_len].eq_ignore_ascii_case(&live_hw[..check_len]);
+            if !hw_matches {
+                verdict = RomCompatibilityVerdict::HardwareMismatch;
+                can_flash = false;
+                explanation = format!(
+                    "CRITICAL HARDWARE MISMATCH: Firmware binary is built for hardware '{}', but installed ECU reports hardware '{}'. Flashing this binary will brick the ECU microcontroller!",
+                    sig_hw, live_hw
+                );
+            } else if let (Some(sig_sw), Some(live_sw)) = (&signatures.bosch_sw_id, &ecu_sw_id) {
+                let sw_check_len = sig_sw.len().min(live_sw.len());
+                if sw_check_len >= 8
+                    && sig_sw[..sw_check_len].eq_ignore_ascii_case(&live_sw[..sw_check_len])
+                {
+                    verdict = RomCompatibilityVerdict::Match;
+                    explanation = format!(
+                        "EXACT MATCH: Firmware matches installed hardware ('{}') and identical calibration version ('{}'). Safe to flash.",
+                        sig_hw, sig_sw
+                    );
+                } else {
+                    verdict = RomCompatibilityVerdict::CalibrationUpdate;
+                    explanation = format!(
+                        "CALIBRATION UPDATE: Hardware matches ('{}'). Firmware contains updated calibration ('{}' vs vehicle '{}'). Compatible for upgrade.",
+                        sig_hw, sig_sw, live_sw
+                    );
+                }
+            } else {
+                verdict = RomCompatibilityVerdict::Match;
+                explanation = format!(
+                    "HARDWARE MATCH: Hardware revision verified ('{}'). Safe to stage.",
+                    sig_hw
+                );
+            }
+        } else if let Some(sig_hw) = &signatures.bosch_hw_id {
+            verdict = RomCompatibilityVerdict::Match;
+            explanation = format!(
+                "Firmware signature detected: Bosch HW {}, SW {}. (ECU offline/unconnected).",
+                sig_hw,
+                signatures.bosch_sw_id.as_deref().unwrap_or("Unknown")
+            );
+        } else {
+            explanation = "Raw binary without recognized Bosch/OEM markers. Flashing requires manual verification of target address and memory layout.".to_string();
+        }
+
+        Ok(RomInspectionReport {
+            signatures,
+            ecu_hw_id,
+            ecu_sw_id,
+            ecu_oem_num,
+            verdict,
+            can_flash,
+            risk_explanation: explanation,
         })
     }
 

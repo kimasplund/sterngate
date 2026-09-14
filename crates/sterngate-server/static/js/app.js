@@ -32,6 +32,43 @@ function switchTab(tabId) {
   } catch (e) {}
 }
 
+// --- Active Vehicle Profile Logic ---
+async function fetchAvailableProfiles() {
+  const select = document.getElementById('profile-select');
+  if (!select) return;
+  try {
+    const res = await fetch('/api/v1/profiles');
+    if (!res.ok) return;
+    const profiles = await res.json();
+    if (!profiles || profiles.length === 0) return;
+
+    select.innerHTML = profiles.map(p => {
+      const label = `${p.oem || ''} ${p.chassis || ''} (${p.profile_name})`.trim();
+      return `<option value="${p.profile_name}">${label}</option>`;
+    }).join('');
+  } catch (e) {}
+}
+
+async function switchVehicleProfile(profileName) {
+  if (!profileName) return;
+  try {
+    const res = await fetch('/api/v1/profile/select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: profileName })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (typeof fetchTelemetry === 'function') fetchTelemetry();
+      if (typeof scanDtc === 'function') scanDtc();
+    } else {
+      alert(`Could not switch profile: ${data.error || 'Unknown error'}`);
+    }
+  } catch (err) {
+    alert(`Error switching profile: ${err.message}`);
+  }
+}
+
 // --- Two-Tier Safety Interlock Modal Logic ---
 function showSafetyModal(options) {
   currentSafetyOptions = options;
@@ -496,13 +533,21 @@ function requestWriteImaCodeSafe() {
 }
 
 function requestStageFlashSafe() {
+  const binaryDetails = currentInspectedRom
+    ? `<div style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(46, 160, 67, 0.15); border: 1px solid rgba(46, 160, 67, 0.4); border-radius: 4px; color: #3fb950; font-size: 0.85rem;">
+        <b>Verified Firmware:</b> ${currentInspectedRom.filename}<br>
+        <b>Bosch HW:</b> ${currentInspectedRom.report.signatures.bosch_hardware || 'N/A'} | <b>SW:</b> ${currentInspectedRom.report.signatures.bosch_software || 'N/A'}<br>
+        <b>Verdict:</b> ${currentInspectedRom.report.verdict}
+       </div>`
+    : '';
+
   showSafetyModal({
     title: 'Autonomous ECU Firmware Flash Execution',
     badge: 'CRITICAL / DESTRUCTIVE',
     badgeClass: 'badge-recording',
     description: `
       <b>ECU FLASH SECTOR ERASE & REPROGRAMMING:</b><br>
-      This will initiate the detached asynchronous Flashing State Machine. All diagnostic reads and APIs will be locked (HTTP 423) during flash execution.<br><br>
+      This will initiate the detached asynchronous Flashing State Machine. All diagnostic reads and APIs will be locked (HTTP 423) during flash execution.<br>${binaryDetails}
       <b>CRITICAL SAFETY RULES:</b><br>
       1. Battery voltage MUST be maintained ≥ 12.50 V (connect battery maintainer).<br>
       2. Engine must be completely OFF with Terminal 15 (Ignition) ON.<br>
@@ -631,7 +676,10 @@ async function scanDtc() {
         <td><b>${d.code}</b></td>
         <td>${d.module}</td>
         <td>${d.description}</td>
-        <td><span style="color: var(--warning)">${d.confirmed ? i18n.t('dtc.confirmed') : i18n.t('dtc.active')}</span></td>
+        <td>
+          <span style="color: var(--warning)">${d.confirmed ? i18n.t('dtc.confirmed') : i18n.t('dtc.active')}</span>
+          ${d.warning_lamp_requested ? '<span class="badge badge-recording" style="margin-left: 0.35rem; font-size: 0.7rem;">💡 MIL Active</span>' : ''}
+        </td>
       </tr>
     `).join('');
   }
@@ -756,14 +804,262 @@ function triggerCustomRoutine() {
   executeRoutineEnvelope(mod, subFn, rId, optBytes, `Custom 0x${rId.toString(16).toUpperCase()}`);
 }
 
+// --- CAN Bus Range Discovery (0x700..0x7EF) ---
+async function startCanBusDiscovery() {
+  const badge = document.getElementById('disc-badge');
+  const resultsDiv = document.getElementById('disc-results');
+  const startIdVal = document.getElementById('disc-start-id').value.trim();
+  const endIdVal = document.getElementById('disc-end-id').value.trim();
+  const timeoutVal = parseInt(document.getElementById('disc-timeout').value.trim(), 10) || 20;
+
+  const startId = parseInt(startIdVal, 16);
+  const endId = parseInt(endIdVal, 16);
+
+  if (isNaN(startId) || isNaN(endId)) {
+    alert('Please enter valid hex IDs (e.g. 0x7E0, 0x7EF)');
+    return;
+  }
+
+  badge.textContent = 'PROBING BUS...';
+  badge.className = 'badge badge-voltage pulse';
+  resultsDiv.style.display = 'block';
+  resultsDiv.innerHTML = '<div style="color: var(--text-muted);">Broadcasting ISO-TP TesterPresent queries and interrogating identification DIDs (0xF187, 0xF190, 0xF191)...</div>';
+
+  try {
+    const res = await fetch('/api/v1/diag/discover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_id: startId,
+        end_id: endId,
+        timeout_ms: timeoutVal
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      badge.textContent = 'PROBE FAILED';
+      badge.className = 'badge badge-recording';
+      resultsDiv.innerHTML = `<div style="color: #f85149;">Discovery failed: ${data.error || 'Unknown error'}</div>`;
+      return;
+    }
+
+    badge.textContent = `${data.count} MODULES FOUND`;
+    badge.className = 'badge badge-ready';
+
+    if (data.count === 0) {
+      resultsDiv.innerHTML = `<div style="color: var(--warning);">No electronic modules responded in range 0x${startId.toString(16).toUpperCase()}..0x${endId.toString(16).toUpperCase()}. Verify CAN bus wiring and ignition status.</div>`;
+      return;
+    }
+
+    let html = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--border); text-align: left; color: var(--text-muted);">
+            <th style="padding: 0.4rem;">CAN ID (TX / RX)</th>
+            <th style="padding: 0.4rem;">Protocol</th>
+            <th style="padding: 0.4rem;">OEM Part #</th>
+            <th style="padding: 0.4rem;">HW / SW</th>
+            <th style="padding: 0.4rem;">VIN</th>
+            <th style="padding: 0.4rem;">Catalog Match</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    for (const ecu of data.ecus) {
+      const matchBadge = ecu.matched_catalog_name 
+        ? `<span class="badge badge-ready">${ecu.matched_catalog_name}</span>`
+        : `<span class="badge badge-voltage">Uncataloged Module</span>`;
+      const hwSw = [ecu.hardware_version, ecu.software_version].filter(Boolean).join(' / ') || '--';
+
+      html += `
+        <tr style="border-bottom: 1px solid rgba(48, 54, 61, 0.5);">
+          <td style="padding: 0.4rem; font-family: monospace; color: var(--accent);">
+            <b>0x${ecu.tx_id.toString(16).toUpperCase()}</b> / 0x${ecu.rx_id.toString(16).toUpperCase()}
+          </td>
+          <td style="padding: 0.4rem;">${ecu.protocol}</td>
+          <td style="padding: 0.4rem; font-family: monospace;">${ecu.part_number || '--'}</td>
+          <td style="padding: 0.4rem; font-family: monospace;">${hwSw}</td>
+          <td style="padding: 0.4rem; font-family: monospace; color: #58a6ff;">${ecu.vin || '--'}</td>
+          <td style="padding: 0.4rem;">${matchBadge}</td>
+        </tr>
+      `;
+    }
+
+    html += '</tbody></table>';
+    resultsDiv.innerHTML = html;
+  } catch (err) {
+    badge.textContent = 'ERROR';
+    badge.className = 'badge badge-recording';
+    resultsDiv.innerHTML = `<div style="color: #f85149;">Probe failed: ${err.message}</div>`;
+  }
+}
+
+// --- Safe Autonomous Flasher & Binary Scanner ---
+let currentInspectedRom = null;
+
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function handleRomFileSelected(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const b64 = arrayBufferToBase64(e.target.result);
+    const sizeStr = (file.size / 1024).toFixed(1) + ' KB';
+    await inspectAndDisplayRom(b64, file.name, sizeStr);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function loadDemoRomBinary(mode) {
+  if (mode === 'match') {
+    let rom = new Uint8Array(4096);
+    rom.fill(0xEA);
+    const enc = new TextEncoder();
+    rom.set(enc.encode("0281012224"), 64);
+    rom.set(enc.encode("1037372332"), 128);
+    rom.set(enc.encode("A 646 150 08 79"), 256);
+    rom.set(enc.encode("CR4-646-43W2-211-100kW"), 512);
+    const b64 = arrayBufferToBase64(rom.buffer);
+    await inspectAndDisplayRom(b64, "OM646_EDC16_0281012224_Verified.bin", "4.0 KB");
+  } else if (mode === 'mismatch') {
+    let rom = new Uint8Array(4096);
+    rom.fill(0xEA);
+    const enc = new TextEncoder();
+    rom.set(enc.encode("0281013345"), 64);
+    rom.set(enc.encode("1037389123"), 128);
+    rom.set(enc.encode("A 642 150 20 79"), 256);
+    rom.set(enc.encode("CR4-642-63W2-211-165kW"), 512);
+    const b64 = arrayBufferToBase64(rom.buffer);
+    await inspectAndDisplayRom(b64, "OM642_EDC16CP31_0281013345_MISMATCH.bin", "4.0 KB");
+  }
+}
+
+async function inspectAndDisplayRom(base64Data, filename, sizeStr) {
+  const panel = document.getElementById('rom-inspect-panel');
+  const verdictBadge = document.getElementById('rom-verdict-badge');
+  const filenameEl = document.getElementById('rom-filename');
+  const filesizeEl = document.getElementById('rom-filesize');
+  const riskBanner = document.getElementById('rom-risk-banner');
+  const stageBtn = document.getElementById('btn-stage-flash');
+  const stageHint = document.getElementById('flash-stage-hint');
+
+  panel.style.display = 'block';
+  filenameEl.textContent = filename;
+  filesizeEl.textContent = sizeStr;
+  verdictBadge.textContent = 'INSPECTING...';
+  verdictBadge.className = 'badge badge-voltage pulse';
+  riskBanner.style.background = 'rgba(88, 166, 255, 0.15)';
+  riskBanner.style.border = '1px solid var(--border)';
+  riskBanner.style.color = 'var(--text-muted)';
+  riskBanner.textContent = 'Extracting embedded binary signatures & querying connected ECU DIDs...';
+  stageBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/v1/flash/inspect-rom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rom_base64: base64Data,
+        target_tx: 0x7E0,
+        target_rx: 0x7E8
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      verdictBadge.textContent = 'INSPECTION ERROR';
+      verdictBadge.className = 'badge badge-recording';
+      riskBanner.style.background = 'rgba(248, 81, 73, 0.15)';
+      riskBanner.style.border = '1px solid rgba(248, 81, 73, 0.4)';
+      riskBanner.style.color = '#f85149';
+      riskBanner.textContent = data.error || 'Inspection failed';
+      return;
+    }
+
+    const r = data.report;
+    currentInspectedRom = {
+      base64: base64Data,
+      filename: filename,
+      report: r
+    };
+
+    // Update Signatures
+    document.getElementById('sig-hw').textContent = r.signatures.bosch_hardware || 'N/A';
+    document.getElementById('sig-sw').textContent = r.signatures.bosch_software || 'N/A';
+    document.getElementById('sig-oem').textContent = r.signatures.oem_part_number || 'N/A';
+    document.getElementById('sig-prj').textContent = r.signatures.project_name || 'N/A';
+    document.getElementById('sig-sha256').textContent = r.signatures.sha256 ? r.signatures.sha256.substring(0, 32) + '...' : 'N/A';
+
+    // Update Live ECU
+    document.getElementById('ecu-hw').textContent = r.live_ecu_hardware || 'N/A';
+    document.getElementById('ecu-sw').textContent = r.live_ecu_software || 'N/A';
+    document.getElementById('ecu-oem').textContent = r.live_ecu_oem || 'N/A';
+    document.getElementById('ecu-target').textContent = `0x${(r.target_ecu_tx || 0x7E0).toString(16).toUpperCase()} (EDC16)`;
+
+    if (r.can_flash) {
+      verdictBadge.className = 'badge badge-ready';
+      verdictBadge.textContent = `VERIFIED: ${r.verdict.toUpperCase()}`;
+      riskBanner.style.background = 'rgba(46, 160, 67, 0.15)';
+      riskBanner.style.border = '1px solid rgba(46, 160, 67, 0.4)';
+      riskBanner.style.color = '#3fb950';
+      riskBanner.innerHTML = `<b>✓ Anti-Bricking Safety Passed:</b> ${r.risk_analysis}`;
+      stageBtn.disabled = false;
+      if (stageHint) {
+        stageHint.textContent = 'Hardware verification passed. Ready to stage and execute flash.';
+        stageHint.style.color = '#3fb950';
+      }
+    } else {
+      verdictBadge.className = 'badge badge-recording pulse';
+      verdictBadge.textContent = `LOCKED: ${r.verdict.toUpperCase()}`;
+      riskBanner.style.background = 'rgba(248, 81, 73, 0.15)';
+      riskBanner.style.border = '1px solid rgba(248, 81, 73, 0.4)';
+      riskBanner.style.color = '#f85149';
+      riskBanner.innerHTML = `<b>🚨 Anti-Bricking Safety Lockout:</b> ${r.risk_analysis}`;
+      stageBtn.disabled = true;
+      if (stageHint) {
+        stageHint.textContent = 'FLASHING LOCKED: Firmware is incompatible with connected ECU hardware.';
+        stageHint.style.color = '#f85149';
+      }
+    }
+  } catch (err) {
+    verdictBadge.textContent = 'INSPECTION FAILED';
+    verdictBadge.className = 'badge badge-recording';
+    riskBanner.style.background = 'rgba(248, 81, 73, 0.15)';
+    riskBanner.style.border = '1px solid rgba(248, 81, 73, 0.4)';
+    riskBanner.style.color = '#f85149';
+    riskBanner.textContent = `Network error during ROM inspection: ${err.message}`;
+  }
+}
+
 // Safe Flasher
 async function startSimulatedFlash() {
   const badge = document.getElementById('flash-state-badge');
   const prog = document.getElementById('flash-progress');
   const logBox = document.getElementById('flash-logs');
 
-  logBox.innerHTML += `[STAGING] Preparing firmware manifest and ROM image...<br>`;
-  const payload = {
+  logBox.innerHTML += `[STAGING] Preparing firmware manifest and verified ROM image...<br>`;
+  
+  const payload = currentInspectedRom ? {
+    manifest: {
+      target_module: "EDC16",
+      expected_hw_id: currentInspectedRom.report.signatures.bosch_hardware || "0281012224",
+      expected_sw_id: currentInspectedRom.report.signatures.bosch_software || "1037372332",
+      flash_start_address: 262144,
+      flash_length: 2097152,
+      block_size: 4096,
+      sha256: currentInspectedRom.report.signatures.sha256
+    },
+    rom_base64: currentInspectedRom.base64
+  } : {
     manifest: {
       target_module: "EDC16",
       expected_hw_id: "0281012224",
@@ -931,6 +1227,11 @@ async function scanVehicleQuick() {
     modelBadge.textContent = 'ERROR';
     alert(`Vehicle scan error: ${err.message}`);
   }
+}
+
+function openDiagnosticReportHtml() {
+  const lang = (window.i18n && i18n.currentLang) || 'en';
+  window.open(`/api/v1/diag/report.html?lang=${lang}`, '_blank');
 }
 
 async function loadGarageHistory() {
@@ -1337,6 +1638,7 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (e) {}
 
   setupTelemetryWebSocket();
+  fetchAvailableProfiles();
   pollRecorderStatus();
   pollCompressorStatus();
   pollCascadeStatus();

@@ -20,6 +20,12 @@
         <span id="badge-status" class="badge badge-online" data-i18n="badge.connected">CONNECTED (MOCK/CAN)</span>
         <span id="badge-voltage" class="badge badge-voltage">13.8V</span>
       </div>
+      <div class="profile-selector" style="display: flex; align-items: center; gap: 0.35rem;">
+        <span style="font-size: 0.9rem;">🚗</span>
+        <select id="profile-select" onchange="switchVehicleProfile(this.value)" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.8rem; max-width: 220px;">
+          <option value="">W211 OM646 (EDC16)</option>
+        </select>
+      </div>
       <div class="lang-selector">
         <span style="font-size: 1rem;">🌐</span>
         <select id="lang-select" onchange="i18n.setLanguage(this.value)">
@@ -167,6 +173,7 @@
         </div>
         <div style="display: flex; gap: 0.5rem; margin-bottom: 0.85rem; flex-wrap: wrap;">
           <button class="btn btn-primary" onclick="scanVehicleQuick()" data-i18n="garage.btn_scan">⚡ Interrogate Vehicle (Quick Scan)</button>
+          <button class="btn" onclick="openDiagnosticReportHtml()">📄 Export Diagnostic Report (HTML)</button>
           <button class="btn" onclick="checkCascadesLive()" data-i18n="garage.btn_cascades" style="border-color: #d29922; color: #e3b341;">⚠️ Check Cascades of Death</button>
           <button class="btn" onclick="loadGarageHistory()" data-i18n="garage.btn_history">📜 View Git History</button>
           <button class="btn" onclick="analyzeSuspensionLive()" data-i18n="garage.btn_suspension">🎈 S211 Air Suspension Leak Test</button>
@@ -370,6 +377,27 @@
           [SYSTEM] Routine controller ready. Select a quick actuator or input custom routine ID.<br>
         </div>
       </div>
+
+      <!-- CAN Bus Range Discovery & Module Probing -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--accent);">🔍 CAN Bus Range Discovery (0x700..0x7EF)</span>
+            <span id="disc-badge" class="badge badge-voltage">IDLE</span>
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Gateway Interrogation & Uncataloged ECU Discovery</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Probes standard 11-bit CAN ranges with ISO-TP TesterPresent to find all responding electronic modules on the vehicle gateway, interrogates identification DIDs, and matches against the 990-ECU Daimler catalog.
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <input id="disc-start-id" type="text" placeholder="Start ID" value="0x7E0" style="width: 110px;">
+          <input id="disc-end-id" type="text" placeholder="End ID" value="0x7E8" style="width: 110px;">
+          <input id="disc-timeout" type="number" placeholder="Timeout ms" value="20" style="width: 120px;">
+          <button class="btn btn-primary" onclick="startCanBusDiscovery()">🚀 Interrogate CAN Range</button>
+        </div>
+        <div id="disc-results" style="display: none; background: #090d13; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; font-size: 0.85rem;"></div>
+      </div>
     </div>
   </div>
 
@@ -455,8 +483,61 @@
         <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
           Sterngate firmware flashing engine runs detached in an isolated real-time thread with active API lockout (HTTP 423) and continuous ISO 14229 Session Keep-Alive ($S_3$). Never streams binaries over WebSocket or WiFi; all firmware is staged and cryptographically verified on local disk prior to sector erase.
         </div>
-        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem;">
-          <button class="btn btn-danger" onclick="requestStageFlashSafe()" data-i18n="flasher.btn_stage">Stage & Execute Flash</button>
+
+        <!-- Binary Upload & Safety Inspection Zone -->
+        <div style="background: #090d13; border: 1px dashed var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+          <input type="file" id="rom-file-input" accept=".bin,.rom" style="display: none;" onchange="handleRomFileSelected(event)">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <b style="color: var(--accent);">📁 Select Target Calibration Binary (.bin)</b>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                Sterngate automatically scans the binary for Bosch HW/SW numbers, OEM part numbers, and project strings, and cross-checks against live ECU DIDs.
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-primary" onclick="document.getElementById('rom-file-input').click()">Browse .bin File</button>
+              <button class="btn" onclick="loadDemoRomBinary('match')">★ Load Demo OM646 Binary</button>
+              <button class="btn btn-danger" onclick="loadDemoRomBinary('mismatch')">⚠️ Simulate HW Mismatch</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROM Pre-Flight Compatibility Report Panel -->
+        <div id="rom-inspect-panel" style="display: none; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span id="rom-verdict-badge" class="badge badge-ready">VERIFIED</span>
+              <b id="rom-filename" style="color: #fff; font-family: monospace;">firmware.bin</b>
+            </div>
+            <span id="rom-filesize" style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace;">0 KB</span>
+          </div>
+
+          <div id="rom-risk-banner" style="padding: 0.75rem; border-radius: 4px; margin-bottom: 0.75rem; font-size: 0.85rem; line-height: 1.5;"></div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
+            <div style="background: #161b22; border: 1px solid var(--border); border-radius: 4px; padding: 0.75rem;">
+              <b style="color: var(--accent); display: block; margin-bottom: 0.4rem;">Embedded Binary Signatures</b>
+              <div><b>Bosch HW Number:</b> <code id="sig-hw" style="color: #fff;">--</code></div>
+              <div><b>Calibration Version:</b> <code id="sig-sw" style="color: #fff;">--</code></div>
+              <div><b>OEM Part Number:</b> <code id="sig-oem" style="color: #fff;">--</code></div>
+              <div><b>Project Family:</b> <code id="sig-prj" style="color: #fff;">--</code></div>
+              <div><b>SHA-256 Hash:</b> <code id="sig-sha256" style="color: var(--text-muted); font-size: 0.75rem; word-break: break-all;">--</code></div>
+            </div>
+
+            <div style="background: #161b22; border: 1px solid var(--border); border-radius: 4px; padding: 0.75rem;">
+              <b style="color: #3fb950; display: block; margin-bottom: 0.4rem;">Connected Vehicle ECU (Live CAN DIDs)</b>
+              <div><b>Supplier HW (0xF192):</b> <code id="ecu-hw" style="color: #fff;">--</code></div>
+              <div><b>Supplier SW (0xF194):</b> <code id="ecu-sw" style="color: #fff;">--</code></div>
+              <div><b>Spare Part # (0xF187):</b> <code id="ecu-oem" style="color: #fff;">--</code></div>
+              <div><b>Target Module:</b> <code id="ecu-target" style="color: #fff;">EDC16 (0x7E0)</code></div>
+              <div><b>Flash Address:</b> <code style="color: var(--text-muted);">0x00040000 (Sector 1)</code></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap;">
+          <button id="btn-stage-flash" class="btn btn-danger" onclick="requestStageFlashSafe()" data-i18n="flasher.btn_stage" disabled>Stage & Execute Flash</button>
+          <span id="flash-stage-hint" style="font-size: 0.8rem; color: var(--text-muted);">Select or load a verified .bin file above to unlock flashing.</span>
         </div>
         <span style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;" data-i18n="flasher.safety_notice">
           Safety Gate: Battery ≥ 12.5V, SHA256 & CRC verified, API Lockout active
