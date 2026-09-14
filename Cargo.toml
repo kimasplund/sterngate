@@ -46,6 +46,7 @@ iroh = "1.2.0"
 
 # CAN & Automotive
 socketcan = { version = "4.0.0", features = ["tokio"] }
+rusb = "0.9"
 
 # Serialization & CLI
 serde = { version = "1.0", features = ["derive"] }

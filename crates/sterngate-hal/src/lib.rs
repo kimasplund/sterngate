@@ -2,12 +2,15 @@ pub mod doip;
 pub mod interface;
 pub mod j2534;
 pub mod mock;
+pub mod openport;
+pub mod openport_codec;
 pub mod socketcan;
 
 pub use doip::DoIpInterface;
 pub use interface::VehicleInterface;
 pub use j2534::J2534Interface;
 pub use mock::VirtualCanInterface;
+pub use openport::OpenPortInterface;
 pub use socketcan::SocketCanInterface;
 
 #[cfg(test)]

@@ -11,7 +11,7 @@ use sterngate_core::{
     SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample,
     VehicleGarage, VehicleProfile,
 };
-use sterngate_hal::{SocketCanInterface, VehicleInterface, VirtualCanInterface};
+use sterngate_hal::{OpenPortInterface, SocketCanInterface, VehicleInterface, VirtualCanInterface};
 use sterngate_mcp::McpServer;
 use sterngate_p2p::P2pNode;
 use sterngate_protocol::{
@@ -51,7 +51,11 @@ struct Cli {
     #[arg(long)]
     server: bool,
 
-    /// Target CAN interface (e.g. can0, vcan0)
+    /// Shortcut to use native Linux Tactrix OpenPort 2.0 interface
+    #[arg(long)]
+    openport: bool,
+
+    /// Target CAN interface (e.g. can0, vcan0, openport, mock)
     #[arg(long, default_value = "can0")]
     can_interface: String,
 
@@ -445,7 +449,10 @@ async fn main() -> Result<()> {
             .init();
     }
 
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    if cli.openport {
+        cli.can_interface = "openport".to_string();
+    }
 
     // Determine operational mode
     let mode = if cli.local {
@@ -742,7 +749,26 @@ async fn main() -> Result<()> {
                     let manifest_data = std::fs::read_to_string(&manifest)?;
                     let pkg_manifest: FlashPackageManifest = serde_json::from_str(&manifest_data)?;
                     let rom_data = std::fs::read(&rom)?;
-                    let batt_voltage = voltage.unwrap_or(12.6);
+                    let batt_voltage = if let Some(v) = voltage {
+                        v
+                    } else if cli.can_interface == "openport" || cli.can_interface == "tactrix" {
+                        let mut op = OpenPortInterface::new();
+                        if op.open().await.is_ok() {
+                            if let Ok(measured) = op.read_battery_voltage().await {
+                                info!(
+                                    "Read live battery voltage from Tactrix OpenPort Pin 16 ADC: {:.2} V",
+                                    measured
+                                );
+                                measured as f64
+                            } else {
+                                12.6
+                            }
+                        } else {
+                            12.6
+                        }
+                    } else {
+                        12.6
+                    };
 
                     let mut iface = open_interface(&cli.can_interface).await;
                     let flasher = FlashingWorker::new();
@@ -805,7 +831,26 @@ async fn main() -> Result<()> {
                     let manifest_data = std::fs::read_to_string(&manifest)?;
                     let pkg_manifest: FlashPackageManifest = serde_json::from_str(&manifest_data)?;
                     let rom_data = std::fs::read(&rom)?;
-                    let batt_voltage = 12.6;
+                    let batt_voltage = if cli.can_interface == "openport"
+                        || cli.can_interface == "tactrix"
+                    {
+                        let mut op = OpenPortInterface::new();
+                        if op.open().await.is_ok() {
+                            if let Ok(measured) = op.read_battery_voltage().await {
+                                info!(
+                                    "Read live battery voltage from Tactrix OpenPort Pin 16 ADC: {:.2} V",
+                                    measured
+                                );
+                                measured as f64
+                            } else {
+                                12.6
+                            }
+                        } else {
+                            12.6
+                        }
+                    } else {
+                        12.6
+                    };
 
                     println!("============================================================");
                     println!("  🚨 CAUTION: ECU FLASHING SEQUENCE INITIATION");
@@ -1725,6 +1770,8 @@ async fn main() -> Result<()> {
 
             let mut iface: Box<dyn VehicleInterface> = if cli.can_interface == "mock" {
                 Box::new(VirtualCanInterface::new())
+            } else if cli.can_interface == "openport" || cli.can_interface == "tactrix" {
+                Box::new(OpenPortInterface::new())
             } else {
                 Box::new(SocketCanInterface::new(&cli.can_interface))
             };
@@ -1813,6 +1860,18 @@ async fn open_interface(can_interface: &str) -> Box<dyn VehicleInterface> {
         let mut sim = VirtualCanInterface::new();
         let _ = sim.open().await;
         Box::new(sim)
+    } else if can_interface == "openport" || can_interface == "tactrix" {
+        let mut op = OpenPortInterface::new();
+        if op.open().await.is_ok() {
+            Box::new(op)
+        } else {
+            warn!(
+                "Tactrix OpenPort hardware not found on USB, falling back to simulated interface"
+            );
+            let (mut sim_op, _) = OpenPortInterface::new_simulated(12.65);
+            let _ = sim_op.open().await;
+            Box::new(sim_op)
+        }
     } else {
         let mut can = SocketCanInterface::new(can_interface);
         if can.open().await.is_ok() {

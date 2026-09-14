@@ -406,6 +406,32 @@ sterngate diag scan --export-html report.html --lang en
    curl -s http://localhost:8080/api/v1/diag/report.html -o report.html
    ```
 
+---
 
+## 13. Native Tactrix OpenPort 2.0 Hardware Operation
 
+Sterngate includes a reverse-engineered native Linux USB driver for Tactrix OpenPort 2.0 cables (`VID 0x0403`, `PID 0xCC4D` / `0xCC4C`).
 
+### Key Features
+* **Zero Windows Dependencies**: Communicates directly over USB bulk endpoints via `rusb`.
+* **100% Clone Safe**: Strips out all vendor phone-home and anti-clone flash erase routines that brick Chinese clones on Windows.
+* **Pin 16 Hardware ADC**: Directly reads real vehicle battery millivolts to enforce the $\ge 12.5\text{ V}$ flashing interlock.
+
+### Setup udev Rules (Non-Root USB Access)
+```bash
+sudo cp scripts/99-tactrix-openport.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo usermod -aG plugdev $USER
+```
+
+### Usage Examples
+```bash
+# Run local dashboard with Tactrix OpenPort 2.0
+sterngate --local --openport
+
+# Run live diagnostic telemetry
+sterngate --openport diag live
+
+# Run flash preflight with hardware voltage interlock
+sterngate --openport flash preflight --manifest flash_pkg/edc16_stage1.json --rom flash_pkg/edc16_stage1.bin
+```

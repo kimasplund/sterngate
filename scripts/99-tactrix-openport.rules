@@ -1,0 +1,16 @@
+# Tactrix OpenPort 2.0 Linux udev rules for Sterngate
+# Copy this file to /etc/udev/rules.d/99-tactrix-openport.rules
+# Then run:
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Allows non-root users in plugdev or dialout groups (or local desktop sessions)
+# to access OpenPort 2.0 USB bulk endpoints without requiring sudo.
+
+# Tactrix OpenPort 2.0 J2534 Interface (standard PID)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cc4d", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+
+# Tactrix OpenPort 2.0 J2534 Composite Interface (composite PID)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cc4c", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+
+# Tactrix OpenPort 2.0 Bootloader
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cc4b", MODE="0666", GROUP="plugdev", TAG+="uaccess"

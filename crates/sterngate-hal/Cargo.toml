@@ -12,5 +12,6 @@ tokio = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 socketcan = { workspace = true }
+rusb = { workspace = true }
 anyhow = { workspace = true }
 
