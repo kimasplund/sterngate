@@ -82,11 +82,11 @@ Sterngate is completely independent of proprietary binary formats. Legacy OEM fi
 Once extracted into native Sterngate JSON, the legacy binary files are discarded and are **never committed or required at runtime**.
 
 ### One-Way Extraction Workflow
-1. Extract CBF files from the NAS data dump:
+1. Extract CBF files from your diagnostic archive:
    ```bash
    python3 -c '
    import py7zr
-   with py7zr.SevenZipFile("/run/user/1000/gvfs/smb-share:server=kims-nas.local,share=public/DTS Projects/DTS_Daimler Refresh_V2 #fuckacmeinc.7z", "r") as z:
+   with py7zr.SevenZipFile("/path/to/diagnostic_archive.7z", "r") as z:
        z.extract(path="/tmp/cbf_extracted", targets=["Old_211_219/cbf/CR4.CBF", "Old_211_219/cbf/EGS52.CBF"])
    '
    ```
