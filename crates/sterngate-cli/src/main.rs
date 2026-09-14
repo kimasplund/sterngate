@@ -24,11 +24,11 @@ enum OperatingMode {
     /// Standalone SBC: Local CAN + Web UI dashboard
     Local,
     /// In-Car Diagnostic Bridge & P2P Host: CAN + Iroh Endpoint P2P listener
-    #[value(alias = "bridge", alias = "car", alias = "host")]
-    Client,
+    #[value(alias = "car", alias = "host")]
+    Bridge,
     /// Remote Technician Client: Iroh Dialer + Technician Web UI
-    #[value(alias = "tech", alias = "remote")]
-    Server,
+    #[value(alias = "remote")]
+    Tech,
 }
 
 #[derive(Parser, Debug)]
@@ -46,12 +46,12 @@ struct Cli {
     local: bool,
 
     /// In-Car Diagnostic Bridge & P2P Host shortcut (generates ticket and listens)
-    #[arg(long, alias = "bridge", alias = "car", alias = "host")]
-    client: bool,
+    #[arg(long, alias = "car", alias = "host")]
+    bridge: bool,
 
     /// Remote technician client shortcut (dials car node via --ticket)
-    #[arg(long, alias = "tech", alias = "remote")]
-    server: bool,
+    #[arg(long, alias = "remote")]
+    tech: bool,
 
     /// Shortcut to use native Linux Tactrix OpenPort 2.0 interface
     #[arg(long)]
@@ -459,10 +459,10 @@ async fn main() -> Result<()> {
     // Determine operational mode
     let mode = if cli.local {
         Some(OperatingMode::Local)
-    } else if cli.client {
-        Some(OperatingMode::Client)
-    } else if cli.server || (cli.ticket.is_some() && cli.mode.is_none()) {
-        Some(OperatingMode::Server)
+    } else if cli.bridge {
+        Some(OperatingMode::Bridge)
+    } else if cli.tech || (cli.ticket.is_some() && cli.mode.is_none()) {
+        Some(OperatingMode::Tech)
     } else {
         cli.mode
     };
@@ -1794,7 +1794,7 @@ async fn main() -> Result<()> {
             let state = Arc::new(AppState::new(iface, profile, flasher));
             run_server(state, cli.port).await?;
         }
-        OperatingMode::Client => {
+        OperatingMode::Bridge => {
             info!("============================================================");
             info!("  Starting Sterngate: Car-Side Diagnostic Bridge (P2P Host)");
             info!("  Role: On-Vehicle Gateway Bridge & Ticket Host");
@@ -1819,7 +1819,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        OperatingMode::Server => {
+        OperatingMode::Tech => {
             let ticket_str = cli
                 .ticket
                 .context("Technician mode requires --ticket <TICKET>")?;

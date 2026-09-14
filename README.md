@@ -97,7 +97,7 @@ sterngate --local --can-interface can0 --port 8080
 sterngate --local --openport --port 8080
 ```
 
-#### B. Car-Side Diagnostic Bridge & P2P Host (`--bridge` / `--car` / `--client`)
+#### B. Car-Side Diagnostic Bridge & P2P Host (`--bridge` / `--car`)
 ```bash
 # Bridging SocketCAN (generates P2P ticket and listens)
 sterngate --bridge --can-interface can0
@@ -107,7 +107,7 @@ sterngate --bridge --openport
 ```
 Prints an encrypted Iroh Node Ticket to share with the remote technician.
 
-#### C. Remote Technician Client Mode (`--tech` / `--ticket` / `--server`)
+#### C. Remote Technician Client Mode (`--tech` / `--ticket`)
 ```bash
 # Dial the car-side bridge and open local technician dashboard on port 3000
 sterngate --tech --ticket <NODE_TICKET> --port 3000

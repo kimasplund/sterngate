@@ -11,11 +11,11 @@ Use this skill when building, starting, or verifying Sterngate in any of its ope
 
 ## 1. Quick Mode Selection
 
-| Mode | Command | Intuitive Alias | Use Case | Requirements |
+| Mode | Command | Alias / Shortcut | Use Case | Requirements |
 | :--- | :--- | :--- | :--- | :--- |
 | **Local** | `sterngate --local` | - | In-car standalone SBC (Raspberry Pi / laptop) serving Web UI on Wi-Fi | Local CAN adapter (`can0` or `--openport`) |
-| **Bridge (Host)** | `sterngate --bridge` | `--car` / `--client` | In-car gateway bridge (P2P Host / DoIP Server) generating ticket and listening | Local CAN adapter + internet |
-| **Tech (Client)** | `sterngate --tech --ticket <TICKET>` | `--ticket <TICKET>` / `--server` | Remote technician workstation (Tester / Dialer) dialing car node | Internet access |
+| **Bridge (Host)** | `sterngate --bridge` | `--car` | In-car gateway bridge (P2P Host / DoIP Server) generating ticket and listening | Local CAN adapter + internet |
+| **Tech (Client)** | `sterngate --tech --ticket <TICKET>` | `--ticket <TICKET>` | Remote technician workstation (Tester / Dialer) dialing car node | Internet access |
 | **Mock** | `sterngate mock` | - | Offline development and CI/CD testing with simulated W211 | None (zero hardware needed) |
 | **MCP** | `sterngate mcp` | - | Running as a Model Context Protocol tool provider for AI agents | stdio |
 
