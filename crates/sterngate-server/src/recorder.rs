@@ -107,10 +107,16 @@ impl FlightRecorder {
             while is_rec.load(Ordering::Relaxed) {
                 match telemetry_rx.recv().await {
                     Ok(snap) => {
+                        // Empty cell rather than a fabricated reading when
+                        // nothing measured the battery.
+                        let battery = snap
+                            .battery_voltage
+                            .map(|v| format!("{v:.1}"))
+                            .unwrap_or_default();
                         let row = format!(
-                            "{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.2},{:.2},{:.2},{:.2}\n",
+                            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.2},{:.2},{:.2},{:.2}\n",
                             snap.timestamp_ms,
-                            snap.battery_voltage,
+                            battery,
                             snap.engine_rpm.unwrap_or(0.0),
                             snap.coolant_temp.unwrap_or(0.0),
                             snap.trans_fluid_temp.unwrap_or(0.0),

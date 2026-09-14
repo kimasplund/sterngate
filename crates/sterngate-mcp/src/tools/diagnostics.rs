@@ -19,7 +19,7 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
         "sterngate_read_telemetry" => {
             let snap = TelemetrySnapshot {
                 timestamp_ms: chrono::Utc::now().timestamp_millis() as u64,
-                battery_voltage: 13.8,
+                battery_voltage: Some(13.8),
                 engine_rpm: Some(820.0),
                 coolant_temp: Some(88.0),
                 trans_fluid_temp: Some(80.0),

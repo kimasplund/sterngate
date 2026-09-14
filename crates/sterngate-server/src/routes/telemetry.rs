@@ -23,15 +23,20 @@ pub async fn sample_telemetry(state: &AppState) -> TelemetrySnapshot {
     if state.flasher.is_locked().await {
         return TelemetrySnapshot {
             timestamp_ms: chrono::Utc::now().timestamp_millis() as u64,
-            battery_voltage: 13.8,
+            battery_voltage: None,
             ..Default::default()
         };
     }
 
     let mut iface = state.interface.lock().await;
+    // No voltage source: `VehicleInterface` exposes no voltage read, so the
+    // reading stays unknown. (OpenPort measures Pin 16 via an inherent method
+    // that is not part of the trait; wiring it through is the follow-up.)
+    // Reporting a plausible constant here would silently satisfy the >= 12.5 V
+    // flashing interlock on a vehicle nothing has measured.
     let mut snap = TelemetrySnapshot {
         timestamp_ms: chrono::Utc::now().timestamp_millis() as u64,
-        battery_voltage: 13.8,
+        battery_voltage: None,
         ..Default::default()
     };
 

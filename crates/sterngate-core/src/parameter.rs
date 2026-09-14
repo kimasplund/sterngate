@@ -14,7 +14,9 @@ pub struct ParameterValue {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TelemetrySnapshot {
     pub timestamp_ms: u64,
-    pub battery_voltage: f64,
+    /// `None` when nothing actually measured the battery. Consumers must treat
+    /// an absent reading as a failed interlock, never as a passing default.
+    pub battery_voltage: Option<f64>,
     pub engine_rpm: Option<f64>,
     pub coolant_temp: Option<f64>,
     pub trans_fluid_temp: Option<f64>,

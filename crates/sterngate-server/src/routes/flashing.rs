@@ -31,6 +31,10 @@ struct StageFlashPayload {
     manifest: FlashPackageManifest,
     #[serde(default)]
     rom_base64: Option<String>,
+    /// Battery voltage from an actual hardware measurement. Required: the
+    /// flashing interlock is meaningless if the server invents this value.
+    #[serde(default)]
+    measured_voltage: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -139,6 +143,21 @@ async fn stage_flash(
         );
     }
 
+    // execute_flash() enforces >= 12.5 V, but only against the number handed
+    // to it. Passing a constant here made that interlock impossible to fail,
+    // so refuse instead of substituting one.
+    let Some(measured_voltage) = payload.measured_voltage else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(GenericResponse {
+                success: false,
+                message: "Refusing to flash: no measured battery voltage supplied. \
+                          Send 'measured_voltage' from a real hardware reading."
+                    .into(),
+            }),
+        );
+    };
+
     use base64::Engine as _;
     let rom_data = match payload.rom_base64.as_deref() {
         Some("dummy_rom_data") | None => vec![0xAA; 4096],
@@ -159,7 +178,9 @@ async fn stage_flash(
     let iface = state.interface.clone();
 
     tokio::spawn(async move {
-        let _ = flasher.execute_flash(manifest, rom_data, 13.8, iface).await;
+        let _ = flasher
+            .execute_flash(manifest, rom_data, measured_voltage, iface)
+            .await;
     });
 
     (
@@ -209,6 +230,10 @@ struct VaultStagePayload {
     #[serde(default)]
     #[allow(dead_code)]
     target_rx: Option<u32>,
+    /// Battery voltage from an actual hardware measurement. Required for the
+    /// same reason as on /api/v1/flash/stage: this path also flashes.
+    #[serde(default)]
+    measured_voltage: Option<f64>,
 }
 
 async fn vault_stage(
@@ -225,6 +250,20 @@ async fn vault_stage(
         )
             .into_response();
     }
+
+    // This endpoint flashes too, so it needs the same measured reading as
+    // /api/v1/flash/stage rather than a constant that always clears 12.5 V.
+    let Some(measured_voltage) = payload.measured_voltage else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Refusing to flash: no measured battery voltage supplied. \
+                          Send 'measured_voltage' from a real hardware reading.",
+            })),
+        )
+            .into_response();
+    };
 
     let rom_data = match std::fs::read(&payload.file_path) {
         Ok(d) => d,
@@ -277,7 +316,9 @@ async fn vault_stage(
     let m_clone = manifest.clone();
 
     tokio::spawn(async move {
-        let _ = flasher.execute_flash(m_clone, rom_data, 13.8, iface).await;
+        let _ = flasher
+            .execute_flash(m_clone, rom_data, measured_voltage, iface)
+            .await;
     });
 
     (

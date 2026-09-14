@@ -95,17 +95,21 @@ function showSafetyModal(options) {
   const minVolts = options.minVoltage !== undefined ? options.minVoltage : 12.5;
   document.getElementById('gate-voltage-target').textContent = `≥ ${minVolts.toFixed(2)} V`;
 
+  // Fail closed: an unmeasured battery must never satisfy the interlock.
   const liveVolts = (lastTelemetrySnap && lastTelemetrySnap.battery_voltage !== null && lastTelemetrySnap.battery_voltage !== undefined)
     ? lastTelemetrySnap.battery_voltage
-    : 13.8;
+    : null;
   const voltSpan = document.getElementById('gate-voltage-live');
-  if (voltSpan) voltSpan.textContent = `${liveVolts.toFixed(1)}V`;
+  if (voltSpan) voltSpan.textContent = liveVolts === null ? '— not measured' : `${liveVolts.toFixed(1)}V`;
 
   const voltStatus = document.getElementById('gate-voltage-status');
-  const voltPass = liveVolts >= minVolts;
+  const voltPass = liveVolts !== null && liveVolts >= minVolts;
   if (voltPass) {
     voltStatus.textContent = 'PASS ✓';
     voltStatus.className = 'badge badge-ready';
+  } else if (liveVolts === null) {
+    voltStatus.textContent = 'UNKNOWN (NO TELEMETRY)';
+    voltStatus.className = 'badge badge-recording';
   } else {
     voltStatus.textContent = `FAIL (${liveVolts.toFixed(1)}V < ${minVolts}V)`;
     voltStatus.className = 'badge badge-recording';
@@ -113,9 +117,16 @@ function showSafetyModal(options) {
 
   // Interlock check: Ignition / Engine stopped
   const ignStatus = document.getElementById('gate-ignition-status');
-  const rpm = (lastTelemetrySnap && lastTelemetrySnap.engine_rpm) ? lastTelemetrySnap.engine_rpm : 0;
+  const rpm = (lastTelemetrySnap && lastTelemetrySnap.engine_rpm !== null && lastTelemetrySnap.engine_rpm !== undefined)
+    ? lastTelemetrySnap.engine_rpm
+    : null;
   let ignPass = true;
-  if (options.requireEngineOff && rpm > 200) {
+  if (options.requireEngineOff && rpm === null) {
+    // An absent reading is not evidence that the engine is stopped.
+    ignPass = false;
+    ignStatus.textContent = 'UNKNOWN (NO TELEMETRY)';
+    ignStatus.className = 'badge badge-recording';
+  } else if (options.requireEngineOff && rpm > 200) {
     ignPass = false;
     ignStatus.textContent = `FAIL (ENGINE RUNNING ${Math.round(rpm)} RPM)`;
     ignStatus.className = 'badge badge-recording';
@@ -159,11 +170,16 @@ function checkSafetyModalKeyword(e) {
   const entered = (input.value || '').trim().toUpperCase();
 
   const minVolts = currentSafetyOptions.minVoltage !== undefined ? currentSafetyOptions.minVoltage : 12.5;
-  const liveVolts = (lastTelemetrySnap && lastTelemetrySnap.battery_voltage) ? lastTelemetrySnap.battery_voltage : 13.8;
-  const voltPass = liveVolts >= minVolts;
+  // Same fail-closed rule as showSafetyModal(): unknown never passes.
+  const liveVolts = (lastTelemetrySnap && lastTelemetrySnap.battery_voltage !== null && lastTelemetrySnap.battery_voltage !== undefined)
+    ? lastTelemetrySnap.battery_voltage
+    : null;
+  const voltPass = liveVolts !== null && liveVolts >= minVolts;
 
-  const rpm = (lastTelemetrySnap && lastTelemetrySnap.engine_rpm) ? lastTelemetrySnap.engine_rpm : 0;
-  const ignPass = !(currentSafetyOptions.requireEngineOff && rpm > 200);
+  const rpm = (lastTelemetrySnap && lastTelemetrySnap.engine_rpm !== null && lastTelemetrySnap.engine_rpm !== undefined)
+    ? lastTelemetrySnap.engine_rpm
+    : null;
+  const ignPass = !currentSafetyOptions.requireEngineOff || (rpm !== null && rpm <= 200);
 
   confirmBtn.disabled = !(entered === target && voltPass && ignPass);
 

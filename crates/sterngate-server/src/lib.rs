@@ -65,7 +65,7 @@ mod tests {
 
         let snap = TelemetrySnapshot {
             timestamp_ms: 1700000000000,
-            battery_voltage: 14.1,
+            battery_voltage: Some(14.1),
             engine_rpm: Some(2450.0),
             coolant_temp: Some(89.0),
             trans_fluid_temp: Some(80.0),
@@ -910,9 +910,25 @@ mod tests {
         assert_eq!(scan_res["total_files"].as_u64().unwrap(), 1);
         assert!(scan_res["recommendation"].is_object());
 
-        // 2. POST /api/v1/vault/stage
-        let stage_payload = json!({
+        // 2. POST /api/v1/vault/stage without a measured voltage is refused:
+        // staging begins a flash, and the >= 12.5 V interlock means nothing if
+        // the server supplies the reading itself.
+        let unmeasured_payload = json!({
             "file_path": bin_path.to_str().unwrap()
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/vault/stage")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&unmeasured_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        // 3. POST /api/v1/vault/stage with a measured voltage proceeds
+        let stage_payload = json!({
+            "file_path": bin_path.to_str().unwrap(),
+            "measured_voltage": 13.4
         });
         let req = Request::builder()
             .method("POST")
@@ -932,6 +948,41 @@ mod tests {
             "0281012224"
         );
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_flash_stage_refuses_without_measured_voltage() {
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(sim, profile, flasher));
+
+        let payload = json!({
+            "manifest": {
+                "target_module": "EDC16",
+                "expected_hw_id": "0281012224",
+                "expected_sw_id": "1037372332",
+                "sha256_checksum": "",
+                "crc32_checksum": 0,
+                "flash_start_address": 262144,
+                "flash_length": 4096,
+                "block_size": 4096
+            },
+            "rom_base64": "dummy_rom_data"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/flash/stage")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
