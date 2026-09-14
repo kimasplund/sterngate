@@ -75,8 +75,12 @@ class I18nManager {
   }
 
   applyTranslations() {
-    // Translate textContent
+    // Translate textContent.
+    // Only leaf nodes: assigning textContent to an element that wraps markup
+    // would delete its children (this once removed the safety modal's keyword
+    // <code> node, leaving every keyword-gated action unable to open).
     document.querySelectorAll('[data-i18n]').forEach(el => {
+      if (el.children.length > 0) return;
       const key = el.getAttribute('data-i18n');
       el.textContent = this.t(key, el.textContent);
     });

@@ -154,6 +154,8 @@
     "pass": "BESTANDEN ✓",
     "ready": "BEREIT ✓",
     "type_confirm": "Geben Sie BESTAETIGEN ein, um die Ausführung freizuschalten:",
+    "type_confirm_prefix": "Geben Sie",
+    "type_confirm_suffix": "ein, um die Ausführung freizuschalten:",
     "placeholder_keyword": "Bestätigungswort eingeben...",
     "btn_cancel": "Abbrechen",
     "btn_confirm": "Prozedur ausführen"

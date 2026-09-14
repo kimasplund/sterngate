@@ -154,6 +154,8 @@
     "pass": "GODKÄND ✓",
     "ready": "REDO ✓",
     "type_confirm": "Skriv BEKRAFTA för att låsa upp körning:",
+    "type_confirm_prefix": "Skriv",
+    "type_confirm_suffix": "för att låsa upp körning:",
     "placeholder_keyword": "Skriv bekräftelseord...",
     "btn_cancel": "Avbryt",
     "btn_confirm": "Utför procedur"

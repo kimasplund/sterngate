@@ -154,6 +154,8 @@
     "pass": "PASS ✓",
     "ready": "READY ✓",
     "type_confirm": "Type CONFIRM to unlock execution:",
+    "type_confirm_prefix": "Type",
+    "type_confirm_suffix": "to unlock execution:",
     "placeholder_keyword": "Type confirmation keyword...",
     "btn_cancel": "Cancel / Abort",
     "btn_confirm": "Execute Procedure"

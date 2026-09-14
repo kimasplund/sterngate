@@ -993,8 +993,12 @@
 
         <!-- Keyword Confirmation Container -->
         <div id="safety-modal-keyword-container" style="display: none; margin-bottom: 0.5rem;">
-          <div style="font-size: 0.85rem; color: var(--warning); margin-bottom: 0.4rem;" data-i18n="modal.type_confirm">
-            Type <code id="safety-modal-keyword" style="color: var(--danger); font-weight: bold;">CONFIRM</code> to unlock execution:
+          <!-- Each translated run of text is its own leaf node: putting data-i18n
+               on a parent would delete the keyword <code> element below. -->
+          <div style="font-size: 0.85rem; color: var(--warning); margin-bottom: 0.4rem;">
+            <span data-i18n="modal.type_confirm_prefix">Type</span>
+            <code id="safety-modal-keyword" style="color: var(--danger); font-weight: bold;">CONFIRM</code>
+            <span data-i18n="modal.type_confirm_suffix">to unlock execution:</span>
           </div>
           <input type="text" id="safety-modal-input" placeholder="Type confirmation keyword..." data-i18n-placeholder="modal.placeholder_keyword" style="width: 100%;" onkeyup="checkSafetyModalKeyword(event)">
         </div>

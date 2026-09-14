@@ -127,7 +127,9 @@ function showSafetyModal(options) {
   // Interlock check: Keyword Confirmation
   if (options.requireKeyword) {
     kwContainer.style.display = 'block';
-    kwCode.textContent = options.requireKeyword;
+    // Never let a missing keyword node abort the modal: the confirm button
+    // stays disabled until checkSafetyModalKeyword() matches the input anyway.
+    if (kwCode) kwCode.textContent = options.requireKeyword;
     kwInput.value = '';
     confirmBtn.disabled = true;
   } else {
