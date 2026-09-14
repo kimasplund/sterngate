@@ -6,11 +6,12 @@ use sterngate_core::{
     EcuCatalog, FirmwareSignatures, FirmwareVault, FlashPackageManifest, Language, ModAction,
     ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, StageGenerator, SterngateMod,
     SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample,
-    TelemetrySnapshot, VehicleGarage, VehicleProfile,
+    TelemetrySnapshot, VariantCodingCatalog, VehicleGarage, VehicleProfile, WorkshopRoutineCatalog,
 };
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 use sterngate_protocol::{
     BusDiscoverer, FlashingWorker, ModRunner, ServiceRoutineManager, VehicleScanner,
+    VinAdaptationManager,
 };
 
 pub fn get_tools_list() -> Value {
@@ -773,6 +774,111 @@ pub fn get_tools_list() -> Value {
                     "output_path": {
                         "type": "string",
                         "description": "Optional file path to write the patched ROM binary (if fix is true)"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_search_workshop_routines",
+            "description": "Search 1,523+ Mercedes-Benz OEM workshop actuator and diagnostic service routines (0x31 RoutineControl) by keyword, German/English description, routine ID, or ECU module name.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search term (routine ID, German/English description, or category)"
+                    },
+                    "ecu": {
+                        "type": "string",
+                        "description": "Filter routines by ECU module name (e.g. CR4, EDC16, ESP, AIRMATIC)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of routines to return. Default: 25",
+                        "default": 25
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_execute_service_routine",
+            "description": "Execute a factory workshop actuator or service routine (Service 0x31 RoutineControl) on a target ECU with optional data payload bytes.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["routine_id"],
+                "properties": {
+                    "routine_id": {
+                        "type": "string",
+                        "description": "Routine identifier in hex (e.g. '0x0305', '0xFF01')"
+                    },
+                    "ecu": {
+                        "type": "string",
+                        "description": "Target ECU module (e.g. 'EDC16', 'CR4', 'ESP'). Default: 'EDC16'",
+                        "default": "EDC16"
+                    },
+                    "data_hex": {
+                        "type": "string",
+                        "description": "Optional hex payload data bytes (e.g. '01FF')"
+                    },
+                    "tx_id": {
+                        "type": "integer",
+                        "description": "Optional CAN Tx arbitration ID (e.g. 0x7E0)"
+                    },
+                    "rx_id": {
+                        "type": "integer",
+                        "description": "Optional CAN Rx arbitration ID (e.g. 0x7E8)"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_search_variant_coding_dids",
+            "description": "Search 3,155+ Mercedes-Benz factory variant coding parameters and Data Identifiers (0x2E WriteDataByIdentifier) across 367 ECUs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search term (DID hex, parameter name, or description)"
+                    },
+                    "ecu": {
+                        "type": "string",
+                        "description": "Filter DIDs by ECU module name"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of DIDs to return. Default: 25",
+                        "default": 25
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_adapt_donor_ecu_vin",
+            "description": "Perform automated Donor Replacement ECU Re-VIN Adaptation: validates ISO 3779 17-char VIN, unlocks ECU via SecurityAccess (0x27), writes new VIN to 0xF190 (0x2E), verifies readback, and commits event to local Git garage.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["ecu", "new_vin"],
+                "properties": {
+                    "ecu": {
+                        "type": "string",
+                        "description": "Target replacement ECU module name (e.g. 'CR4', 'EDC16', 'MED17')"
+                    },
+                    "new_vin": {
+                        "type": "string",
+                        "description": "New 17-character vehicle identification number (VIN)"
+                    },
+                    "security_level": {
+                        "type": "integer",
+                        "description": "Optional SecurityAccess level override (e.g. 1, 3, 5, 9, 11)"
+                    },
+                    "tx_id": {
+                        "type": "integer",
+                        "description": "Optional CAN Tx arbitration ID override"
+                    },
+                    "rx_id": {
+                        "type": "integer",
+                        "description": "Optional CAN Rx arbitration ID override"
                     }
                 }
             }
@@ -2364,6 +2470,176 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                     "report": report,
                 }))
             }
+        }
+        "sterngate_search_workshop_routines" => {
+            let cat = WorkshopRoutineCatalog::load_default()
+                .map_err(|e| format!("Failed to load workshop routine catalog: {}", e))?;
+            let query = arguments
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let ecu = arguments.get("ecu").and_then(|v| v.as_str());
+            let limit = arguments
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(25) as usize;
+            let results = cat.search(query, ecu, limit);
+
+            Ok(json!({
+                "query": query,
+                "ecu_filter": ecu,
+                "total_cataloged": cat.routines.len(),
+                "count": results.len(),
+                "routines": results,
+            }))
+        }
+        "sterngate_execute_service_routine" => {
+            let r_str = arguments
+                .get("routine_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "Missing required parameter 'routine_id'".to_string())?;
+            let r_clean = r_str
+                .trim()
+                .trim_start_matches("0x")
+                .trim_start_matches("0X");
+            let r_id = u16::from_str_radix(r_clean, 16)
+                .map_err(|e| format!("Invalid hex routine_id '{}': {}", r_str, e))?;
+
+            let ecu = arguments
+                .get("ecu")
+                .and_then(|v| v.as_str())
+                .unwrap_or("EDC16");
+            let eff_tx = arguments
+                .get("tx_id")
+                .and_then(|v| v.as_u64())
+                .unwrap_or_else(|| {
+                    if ecu.eq_ignore_ascii_case("EGS52") {
+                        0x7E1
+                    } else if ecu.eq_ignore_ascii_case("ESP") {
+                        0x7E2
+                    } else if ecu.eq_ignore_ascii_case("AIRMATIC")
+                        || ecu.eq_ignore_ascii_case("ENR")
+                    {
+                        0x7E3
+                    } else {
+                        0x7E0
+                    }
+                }) as u32;
+            let eff_rx = arguments
+                .get("rx_id")
+                .and_then(|v| v.as_u64())
+                .unwrap_or_else(|| {
+                    if ecu.eq_ignore_ascii_case("EGS52") {
+                        0x7E9
+                    } else if ecu.eq_ignore_ascii_case("ESP") {
+                        0x7EA
+                    } else if ecu.eq_ignore_ascii_case("AIRMATIC")
+                        || ecu.eq_ignore_ascii_case("ENR")
+                    {
+                        0x7EB
+                    } else {
+                        0x7E8
+                    }
+                }) as u32;
+
+            let data_bytes = if let Some(d_hex) = arguments.get("data_hex").and_then(|v| v.as_str())
+            {
+                parse_hex_slice(d_hex)?
+            } else {
+                Vec::new()
+            };
+
+            let resp_bytes = ServiceRoutineManager::execute_generic_routine(
+                &mut mock_iface,
+                eff_tx,
+                eff_rx,
+                r_id,
+                &data_bytes,
+            )
+            .await
+            .map_err(|e| format!("Routine execution failed: {}", e))?;
+
+            let resp_hex = resp_bytes
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(" ");
+            Ok(json!({
+                "success": true,
+                "routine_id": format!("0x{:04X}", r_id),
+                "target_ecu": ecu,
+                "tx_id": eff_tx,
+                "rx_id": eff_rx,
+                "response_hex": resp_hex,
+                "message": format!("Routine 0x{:04X} executed successfully", r_id),
+            }))
+        }
+        "sterngate_search_variant_coding_dids" => {
+            let cat = VariantCodingCatalog::load_default()
+                .map_err(|e| format!("Failed to load variant coding catalog: {}", e))?;
+            let query = arguments
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let ecu = arguments.get("ecu").and_then(|v| v.as_str());
+            let limit = arguments
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(25) as usize;
+            let results = cat.search(query, ecu, limit);
+
+            Ok(json!({
+                "query": query,
+                "ecu_filter": ecu,
+                "total_cataloged": cat.coding_dids.len(),
+                "count": results.len(),
+                "coding_dids": results,
+            }))
+        }
+        "sterngate_adapt_donor_ecu_vin" => {
+            let ecu = arguments
+                .get("ecu")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "Missing required parameter 'ecu'".to_string())?;
+            let new_vin = arguments
+                .get("new_vin")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "Missing required parameter 'new_vin'".to_string())?;
+
+            let eff_tx = arguments
+                .get("tx_id")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x7E0) as u32;
+            let eff_rx = arguments
+                .get("rx_id")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0x7E8) as u32;
+            let sec_lvl = arguments
+                .get("security_level")
+                .and_then(|v| v.as_u64())
+                .map(|l| l as u8);
+
+            let res = VinAdaptationManager::adapt_donor_ecu_vin(
+                &mut mock_iface,
+                eff_tx,
+                eff_rx,
+                ecu,
+                new_vin,
+                sec_lvl,
+            )
+            .await
+            .map_err(|e| format!("Donor ECU Re-VIN adaptation failed: {}", e))?;
+
+            if res.success {
+                let garage = VehicleGarage::new(VehicleGarage::default_path());
+                let note = format!(
+                    "Donor ECU {} Re-VIN adaptation: programmed to {}",
+                    ecu, new_vin
+                );
+                let _ = garage.save_coding(new_vin, ecu, new_vin, None, &note);
+            }
+
+            Ok(serde_json::to_value(res).unwrap())
         }
         _ => Err(format!("Unknown tool name: {}", name)),
     }

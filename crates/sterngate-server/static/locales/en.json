@@ -198,6 +198,24 @@
     "reset": "Reset",
     "generated_mod": "✓ Generated Community Mod Package (.sgmod)",
     "btn_flash_mod": "⚡ 1-Click Flash Mod to Vehicle"
+  },
+  "routines_catalog": {
+    "title": "Workshop Service & Actuator Routines (0x31)",
+    "search_ph": "Search by ID, German/English description, ECU (e.g. 0x0305, steering, CR4)...",
+    "total_cataloged": "Total Routines Cataloged",
+    "btn_execute": "Execute Routine",
+    "prefix": "Prefix",
+    "category": "Category",
+    "applicable_ecus": "Applicable ECUs"
+  },
+  "variant_coding": {
+    "title": "Variant Coding & Re-VIN Adaptation (0x2E)",
+    "search_ph": "Search DIDs by hex, parameter name, description (e.g. 0xF190, VIN)...",
+    "total_dids": "Total Coding DIDs",
+    "revin_title": "Donor ECU Re-VIN Adaptation",
+    "btn_revin": "Adapt Donor VIN",
+    "new_vin_ph": "Enter 17-character VIN (ISO 3779)...",
+    "security_level": "SecurityAccess Level"
   }
 }
 

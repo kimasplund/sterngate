@@ -1,6 +1,6 @@
 use crate::interface::VehicleInterface;
 use async_trait::async_trait;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use sterngate_core::{CanFrame, Result};
@@ -16,6 +16,8 @@ pub struct VirtualCanInterface {
     start_time: Instant,
     dtc_cleared: Arc<AtomicBool>,
     last_multi_frame_sid: Arc<AtomicU8>,
+    expected_cfs: Arc<AtomicU32>,
+    received_cfs: Arc<AtomicU32>,
 }
 
 impl VirtualCanInterface {
@@ -29,6 +31,8 @@ impl VirtualCanInterface {
             start_time: Instant::now(),
             dtc_cleared: Arc::new(AtomicBool::new(false)),
             last_multi_frame_sid: Arc::new(AtomicU8::new(0x2E)),
+            expected_cfs: Arc::new(AtomicU32::new(1)),
+            received_cfs: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -48,6 +52,15 @@ impl VirtualCanInterface {
 
         if pci_type == 1 {
             // ISO-TP First Frame: Send Flow Control (0x30: ContinueToSend)
+            let total_len = (((payload[0] as usize) & 0x0F) << 8) | (payload[1] as usize);
+            let needed_cfs = if total_len > 6 {
+                (total_len - 6).div_ceil(7)
+            } else {
+                1
+            };
+            self.expected_cfs
+                .store(needed_cfs as u32, Ordering::Relaxed);
+            self.received_cfs.store(0, Ordering::Relaxed);
             if payload.len() >= 3 {
                 self.last_multi_frame_sid
                     .store(payload[2], Ordering::Relaxed);
@@ -59,7 +72,12 @@ impl VirtualCanInterface {
         }
 
         if pci_type == 2 {
-            // ISO-TP Consecutive Frame: Acknowledge completion based on active SID
+            let received = self.received_cfs.fetch_add(1, Ordering::Relaxed) + 1;
+            let expected = self.expected_cfs.load(Ordering::Relaxed);
+            if received < expected {
+                return None;
+            }
+            // ISO-TP Consecutive Frame: Acknowledge completion once all frames received
             let sid = self.last_multi_frame_sid.load(Ordering::Relaxed);
             let resp_bytes = if sid == 0x3D {
                 vec![0x02, 0x7D, 0x24, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA]
@@ -101,7 +119,7 @@ impl VirtualCanInterface {
             // SecurityAccess
             0x27 => {
                 let sub = if payload.len() > 2 { payload[2] } else { 0x01 };
-                if sub == 0x01 || sub == 0x03 || sub == 0x0B {
+                if sub % 2 == 1 {
                     Some(CanFrame::new_standard(
                         resp_id as u16,
                         &[0x06, 0x67, sub, 0x12, 0x34, 0x56, 0x78],
@@ -219,6 +237,11 @@ impl VirtualCanInterface {
                     0xF190 => Some(CanFrame::new_standard(
                         resp_id as u16,
                         &[0x07, 0x62, 0xF1, 0x90, b'W', b'D', b'B', b'2'],
+                    )),
+                    // VIN Current (0xF1A0) -> "WDB2"
+                    0xF1A0 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0xA0, b'W', b'D', b'B', b'2'],
                     )),
                     // Hardware Version (0xF191)
                     0xF191 => Some(CanFrame::new_standard(
@@ -361,7 +384,7 @@ impl VirtualCanInterface {
                         )),
                         _ => Some(CanFrame::new_standard(
                             resp_id as u16,
-                            &[0x03, 0x7F, 0x31, 0x31], // RequestOutOfRange
+                            &[0x05, 0x71, sub_fn, r_hi, r_lo, 0x00],
                         )),
                     }
                 } else {

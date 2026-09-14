@@ -55,10 +55,12 @@ pub use modpack::{
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
 pub use service::{
-    AdBlueResetStatus, CorneringLightsStatus, DiscoveredEcu, EcoStartStopMode, EcoStartStopStatus,
-    EgrOptimizationStatus, ImaClassification, SbcServiceAction, SbcServiceStatus,
+    AdBlueResetStatus, CodingCatalogMetadata, CorneringLightsStatus, DiscoveredEcu,
+    DonorEcuVinAdaptation, EcoStartStopMode, EcoStartStopStatus, EgrOptimizationStatus,
+    ImaClassification, RoutineCatalogMetadata, SbcServiceAction, SbcServiceStatus,
     SeatbeltChimeStatus, SpeedLimiterStatus, SuspensionCorner, SuspensionCornerAction,
-    TankLitersStatus,
+    TankLitersStatus, VariantCodingCatalog, VariantCodingDefinition, WorkshopRoutineCatalog,
+    WorkshopRoutineDefinition,
 };
 
 #[cfg(test)]
@@ -837,5 +839,55 @@ mod tests {
         let verify_after = BoschChecksumSolver::verify(&rom);
         assert!(verify_after.is_valid);
         assert_eq!(verify_after.valid_blocks, 4);
+    }
+
+    #[test]
+    fn test_workshop_routine_and_coding_catalogs() {
+        // 1. Test Routine Catalog
+        let routine_cat = WorkshopRoutineCatalog::load_default().unwrap();
+        assert!(routine_cat.metadata.total_routines >= 800);
+        assert!(routine_cat.routines.len() >= 800);
+
+        // Check common routines exist
+        let check_deps = routine_cat.get_routine("0xFF01").unwrap();
+        assert_eq!(check_deps.routine_id, "0xFF01");
+        assert!(check_deps.name_en.contains("Compatibility"));
+        assert!(check_deps
+            .localized_name(Language::De)
+            .contains("Kompatibilitäts"));
+        assert!(check_deps
+            .localized_name(Language::Sv)
+            .contains("kompatibilitets"));
+
+        let sbc_deact = routine_cat.get_routine("0x0204").unwrap();
+        assert!(sbc_deact.name_en.contains("SBC"));
+
+        // Search routines
+        let steering_routines = routine_cat.search("steering", None, 10);
+        assert!(!steering_routines.is_empty());
+        assert!(steering_routines
+            .iter()
+            .any(|r| r.routine_id == "0x0305" || r.routine_id == "0x0307"));
+
+        // 2. Test Coding Catalog
+        let coding_cat = VariantCodingCatalog::load_default().unwrap();
+        assert!(coding_cat.metadata.total_dids >= 2000);
+        assert!(coding_cat.coding_dids.len() >= 2000);
+
+        let vin_did = coding_cat.get_did("0xF190").unwrap();
+        assert!(vin_did.is_vin_parameter);
+        assert!(vin_did.ecus.len() > 50);
+
+        let fp_did = coding_cat.get_did("0xF15A").unwrap();
+        assert!(fp_did.is_fingerprint);
+
+        // Search coding DIDs
+        let vin_dids = coding_cat.search("vin", None, 10);
+        assert!(!vin_dids.is_empty());
+
+        // 3. Test Donor ECU VIN Adaptation Validator
+        assert!(DonorEcuVinAdaptation::validate_vin("WDB2112061A999888"));
+        assert!(!DonorEcuVinAdaptation::validate_vin("WDB2112061A99988")); // Too short (16)
+        assert!(!DonorEcuVinAdaptation::validate_vin("WDB2112061A99988I")); // Forbids 'I'
     }
 }

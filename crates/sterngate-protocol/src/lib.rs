@@ -19,7 +19,7 @@ pub use kwp2000::KwpClient;
 pub use modrunner::{ModExecutionReport, ModRunner};
 pub use scanner::{ModuleScanResult, VehicleDiagnosticReport, VehicleScanner};
 pub use seedkey::{DaimlerSeedKey, DaimlerSolver, SeedKeySolver};
-pub use service::ServiceRoutineManager;
+pub use service::{ServiceRoutineManager, VinAdaptationManager};
 pub use uds::UdsClient;
 
 #[cfg(test)]
@@ -578,5 +578,40 @@ mod tests {
         assert!(exec.actions_executed[0].contains("Torque Limiter"));
         assert!(exec.actions_executed[1].contains("P0401"));
         assert!(exec.git_commit_sha.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_generic_routine_and_vin_adaptation() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+
+        // 1. Test generic routine execution (e.g. 0x0305 Steering Angle Zero Position)
+        let routine_res = ServiceRoutineManager::execute_generic_routine(
+            &mut iface,
+            0x7E0,
+            0x7E8,
+            0x0305,
+            &[0x00],
+        )
+        .await
+        .unwrap();
+        assert!(!routine_res.is_empty());
+
+        // 2. Test Donor ECU Re-VIN Adaptation
+        let adapt_res = VinAdaptationManager::adapt_donor_ecu_vin(
+            &mut iface,
+            0x7E0,
+            0x7E8,
+            "CR4",
+            "WDB2112061A999888",
+            Some(0x0B),
+        )
+        .await
+        .unwrap();
+
+        assert!(adapt_res.success);
+        assert_eq!(adapt_res.new_vin, "WDB2112061A999888");
+        assert_eq!(adapt_res.security_level, "0x0B");
+        assert!(adapt_res.message.contains("successful"));
     }
 }

@@ -198,6 +198,24 @@
     "reset": "Återställ",
     "generated_mod": "✓ Skapat Community Mod-paket (.sgmod)",
     "btn_flash_mod": "⚡ 1-Klick Flash Mod till fordon"
+  },
+  "routines_catalog": {
+    "title": "Verkstads- & ställdonsrutiner (0x31)",
+    "search_ph": "Sök efter rutin-ID, beskrivning eller styrenhet (t.ex. 0x0305, styrning, CR4)...",
+    "total_cataloged": "Totalt katalogiserade rutiner",
+    "btn_execute": "Kör rutin",
+    "prefix": "Prefix",
+    "category": "Kategori",
+    "applicable_ecus": "Tillämpliga styrenheter"
+  },
+  "variant_coding": {
+    "title": "Variantkodning & byte av donator-VIN (0x2E)",
+    "search_ph": "Sök DID via hex, parameter eller beskrivning (t.ex. 0xF190, VIN)...",
+    "total_dids": "Totalt antal kodnings-DID",
+    "revin_title": "Donator-styrenhet VIN-adaption",
+    "btn_revin": "Anpassa donator-VIN",
+    "new_vin_ph": "Ange 17-teckens VIN (ISO 3779)...",
+    "security_level": "SecurityAccess-nivå"
   }
 }
 

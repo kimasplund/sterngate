@@ -17,10 +17,12 @@ use sterngate_core::{
     EcuCatalog, FirmwareSignatures, FirmwareVault, FlashPackageManifest, FlashProgress, Language,
     ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, SbcServiceAction,
     StageGenerator, SterngateMod, SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector,
-    SuspensionSample, TelemetrySnapshot, VehicleGarage, VehicleProfile,
+    SuspensionSample, TelemetrySnapshot, VariantCodingCatalog, VehicleGarage, VehicleProfile,
+    WorkshopRoutineCatalog,
 };
 use sterngate_protocol::{
     BusDiscoverer, ModRunner, ServiceRoutineManager, UdsClient, VehicleScanner,
+    VinAdaptationManager,
 };
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -84,6 +86,13 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/service/suspension", post(service_suspension))
         .route("/api/v1/diag/discover", post(diag_discover))
         .route("/api/v1/diag/report.html", get(get_diag_report_html))
+        .route("/api/v1/service/routines", get(list_workshop_routines))
+        .route(
+            "/api/v1/service/routines/execute",
+            post(execute_workshop_routine_endpoint),
+        )
+        .route("/api/v1/coding/dids", get(list_variant_coding_dids))
+        .route("/api/v1/coding/revin", post(revin_adaptation_endpoint))
         .route("/api/v1/workflow/adblue-reset", post(workflow_adblue_reset))
         .route(
             "/api/v1/workflow/eco-start-stop",
@@ -2831,6 +2840,231 @@ async fn tuning_checksum_fix(Json(payload): Json<TuningChecksumPayload>) -> impl
             Json(serde_json::json!({
                 "success": false,
                 "error": format!("Failed recalculating Bosch checksums: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct RoutineListParams {
+    #[serde(default)]
+    q: Option<String>,
+    #[serde(default)]
+    ecu: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+}
+
+async fn list_workshop_routines(Query(params): Query<RoutineListParams>) -> impl IntoResponse {
+    match WorkshopRoutineCatalog::load_default() {
+        Ok(cat) => {
+            let limit = params.limit.unwrap_or(50);
+            let query = params.q.as_deref().unwrap_or("");
+            let results = cat.search(query, params.ecu.as_deref(), limit);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "total": results.len(),
+                    "routines": results,
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("Failed to load workshop routine catalog: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct ExecuteRoutinePayload {
+    routine_id: String,
+    #[serde(default)]
+    tx_id: Option<u32>,
+    #[serde(default)]
+    rx_id: Option<u32>,
+    #[serde(default)]
+    data_hex: Option<String>,
+}
+
+async fn execute_workshop_routine_endpoint(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ExecuteRoutinePayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let tx_id = payload.tx_id.unwrap_or(0x7E0);
+    let rx_id = payload.rx_id.unwrap_or(0x7E8);
+
+    let clean_id = payload.routine_id.trim();
+    let stripped = clean_id
+        .strip_prefix("0x")
+        .or_else(|| clean_id.strip_prefix("0X"))
+        .unwrap_or(clean_id);
+    let r_id = match u16::from_str_radix(stripped, 16) {
+        Ok(val) => val,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Invalid routine ID hex '{}': {}", clean_id, e),
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let data_bytes = if let Some(hex_str) = &payload.data_hex {
+        hex::decode(hex_str.replace(' ', "")).unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    let mut iface_guard = state.interface.lock().await;
+    match ServiceRoutineManager::execute_generic_routine(
+        &mut **iface_guard,
+        tx_id,
+        rx_id,
+        r_id,
+        &data_bytes,
+    )
+    .await
+    {
+        Ok(res_bytes) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "routine_id": format!("0x{:04X}", r_id),
+                "response_hex": hex::encode(&res_bytes),
+                "message": format!("Routine 0x{:04X} executed successfully", r_id),
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "routine_id": format!("0x{:04X}", r_id),
+                "error": format!("Routine execution failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct CodingListParams {
+    #[serde(default)]
+    q: Option<String>,
+    #[serde(default)]
+    ecu: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+}
+
+async fn list_variant_coding_dids(Query(params): Query<CodingListParams>) -> impl IntoResponse {
+    match VariantCodingCatalog::load_default() {
+        Ok(cat) => {
+            let limit = params.limit.unwrap_or(50);
+            let query = params.q.as_deref().unwrap_or("");
+            let results = cat.search(query, params.ecu.as_deref(), limit);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "total": results.len(),
+                    "coding_dids": results,
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("Failed to load variant coding catalog: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct RevinPayload {
+    target_ecu: String,
+    new_vin: String,
+    #[serde(default)]
+    tx_id: Option<u32>,
+    #[serde(default)]
+    rx_id: Option<u32>,
+    #[serde(default)]
+    security_level: Option<u8>,
+}
+
+async fn revin_adaptation_endpoint(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<RevinPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let tx_id = payload.tx_id.unwrap_or(0x7E0);
+    let rx_id = payload.rx_id.unwrap_or(0x7E8);
+
+    let mut iface_guard = state.interface.lock().await;
+    match VinAdaptationManager::adapt_donor_ecu_vin(
+        &mut **iface_guard,
+        tx_id,
+        rx_id,
+        &payload.target_ecu,
+        &payload.new_vin,
+        payload.security_level,
+    )
+    .await
+    {
+        Ok(adapt) => {
+            if adapt.success {
+                let note = format!(
+                    "Donor ECU {} Re-VIN adaptation: programmed to {}",
+                    payload.target_ecu, payload.new_vin
+                );
+                let garage = VehicleGarage::new(VehicleGarage::default_path());
+                let _ = garage.save_coding(
+                    &payload.new_vin,
+                    &payload.target_ecu,
+                    &payload.new_vin,
+                    None,
+                    &note,
+                );
+            }
+            (StatusCode::OK, Json(serde_json::to_value(adapt).unwrap())).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Re-VIN adaptation failed: {}", e),
             })),
         )
             .into_response(),

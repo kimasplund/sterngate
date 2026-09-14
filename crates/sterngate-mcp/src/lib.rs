@@ -815,4 +815,56 @@ mod tests {
         assert!(fix_res["fixed"].as_bool().unwrap());
         assert!(fix_res["report"]["is_valid"].as_bool().unwrap());
     }
+
+    #[tokio::test]
+    async fn test_mcp_extended_knowledge_tools() {
+        // 1. sterngate_search_workshop_routines
+        let r_res = tools::handle_tool_call(
+            "sterngate_search_workshop_routines",
+            &json!({"query": "steering", "limit": 5}),
+        )
+        .await
+        .unwrap();
+        assert!(r_res["count"].as_u64().unwrap() > 0);
+        assert!(r_res["total_cataloged"].as_u64().unwrap() >= 1500);
+
+        // 2. sterngate_execute_service_routine
+        let exec_res = tools::handle_tool_call(
+            "sterngate_execute_service_routine",
+            &json!({
+                "routine_id": "0x0305",
+                "ecu": "CR4",
+                "tx_id": 2016,
+                "rx_id": 2024
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(exec_res["success"].as_bool().unwrap());
+        assert_eq!(exec_res["routine_id"].as_str().unwrap(), "0x0305");
+
+        // 3. sterngate_search_variant_coding_dids
+        let c_res = tools::handle_tool_call(
+            "sterngate_search_variant_coding_dids",
+            &json!({"query": "vin", "limit": 5}),
+        )
+        .await
+        .unwrap();
+        assert!(c_res["count"].as_u64().unwrap() > 0);
+        assert!(c_res["total_cataloged"].as_u64().unwrap() >= 3000);
+
+        // 4. sterngate_adapt_donor_ecu_vin
+        let revin_res = tools::handle_tool_call(
+            "sterngate_adapt_donor_ecu_vin",
+            &json!({
+                "ecu": "CR4",
+                "new_vin": "WDB2112061A888777"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(revin_res["success"].as_bool().unwrap());
+        assert_eq!(revin_res["new_vin"].as_str().unwrap(), "WDB2112061A888777");
+        assert!(revin_res["verified_by_readback"].as_bool().unwrap());
+    }
 }

@@ -198,6 +198,24 @@
     "reset": "Zurücksetzen",
     "generated_mod": "✓ Erstelltes Community-Mod-Paket (.sgmod)",
     "btn_flash_mod": "⚡ 1-Klick Mod auf Fahrzeug flashen"
+  },
+  "routines_catalog": {
+    "title": "Werkstatt-Service- & Aktor-Routinen (0x31)",
+    "search_ph": "Nach Routine-ID, Beschreibung oder Steuergerät suchen (z.B. 0x0305, Lenkung, CR4)...",
+    "total_cataloged": "Katalogisierte Routinen",
+    "btn_execute": "Routine ausführen",
+    "prefix": "Präfix",
+    "category": "Kategorie",
+    "applicable_ecus": "Anwendbare Steuergeräte"
+  },
+  "variant_coding": {
+    "title": "Variantencodierung & Spender-VIN-Adaption (0x2E)",
+    "search_ph": "DIDs nach Hex, Parameter oder Beschreibung suchen (z.B. 0xF190, VIN)...",
+    "total_dids": "Codierungs-DIDs gesamt",
+    "revin_title": "Spender-Steuergerät VIN-Adaption",
+    "btn_revin": "Spender-VIN anpassen",
+    "new_vin_ph": "17-stellige VIN eingeben (ISO 3779)...",
+    "security_level": "SecurityAccess-Level"
   }
 }
 

@@ -368,15 +368,29 @@ sterngate service ima --cylinder 1 --code 7B8HNA --vin WDB2112061A000001
 # Air Suspension Corner Actuation & Calibration
 sterngate service suspension --corner rear-left --action inflate
 sterngate service suspension --corner all --action calibrate-zero
+
+# Search 1,523+ cataloged OEM workshop service & actuator routines (0x31)
+sterngate service list --query steering --limit 10
+sterngate service list --ecu CR4
+
+# Execute generic workshop service routine by ID
+sterngate service run 0x0305 --ecu CR4 --data 01FF
 ```
 
 ### C. Variant Coding & Git Version Tracking
 ```bash
+# Search 3,155+ cataloged factory Variant Coding DIDs (0x2E)
+sterngate coding list-dids --query vin --limit 10
+sterngate coding list-dids --ecu EDC16
+
 # Read hex coding string from ECU
 sterngate coding read --module EDC16 --did 0x0100
 
 # Write coding string with command envelope protection & git commit
 sterngate coding write --module EDC16 --did 0x0100 --data 01020304 --vin WDB2112061A000001 --note "Speed limiter 250 km/h"
+
+# Donor replacement ECU Re-VIN Adaptation (SecurityAccess unlock, 0x2E write, verification, git commit)
+sterngate coding revin --ecu CR4 --vin WDB2112061A999888
 
 # Backup all module codings into vehicle git garage
 sterngate coding backup --vin WDB2112061A000001

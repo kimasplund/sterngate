@@ -60,6 +60,14 @@ pub struct EcuCatalogEntry {
     #[serde(default)]
     pub chassis: Vec<String>,
     #[serde(default)]
+    pub security_level: Option<String>,
+    #[serde(default)]
+    pub supported_security_levels: Vec<String>,
+    #[serde(default)]
+    pub routines_count: usize,
+    #[serde(default)]
+    pub coding_dids_count: usize,
+    #[serde(default)]
     pub canonical_version: EcuVersionInfo,
     #[serde(default)]
     pub all_chassis_supported: Vec<String>,
@@ -80,6 +88,12 @@ pub struct EcuSearchResult {
     pub func_id: Option<String>,
     pub dtc_count: usize,
     pub chassis: Vec<String>,
+    #[serde(default)]
+    pub security_level: Option<String>,
+    #[serde(default)]
+    pub routines_count: usize,
+    #[serde(default)]
+    pub coding_dids_count: usize,
     #[serde(default)]
     pub date: String,
     #[serde(default)]
@@ -204,6 +218,9 @@ impl EcuCatalog {
                         func_id: info.func_id.clone(),
                         dtc_count: info.dtc_count,
                         chassis: info.chassis.clone(),
+                        security_level: info.security_level.clone(),
+                        routines_count: info.routines_count,
+                        coding_dids_count: info.coding_dids_count,
                         date: info.canonical_version.date.clone(),
                         total_copies: info.total_copies_in_cbf,
                         distinct_versions: info.distinct_versions_count,

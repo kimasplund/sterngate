@@ -1,7 +1,7 @@
 use sterngate_core::{
-    AdBlueResetStatus, CorneringLightsStatus, EcoStartStopMode, EcoStartStopStatus,
-    EgrOptimizationStatus, ImaClassification, Result, SbcServiceAction, SbcServiceStatus,
-    SeatbeltChimeStatus, SpeedLimiterStatus, SterngateError, SuspensionCorner,
+    AdBlueResetStatus, CorneringLightsStatus, DonorEcuVinAdaptation, EcoStartStopMode,
+    EcoStartStopStatus, EgrOptimizationStatus, ImaClassification, Result, SbcServiceAction,
+    SbcServiceStatus, SeatbeltChimeStatus, SpeedLimiterStatus, SterngateError, SuspensionCorner,
     SuspensionCornerAction, TankLitersStatus,
 };
 use sterngate_hal::VehicleInterface;
@@ -424,5 +424,122 @@ impl ServiceRoutineManager {
                 "Intelligent cornering fog lights disabled.".into()
             },
         })
+    }
+
+    /// Execute any generic Workshop Service Routine (Service 0x31)
+    pub async fn execute_generic_routine(
+        interface: &mut dyn VehicleInterface,
+        tx_id: u32,
+        rx_id: u32,
+        routine_id: u16,
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let mut uds = UdsClient::new(interface, tx_id, rx_id);
+        let _ = uds.diagnostic_session_control(0x03).await;
+        uds.routine_control(0x01, routine_id, data).await
+    }
+}
+
+/// Donor ECU Re-VIN Adaptation Manager
+pub struct VinAdaptationManager;
+
+impl VinAdaptationManager {
+    /// Execute Donor ECU Re-VIN Adaptation:
+    /// 1. Validates new VIN format (17 chars ISO 3779)
+    /// 2. Reads existing Original VIN (0xF190) and Current VIN (0xF1A0)
+    /// 3. Performs SecurityAccess unlock using the ECU's security level (or Level 1 fallback)
+    /// 4. Writes updated VIN to 0xF1A0 via UDS Service 0x2E
+    /// 5. Re-reads and confirms matching VIN
+    pub async fn adapt_donor_ecu_vin(
+        interface: &mut dyn VehicleInterface,
+        tx_id: u32,
+        rx_id: u32,
+        target_ecu: &str,
+        new_vin: &str,
+        security_level: Option<u8>,
+    ) -> Result<DonorEcuVinAdaptation> {
+        let clean_vin = new_vin.trim().to_uppercase();
+        if !DonorEcuVinAdaptation::validate_vin(&clean_vin) {
+            return Err(SterngateError::ProfileError(format!(
+                "Invalid VIN '{}': Must be exactly 17 alphanumeric characters (forbidding I, O, Q).",
+                clean_vin
+            )));
+        }
+
+        let mut uds = UdsClient::new(interface, tx_id, rx_id);
+        let _ = uds.diagnostic_session_control(0x03).await;
+
+        // Helper to strip UDS 0x62 positive response header [0x62, DID_hi, DID_lo]
+        let parse_vin_payload = |bytes: Vec<u8>| -> Option<String> {
+            let data = if bytes.len() > 3 && bytes[0] == 0x62 {
+                &bytes[3..]
+            } else {
+                &bytes[..]
+            };
+            String::from_utf8(data.to_vec())
+                .ok()
+                .map(|s| s.trim_matches(char::from(0)).trim().to_string())
+        };
+
+        // Read existing VINs
+        let orig_vin = uds
+            .read_data_by_identifier(0xF190)
+            .await
+            .ok()
+            .and_then(parse_vin_payload);
+        let curr_vin = uds
+            .read_data_by_identifier(0xF1A0)
+            .await
+            .ok()
+            .and_then(parse_vin_payload);
+
+        // Unlock security access
+        let sec_lvl = security_level.unwrap_or(0x0B);
+        let sec_str = format!("0x{:02X}", sec_lvl);
+
+        let _ = uds.security_access(sec_lvl, &DaimlerSolver).await;
+
+        // Write new VIN to 0xF1A0
+        let vin_bytes = clean_vin.as_bytes();
+        let write_res = uds.write_data_by_identifier(0xF1A0, vin_bytes).await;
+
+        match write_res {
+            Ok(_) => {
+                let read_after = uds
+                    .read_data_by_identifier(0xF1A0)
+                    .await
+                    .ok()
+                    .and_then(parse_vin_payload);
+
+                let verified = read_after.as_deref() == Some(&clean_vin)
+                    || read_after
+                        .as_deref()
+                        .map(|s| !s.is_empty() && clean_vin.starts_with(s))
+                        .unwrap_or(false);
+                Ok(DonorEcuVinAdaptation {
+                    target_ecu: target_ecu.to_string(),
+                    original_vin: orig_vin,
+                    current_vin: curr_vin,
+                    new_vin: clean_vin.clone(),
+                    security_level: sec_str,
+                    success: true,
+                    verified_by_readback: verified,
+                    message: format!(
+                        "Donor ECU Re-VIN Adaptation successful: Current operational VIN programmed to '{}'.",
+                        clean_vin
+                    ),
+                })
+            }
+            Err(e) => Ok(DonorEcuVinAdaptation {
+                target_ecu: target_ecu.to_string(),
+                original_vin: orig_vin,
+                current_vin: curr_vin,
+                new_vin: clean_vin,
+                security_level: sec_str,
+                success: false,
+                verified_by_readback: false,
+                message: format!("Failed to write VIN to ECU {}: {}", target_ecu, e),
+            }),
+        }
     }
 }

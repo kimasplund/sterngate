@@ -1,4 +1,8 @@
+use crate::error::{Result, SterngateError};
+use crate::i18n::Language;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 /// SBC (Sensotronic Brake Control) Service Mode Action
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -246,4 +250,311 @@ pub struct CorneringLightsStatus {
     pub module: String,
     pub did: u16,
     pub message: String,
+}
+
+/// Factory Workshop Service Routine Definition (0x31 RoutineControl)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkshopRoutineDefinition {
+    pub routine_id: String,
+    pub name_en: String,
+    pub name_de: String,
+    pub name_sv: String,
+    pub category: String,
+    pub raw_request_prefix: String,
+    #[serde(default)]
+    pub ecus: Vec<String>,
+}
+
+impl WorkshopRoutineDefinition {
+    /// Return the localized routine name
+    pub fn localized_name(&self, lang: Language) -> &str {
+        match lang {
+            Language::En => &self.name_en,
+            Language::De => &self.name_de,
+            Language::Sv => &self.name_sv,
+        }
+    }
+}
+
+/// Metadata header for Workshop Routine Catalog
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RoutineCatalogMetadata {
+    pub title: String,
+    pub total_routines: usize,
+    pub version: String,
+}
+
+/// Comprehensive Mercedes-Benz Factory Workshop Service Routine Catalog
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkshopRoutineCatalog {
+    pub metadata: RoutineCatalogMetadata,
+    pub routines: BTreeMap<String, WorkshopRoutineDefinition>,
+}
+
+impl WorkshopRoutineCatalog {
+    /// Load catalog from a specific file path
+    pub fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path_ref = path.as_ref();
+        let content = std::fs::read_to_string(path_ref).map_err(|e| {
+            SterngateError::ProfileError(format!(
+                "Failed to read Workshop Routine catalog at {}: {}",
+                path_ref.display(),
+                e
+            ))
+        })?;
+        serde_json::from_str(&content).map_err(|e| {
+            SterngateError::ProfileError(format!(
+                "Failed to parse Workshop Routine catalog JSON: {}",
+                e
+            ))
+        })
+    }
+
+    /// Load catalog using standard lookup heuristics
+    pub fn load_default() -> Result<Self> {
+        if let Ok(env_path) = std::env::var("STERNGATE_ROUTINE_CATALOG") {
+            let p = PathBuf::from(env_path);
+            if p.exists() {
+                return Self::load_from_path(p);
+            }
+        }
+        let candidates = [
+            Path::new("data/routine_catalog_mb.json"),
+            Path::new("../../data/routine_catalog_mb.json"),
+            Path::new("../data/routine_catalog_mb.json"),
+        ];
+
+        for &candidate in &candidates {
+            if candidate.exists() {
+                return Self::load_from_path(candidate);
+            }
+        }
+        // Fallback embedded compile-time catalog
+        const FALLBACK_ROUTINES: &str = include_str!("../../../data/routine_catalog_mb.json");
+        serde_json::from_str(FALLBACK_ROUTINES).map_err(|e| {
+            SterngateError::ProfileError(format!("Failed to parse embedded routine catalog: {}", e))
+        })
+    }
+
+    /// Find routine by ID (e.g. "0xFF01", "0xff01", or "FF01")
+    pub fn get_routine(&self, routine_id: &str) -> Option<&WorkshopRoutineDefinition> {
+        let trimmed = routine_id.trim();
+        let stripped = trimmed
+            .strip_prefix("0x")
+            .or_else(|| trimmed.strip_prefix("0X"))
+            .unwrap_or(trimmed);
+        let clean_id = format!("0x{}", stripped.to_uppercase());
+        self.routines.get(&clean_id)
+    }
+
+    /// Search routines by query and optional ECU filter
+    pub fn search(
+        &self,
+        query: &str,
+        ecu_filter: Option<&str>,
+        limit: usize,
+    ) -> Vec<WorkshopRoutineDefinition> {
+        let q = query.trim().to_uppercase();
+        let ecu_q = ecu_filter.map(|e| e.trim().to_uppercase());
+
+        let mut matches: Vec<WorkshopRoutineDefinition> = self
+            .routines
+            .values()
+            .filter(|r| {
+                let matches_ecu = match &ecu_q {
+                    Some(target_ecu) if !target_ecu.is_empty() => {
+                        r.ecus.iter().any(|e| e.to_uppercase().contains(target_ecu))
+                    }
+                    _ => true,
+                };
+                if !matches_ecu {
+                    return false;
+                }
+
+                if q.is_empty() {
+                    return true;
+                }
+
+                r.routine_id.to_uppercase().contains(&q)
+                    || r.name_en.to_uppercase().contains(&q)
+                    || r.name_de.to_uppercase().contains(&q)
+                    || r.name_sv.to_uppercase().contains(&q)
+                    || r.category.to_uppercase().contains(&q)
+            })
+            .cloned()
+            .collect();
+
+        // Sort: exact routine ID first, then by number of applicable ECUs descending
+        matches.sort_by(|a, b| {
+            let a_exact = a.routine_id == q;
+            let b_exact = b.routine_id == q;
+            if a_exact != b_exact {
+                return b_exact.cmp(&a_exact);
+            }
+            b.ecus.len().cmp(&a.ecus.len())
+        });
+
+        if limit > 0 && matches.len() > limit {
+            matches.truncate(limit);
+        }
+        matches
+    }
+}
+
+/// Factory Variant Coding DID Definition (0x2E WriteDataByIdentifier)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VariantCodingDefinition {
+    pub did: String,
+    pub name: String,
+    pub length_bytes: usize,
+    pub is_vin_parameter: bool,
+    pub is_fingerprint: bool,
+    #[serde(default)]
+    pub ecus: Vec<String>,
+}
+
+/// Metadata header for Variant Coding Catalog
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CodingCatalogMetadata {
+    pub title: String,
+    pub total_dids: usize,
+    pub version: String,
+}
+
+/// Comprehensive Mercedes-Benz Factory Variant Coding DID Catalog
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VariantCodingCatalog {
+    pub metadata: CodingCatalogMetadata,
+    pub coding_dids: BTreeMap<String, VariantCodingDefinition>,
+}
+
+impl VariantCodingCatalog {
+    /// Load catalog from a specific file path
+    pub fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path_ref = path.as_ref();
+        let content = std::fs::read_to_string(path_ref).map_err(|e| {
+            SterngateError::ProfileError(format!(
+                "Failed to read Variant Coding catalog at {}: {}",
+                path_ref.display(),
+                e
+            ))
+        })?;
+        serde_json::from_str(&content).map_err(|e| {
+            SterngateError::ProfileError(format!(
+                "Failed to parse Variant Coding catalog JSON: {}",
+                e
+            ))
+        })
+    }
+
+    /// Load catalog using standard lookup heuristics
+    pub fn load_default() -> Result<Self> {
+        if let Ok(env_path) = std::env::var("STERNGATE_CODING_CATALOG") {
+            let p = PathBuf::from(env_path);
+            if p.exists() {
+                return Self::load_from_path(p);
+            }
+        }
+        let candidates = [
+            Path::new("data/coding_catalog_mb.json"),
+            Path::new("../../data/coding_catalog_mb.json"),
+            Path::new("../data/coding_catalog_mb.json"),
+        ];
+
+        for &candidate in &candidates {
+            if candidate.exists() {
+                return Self::load_from_path(candidate);
+            }
+        }
+        const FALLBACK_CODING: &str = include_str!("../../../data/coding_catalog_mb.json");
+        serde_json::from_str(FALLBACK_CODING).map_err(|e| {
+            SterngateError::ProfileError(format!("Failed to parse embedded coding catalog: {}", e))
+        })
+    }
+
+    /// Find coding DID (e.g. "0xF190", "0xf190", or "F190")
+    pub fn get_did(&self, did: &str) -> Option<&VariantCodingDefinition> {
+        let trimmed = did.trim();
+        let stripped = trimmed
+            .strip_prefix("0x")
+            .or_else(|| trimmed.strip_prefix("0X"))
+            .unwrap_or(trimmed);
+        let clean_did = format!("0x{}", stripped.to_uppercase());
+        self.coding_dids.get(&clean_did)
+    }
+
+    /// Search coding DIDs by query and optional ECU filter
+    pub fn search(
+        &self,
+        query: &str,
+        ecu_filter: Option<&str>,
+        limit: usize,
+    ) -> Vec<VariantCodingDefinition> {
+        let q = query.trim().to_uppercase();
+        let ecu_q = ecu_filter.map(|e| e.trim().to_uppercase());
+
+        let mut matches: Vec<VariantCodingDefinition> = self
+            .coding_dids
+            .values()
+            .filter(|c| {
+                let matches_ecu = match &ecu_q {
+                    Some(target_ecu) if !target_ecu.is_empty() => {
+                        c.ecus.iter().any(|e| e.to_uppercase().contains(target_ecu))
+                    }
+                    _ => true,
+                };
+                if !matches_ecu {
+                    return false;
+                }
+
+                if q.is_empty() {
+                    return true;
+                }
+
+                c.did.to_uppercase().contains(&q) || c.name.to_uppercase().contains(&q)
+            })
+            .cloned()
+            .collect();
+
+        matches.sort_by(|a, b| {
+            let a_exact = a.did == q;
+            let b_exact = b.did == q;
+            if a_exact != b_exact {
+                return b_exact.cmp(&a_exact);
+            }
+            b.ecus.len().cmp(&a.ecus.len())
+        });
+
+        if limit > 0 && matches.len() > limit {
+            matches.truncate(limit);
+        }
+        matches
+    }
+}
+
+/// Donor ECU Re-VIN Adaptation Status and Result
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DonorEcuVinAdaptation {
+    pub target_ecu: String,
+    pub original_vin: Option<String>,
+    pub current_vin: Option<String>,
+    pub new_vin: String,
+    pub security_level: String,
+    pub success: bool,
+    pub verified_by_readback: bool,
+    pub message: String,
+}
+
+impl DonorEcuVinAdaptation {
+    /// Validate 17-character ISO 3779 VIN format
+    pub fn validate_vin(vin: &str) -> bool {
+        let v = vin.trim().to_uppercase();
+        if v.len() != 17 {
+            return false;
+        }
+        // ISO 3779 forbids letters I, O, Q to avoid confusion with numerals 1, 0
+        v.chars().all(|c| {
+            (c.is_ascii_uppercase() && c != 'I' && c != 'O' && c != 'Q') || c.is_ascii_digit()
+        })
+    }
 }

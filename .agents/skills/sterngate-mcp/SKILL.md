@@ -79,6 +79,10 @@ Or when running the compiled release binary:
 | `sterngate_generate_stage_tune` | `rom_path` (opt), `rom_base64` (opt), `stage` (1 or 2), `chassis`, `ecu_name` | Creates Stage 1 (+18% torque) or Stage 2 (+25% torque + deletes) .sgmod tuning package. |
 | `sterngate_kill_dtc` | `rom_path` (opt), `rom_base64` (opt), `p_codes`, `chassis`, `ecu_name` | Generates standalone DTC suppression .sgmod zeroing error enable switches in ROM. |
 | `sterngate_solve_checksum` | `rom_path` (opt), `rom_base64` (opt), `fix` (opt), `output_path` (opt) | Verifies and optionally recalculates Bosch MPC5xx partitioned 32-bit block checksums. |
+| `sterngate_search_workshop_routines` | `query` (opt), `ecu` (opt), `limit` (opt) | Searches 1,523+ OEM workshop actuator and diagnostic service routines (0x31) by keyword, ID, German/English description, or ECU. |
+| `sterngate_execute_service_routine` | `routine_id`, `ecu` (opt), `data_hex` (opt), `tx_id` (opt), `rx_id` (opt) | Executes generic factory workshop service routine (0x31) on target ECU with optional payload bytes. |
+| `sterngate_search_variant_coding_dids` | `query` (opt), `ecu` (opt), `limit` (opt) | Searches 3,155+ factory variant coding parameters and Data Identifiers (0x2E) across 367 ECUs. |
+| `sterngate_adapt_donor_ecu_vin` | `ecu`, `new_vin`, `security_level` (opt), `tx_id` (opt), `rx_id` (opt) | Executes donor replacement ECU Re-VIN adaptation with SecurityAccess unlock, 0x2E programming, readback verification, and Git garage tracking. |
 
 ---
 

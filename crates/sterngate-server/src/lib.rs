@@ -630,7 +630,7 @@ mod tests {
             .uri("/api/v1/diag/report.html?lang=en")
             .body(Body::empty())
             .unwrap();
-        let resp = create_router(state).oneshot(req).await.unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
             resp.headers().get("content-type").unwrap(),
@@ -642,6 +642,67 @@ mod tests {
         let html_str = String::from_utf8_lossy(&body_bytes);
         assert!(html_str.contains("<!DOCTYPE html>"));
         assert!(html_str.contains("Sterngate"));
+
+        // 8. GET /api/v1/service/routines
+        let req = Request::builder()
+            .uri("/api/v1/service/routines?q=steering")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let r_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(r_res["total"].as_u64().unwrap() > 0);
+
+        // 9. POST /api/v1/service/routines/execute
+        let exec_payload = json!({
+            "routine_id": "0x0305",
+            "tx_id": 2016,
+            "rx_id": 2024
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/service/routines/execute")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&exec_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 10. GET /api/v1/coding/dids
+        let req = Request::builder()
+            .uri("/api/v1/coding/dids?q=vin")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let c_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(c_res["total"].as_u64().unwrap() > 0);
+
+        // 11. POST /api/v1/coding/revin
+        let revin_payload = json!({
+            "target_ecu": "CR4",
+            "new_vin": "WDB2112061A999888"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/coding/revin")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&revin_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let revin_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(revin_res["success"].as_bool().unwrap());
+        assert_eq!(revin_res["new_vin"].as_str().unwrap(), "WDB2112061A999888");
     }
 
     #[tokio::test]

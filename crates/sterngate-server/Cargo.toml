@@ -26,3 +26,4 @@ futures-util = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 base64 = { workspace = true }
+hex = { workspace = true }
