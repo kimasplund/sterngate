@@ -23,7 +23,6 @@ pub fn router() -> Router<Arc<AppState>> {
 
 #[derive(Debug, Deserialize)]
 pub struct RomSourcePayload {
-    pub rom_path: Option<String>,
     pub rom_base64: Option<String>,
     pub rom_hex: Option<String>,
 }
@@ -31,17 +30,10 @@ pub struct RomSourcePayload {
 fn load_rom_bytes(
     payload: &RomSourcePayload,
 ) -> std::result::Result<Vec<u8>, (StatusCode, Json<serde_json::Value>)> {
-    if let Some(ref path) = payload.rom_path {
-        std::fs::read(path).map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "success": false,
-                    "error": format!("Failed to read ROM file from '{}': {}", path, e),
-                })),
-            )
-        })
-    } else if let Some(ref b64) = payload.rom_base64 {
+    // Deliberately no filesystem path input: these routes are reachable by any
+    // client on the network, so a caller-supplied path would be an arbitrary
+    // file read. ROMs must arrive in the request body.
+    if let Some(ref b64) = payload.rom_base64 {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD
             .decode(b64.trim())
@@ -69,7 +61,7 @@ fn load_rom_bytes(
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
                 "success": false,
-                "error": "No ROM provided. Please specify 'rom_path', 'rom_base64', or 'rom_hex'.",
+                "error": "No ROM provided. Please specify 'rom_base64' or 'rom_hex'.",
             })),
         ))
     }
@@ -77,14 +69,12 @@ fn load_rom_bytes(
 
 #[derive(Debug, Deserialize)]
 pub struct TuningScanPayload {
-    pub rom_path: Option<String>,
     pub rom_base64: Option<String>,
     pub rom_hex: Option<String>,
 }
 
 async fn tuning_scan_rom(Json(payload): Json<TuningScanPayload>) -> impl IntoResponse {
     let rom = match load_rom_bytes(&RomSourcePayload {
-        rom_path: payload.rom_path,
         rom_base64: payload.rom_base64,
         rom_hex: payload.rom_hex,
     }) {
@@ -112,7 +102,6 @@ async fn tuning_scan_rom(Json(payload): Json<TuningScanPayload>) -> impl IntoRes
 
 #[derive(Debug, Deserialize)]
 pub struct TuningStagePayload {
-    pub rom_path: Option<String>,
     pub rom_base64: Option<String>,
     pub rom_hex: Option<String>,
     pub chassis: Option<String>,
@@ -122,7 +111,6 @@ pub struct TuningStagePayload {
 
 async fn tuning_stage1(Json(payload): Json<TuningStagePayload>) -> impl IntoResponse {
     let rom = match load_rom_bytes(&RomSourcePayload {
-        rom_path: payload.rom_path,
         rom_base64: payload.rom_base64,
         rom_hex: payload.rom_hex,
     }) {
@@ -164,7 +152,6 @@ async fn tuning_stage1(Json(payload): Json<TuningStagePayload>) -> impl IntoResp
 
 async fn tuning_stage2(Json(payload): Json<TuningStagePayload>) -> impl IntoResponse {
     let rom = match load_rom_bytes(&RomSourcePayload {
-        rom_path: payload.rom_path,
         rom_base64: payload.rom_base64,
         rom_hex: payload.rom_hex,
     }) {
@@ -206,7 +193,6 @@ async fn tuning_stage2(Json(payload): Json<TuningStagePayload>) -> impl IntoResp
 
 #[derive(Debug, Deserialize)]
 pub struct TuningDtcKillPayload {
-    pub rom_path: Option<String>,
     pub rom_base64: Option<String>,
     pub rom_hex: Option<String>,
     pub chassis: Option<String>,
@@ -217,7 +203,6 @@ pub struct TuningDtcKillPayload {
 
 async fn tuning_dtc_kill(Json(payload): Json<TuningDtcKillPayload>) -> impl IntoResponse {
     let rom = match load_rom_bytes(&RomSourcePayload {
-        rom_path: payload.rom_path,
         rom_base64: payload.rom_base64,
         rom_hex: payload.rom_hex,
     }) {
@@ -256,15 +241,12 @@ async fn tuning_dtc_kill(Json(payload): Json<TuningDtcKillPayload>) -> impl Into
 
 #[derive(Debug, Deserialize)]
 pub struct TuningChecksumPayload {
-    pub rom_path: Option<String>,
     pub rom_base64: Option<String>,
     pub rom_hex: Option<String>,
-    pub output_path: Option<String>,
 }
 
 async fn tuning_checksum_verify(Json(payload): Json<TuningChecksumPayload>) -> impl IntoResponse {
     let rom = match load_rom_bytes(&RomSourcePayload {
-        rom_path: payload.rom_path,
         rom_base64: payload.rom_base64,
         rom_hex: payload.rom_hex,
     }) {
@@ -285,7 +267,6 @@ async fn tuning_checksum_verify(Json(payload): Json<TuningChecksumPayload>) -> i
 
 async fn tuning_checksum_fix(Json(payload): Json<TuningChecksumPayload>) -> impl IntoResponse {
     let mut rom = match load_rom_bytes(&RomSourcePayload {
-        rom_path: payload.rom_path.clone(),
         rom_base64: payload.rom_base64,
         rom_hex: payload.rom_hex,
     }) {
@@ -295,38 +276,16 @@ async fn tuning_checksum_fix(Json(payload): Json<TuningChecksumPayload>) -> impl
 
     match BoschChecksumSolver::recalculate_and_apply(&mut rom) {
         Ok(report) => {
-            let mut saved_to = None;
-            let target_path = payload.output_path.or(payload.rom_path);
-            if let Some(ref path) = target_path {
-                if let Err(e) = std::fs::write(path, &rom) {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({
-                            "success": false,
-                            "error": format!(
-                                "Calculated checksums successfully but failed writing to '{}': {}",
-                                path, e
-                            ),
-                        })),
-                    )
-                        .into_response();
-                }
-                saved_to = Some(path.clone());
-            }
-
+            // The corrected ROM is returned to the caller rather than written
+            // to a caller-supplied path, which was an arbitrary file write.
             use base64::Engine;
-            let fixed_b64 = if saved_to.is_none() {
-                Some(base64::engine::general_purpose::STANDARD.encode(&rom))
-            } else {
-                None
-            };
+            let fixed_b64 = base64::engine::general_purpose::STANDARD.encode(&rom);
 
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
                     "success": true,
                     "report": report,
-                    "saved_to": saved_to,
                     "fixed_base64": fixed_b64,
                 })),
             )
