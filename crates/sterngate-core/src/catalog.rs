@@ -152,20 +152,10 @@ impl EcuCatalog {
                 return Self::load_from_path(p);
             }
         }
-        if let Ok(env_path) = std::env::var("STERNGATE_CBF_CATALOG") {
-            let p = PathBuf::from(env_path);
-            if p.exists() {
-                return Self::load_from_path(p);
-            }
-        }
-
         let candidates = [
             Path::new("data/ecu_catalog.json"),
             Path::new("../../data/ecu_catalog.json"),
             Path::new("../data/ecu_catalog.json"),
-            Path::new("data/cbf_catalog.json"),
-            Path::new("../../data/cbf_catalog.json"),
-            Path::new("../data/cbf_catalog.json"),
         ];
 
         for &candidate in &candidates {

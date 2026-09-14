@@ -130,11 +130,6 @@ enum Commands {
         #[command(subcommand)]
         action: EcuCommands,
     },
-    /// Daimler CBF database inspection and deduplicated catalog (alias to 'ecu')
-    Cbf {
-        #[command(subcommand)]
-        action: EcuCommands,
-    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1667,7 +1662,7 @@ async fn main() -> Result<()> {
                     return Ok(());
                 }
             },
-            Commands::Ecu { action } | Commands::Cbf { action } => {
+            Commands::Ecu { action } => {
                 let catalog = match EcuCatalog::load_default() {
                     Ok(c) => c,
                     Err(e) => {
