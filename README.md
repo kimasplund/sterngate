@@ -6,6 +6,14 @@
 
 **Sterngate** is a high-performance, modular automotive diagnostic, live telemetry, variant coding, and safe ECU flashing platform written in modern Rust. It replaces legacy, proprietary OEM diagnostic tooling (such as Mercedes Vediamo and Star / Xentry) with an open-source, cross-platform architecture that eliminates Windows XP virtual machines, license dongles, and fragile COM port setups.
 
+> [!CAUTION]
+> ### LEGAL DISCLAIMER & ASSUMPTION OF RISK
+> **STERNGATE COMMUNICATES DIRECTLY WITH SAFETY-CRITICAL AUTOMOTIVE CONTROLLERS (ENGINE ECUs, TRANSMISSIONS, SENSOTRONIC BRAKE CONTROL / SBC, SUSPENSION HYDRAULICS, AND VEHICLE GATEWAYS).**
+>
+> **YOU USE THIS SOFTWARE ENTIRELY AT YOUR OWN RISK.** The authors, copyright holders, and contributors accept **ABSOLUTELY NO LIABILITY** for damaged, corrupted, or bricked ECUs, immobilized vehicles, mechanical failures, personal injury, traffic accidents, towing fees, dealer recovery expenses, or financial damages arising from the use or misuse of this software.
+>
+> Modifying vehicle firmware, variant coding, or triggering high-pressure workshop service routines carries inherent risks. Always use a commercial voltage-regulated power supply ($\ge 12.5\text{ V}$, $\ge 25\text{ A}$). By downloading, compiling, or executing this software, you agree to all terms in [DISCLAIMER.md](DISCLAIMER.md).
+
 ---
 
 ## Key Capabilities
@@ -14,6 +22,7 @@
 - **Active Hardware Safety Guards**: Software-controlled kill-switches and pressure limiters:
   * **ENR / AIRMATIC Compressor Guard**: Autonomous thermal watchdog with 40s continuous run cutoff, 180s cooldown, and Routine `0x0210` safe mode relay disconnect.
   * **ABC Hydraulic Surge Limiter**: Routine `0x0220` pressure dump (reduce 200 bar to 120 bar safe fallback) and Routine `0x0221` strut isolation valve lock to prevent line explosion over hot exhaust.
+- **Native Linux Tactrix OpenPort 2.0 Driver**: Reverse-engineered direct USB bulk protocol via `rusb` (`--openport`). Eliminates abandoned 32-bit Windows drivers and Wine. **100% Clone Safe**—strips out vendor phone-home and anti-clone flash erase commands that brick Chinese clones on Windows. Includes direct OBD-II Pin 16 ADC hardware voltage monitoring to enforce the $\ge 12.5\text{ V}$ flashing interlock.
 - **Vehicle Garage & Per-Car Git Configuration Tracking**: Automatically identifies and decodes VINs (e.g. S211 Estate OM646), creates an isolated Git repository under `data/vehicles/<VIN>/`, and commits every diagnostic scan, live vital snapshot, and variant coding session with full history and rollback capability.
 - **In-Flight Drive Benchmarking & A/B Comparative Analysis**: High-frequency drive telemetry sampling (consumption, boost, rail pressure, coolant, TCC lockup slip) with mathematical diesel consumption modeling and A/B comparison to verify if tuning, adaptations, or hardware changes were beneficial.
 - **21st-Century Compact 990-ECU Catalog**: Compact JSON routing index (1,001 lines, 170 KB) mapping CAN Tx/Rx IDs, protocols (UDS/KWP2000), functional IDs, DTC counts, and multi-chassis platforms without legacy binary file bloat.
@@ -23,7 +32,7 @@
 - **Decoupled Safe Flashing**: Atomic local file staging, strict pre-flight safety gates (voltage $\ge 12.5\text{ V}$, SHA256 & Bosch CRC32 verification, HW/SW calibration match), and a detached Tokio worker immune to browser closes or network drops.
 - **P2P Remote Operations (Iroh)**: Integrated peer-to-peer QUIC tunneling allows an end customer to plug the device into their OBD port and share a short Node Ticket with a remote technician anywhere in the world—punching through carrier-grade NATs without port forwarding.
 - **Built-in Model Context Protocol (MCP) Server**: Exposes diagnostic routines, live telemetry snapshots, fault code scanning, 13-cascade checks, safety limiters, and flash safety verification directly to AI agents.
-- **Hardware Abstraction Layer (HAL)**: Native support for Linux SocketCAN (`can0`, CANable, gs_usb, Candlelight, SPI MCP2518FD), SAE J2534 PassThru (Tactrix OpenPort 2.0), and zero-hardware virtual simulation.
+- **Hardware Abstraction Layer (HAL)**: Native support for Linux SocketCAN (`can0`, CANable, gs_usb, Candlelight, SPI MCP2518FD), native Tactrix OpenPort 2.0 (`--openport`), SAE J2534 PassThru, and zero-hardware virtual simulation.
 
 ---
 
@@ -79,14 +88,22 @@ Open [http://localhost:8080](http://localhost:8080) in your web browser to explo
 
 ### 4. Operational Modes
 
-#### A. Local Standalone Mode (In-Car Raspberry Pi / SBC)
+#### A. Local Standalone Mode (In-Car Raspberry Pi / Laptop / SBC)
 ```bash
+# Using native Linux SocketCAN (e.g. CANable, gs_usb, SPI MCP2518FD)
 sterngate --local --can-interface can0 --port 8080
+
+# Using native Linux Tactrix OpenPort 2.0 (USB bulk interface)
+sterngate --local --openport --port 8080
 ```
 
 #### B. Customer Car-Bridge Mode (P2P Listener)
 ```bash
+# Bridging SocketCAN
 sterngate --client --can-interface can0
+
+# Bridging Tactrix OpenPort 2.0
+sterngate --client --openport
 ```
 Prints an encrypted Iroh Node Ticket to share with the remote technician.
 
@@ -283,6 +300,25 @@ sterngate diag scan --export-html report.html --lang en
 
 ---
 
+## Tactrix OpenPort 2.0 Linux Setup (Non-Root USB Access)
+
+Sterngate communicates directly with Tactrix OpenPort 2.0 bulk endpoints on Linux without root/sudo:
+
+```bash
+# 1. Install udev permissions rule
+sudo cp scripts/99-tactrix-openport.rules /etc/udev/rules.d/
+
+# 2. Reload and trigger udev
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# 3. Ensure your user is in the plugdev group
+sudo usermod -aG plugdev $USER
+```
+
+For complete technical documentation on the reverse-engineered AT-command syntax and binary packet structure, see [docs/TACTRIX_PROTOCOL.md](docs/TACTRIX_PROTOCOL.md).
+
+---
+
 ## OBD-II Port Wiring Reference
 
 For Mercedes W211/S211 and most ISO 15765-4 compliant vehicles:
@@ -293,11 +329,13 @@ For Mercedes W211/S211 and most ISO 15765-4 compliant vehicles:
 | **Pin 5** | Signal Ground | Ground (GND) |
 | **Pin 6** | CAN High (CAN-D Diagnostics) | CAN_H (500 kbps) |
 | **Pin 14** | CAN Low (CAN-D Diagnostics) | CAN_L (500 kbps) |
-| **Pin 16** | Battery Power (+12V Continuous) | Power Input / Voltage Sensing |
+| **Pin 16** | Battery Power (+12V Continuous) | Power Input / OpenPort ADC Sensing |
 
 ---
 
-## License
+## Legal Disclaimer & License
 
-Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.
+- **Disclaimer**: Sterngate is distributed strictly on an **"AS IS"** basis, **WITHOUT WARRANTY OF ANY KIND**. By using this software, you agree that you do so **AT YOUR OWN RISK**, and that the authors and contributors bear **ZERO LIABILITY** for bricked ECUs, immobilized vehicles, or mechanical damages. See [DISCLAIMER.md](DISCLAIMER.md) for the complete legal notice.
+- **License**: Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.
+
 

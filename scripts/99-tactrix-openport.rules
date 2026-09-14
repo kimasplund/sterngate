@@ -14,3 +14,4 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cc4c", MODE="0666"
 
 # Tactrix OpenPort 2.0 Bootloader
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="cc4b", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+

@@ -862,6 +862,10 @@ async fn main() -> Result<()> {
                         rom.display(),
                         rom_data.len()
                     );
+                    println!("\n  ⚠️  DISCLAIMER & LIABILITY NOTICE:");
+                    println!("  Modifying ECU firmware is performed strictly at your own risk.");
+                    println!("  The authors and contributors accept ZERO liability for bricked");
+                    println!("  controllers or vehicle immobilization. See DISCLAIMER.md.");
                     println!("\n  This procedure will:");
                     println!("  1. Engage API lockout (HTTP 423) across all diagnostic streams");
                     println!("  2. Request Programming Diagnostic Session (0x10 03)");
@@ -1766,6 +1770,7 @@ async fn main() -> Result<()> {
             info!("  Starting Sterngate in LOCAL STANDALONE mode");
             info!("  Interface: {}", cli.can_interface);
             info!("  Dashboard: http://localhost:{}", cli.port);
+            info!("  Notice: Use at your own risk. See DISCLAIMER.md.");
             info!("============================================================");
 
             let mut iface: Box<dyn VehicleInterface> = if cli.can_interface == "mock" {

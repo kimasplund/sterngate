@@ -112,3 +112,4 @@ sudo udevadm trigger
 # 3. Ensure user is in plugdev group
 sudo usermod -aG plugdev $USER
 ```
+
