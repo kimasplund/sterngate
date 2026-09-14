@@ -938,4 +938,104 @@ mod tests {
         let select_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert!(select_res["success"].as_bool().unwrap());
     }
+
+    #[tokio::test]
+    async fn test_community_mods_endpoints() {
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(sim, profile, flasher));
+
+        // 1. POST /api/v1/mods/create
+        let create_payload = json!({
+            "name": "W211 Top Speed 300",
+            "author": "TunerKim",
+            "description": "Increases speed limiter to 300 km/h",
+            "category": "performance",
+            "risk_level": "moderate",
+            "chassis": ["W211", "S211"],
+            "ecu_name": "EDC16",
+            "tx_id": 2016,
+            "rx_id": 2024,
+            "min_voltage": 12.0,
+            "did": 272, // 0x0110
+            "data_hex": "012C",
+            "action_description": "Set speed governor to 300 km/h"
+        });
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/mods/create")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&create_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let create_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(create_res["success"].as_bool().unwrap());
+        let armored_text = create_res["armored_text"].as_str().unwrap().to_string();
+        assert!(armored_text.contains("BEGIN STERNGATE COMMUNITY MOD"));
+
+        // 2. POST /api/v1/mods/inspect
+        let inspect_payload = json!({
+            "content": armored_text,
+            "vin": "WDB2112061A000001",
+            "battery_voltage": 12.8
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/mods/inspect")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&inspect_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let inspect_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(inspect_res["success"].as_bool().unwrap());
+        assert!(inspect_res["validation"]["is_valid"].as_bool().unwrap());
+        assert!(inspect_res["validation"]["matched_vehicle"]
+            .as_bool()
+            .unwrap());
+
+        // 3. POST /api/v1/mods/apply
+        let apply_payload = json!({
+            "content": armored_text,
+            "vin": "WDB2112061A000001",
+            "battery_voltage": 12.8,
+            "force": false
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/mods/apply")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&apply_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let apply_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(apply_res["success"].as_bool().unwrap());
+        assert_eq!(apply_res["report"]["steps_completed"].as_u64().unwrap(), 1);
+
+        // 4. GET /api/v1/mods/library
+        let req = Request::builder()
+            .uri("/api/v1/mods/library")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
 }

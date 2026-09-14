@@ -241,3 +241,4 @@ Replacing a burned or water-damaged ECU with a junkyard donor unit:
 | **Pin 1 reversed** | Ribbon cable plugged upside down | Disconnect power immediately. Verify red stripe aligns with square pad #1. |
 | **"Start Error" on vehicle cluster after flashing** | Corrupted EEPROM or mismatched IMMO hash | Re-flash original backup `eeprom.bin` via BDM. Never write random EEPROM files. |
 | **ECU draws $> 1.5\text{ A}$ idle current on bench** | Short circuit across BDM pins or internal diode failure | Shut off power supply immediately; check with thermal camera for overheated components. |
+

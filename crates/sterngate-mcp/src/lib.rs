@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 pub mod prompts;
 pub mod resources;
 pub mod server;
@@ -643,5 +645,67 @@ mod tests {
         .await
         .unwrap();
         assert!(vault_res["success"].as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_community_mods_suite() {
+        // 1. Create a community mod via MCP
+        let create_args = json!({
+            "name": "AMG Cluster Logo & Sweep",
+            "author": "BenzTuner_MCP",
+            "description": "Enables AMG logo on instrument cluster and needle sweep on startup",
+            "chassis": "W211",
+            "ecu": "IC_211",
+            "did": "0x01B0",
+            "data": "02",
+            "bitmask": "02",
+            "category": "comfort",
+            "risk_level": "low",
+            "min_voltage": 12.2,
+            "instructions": "Cycle key after programming."
+        });
+
+        let create_res = tools::handle_tool_call("sterngate_create_community_mod", &create_args)
+            .await
+            .unwrap();
+
+        assert!(create_res["success"].as_bool().unwrap());
+        let mod_id = create_res["mod_id"].as_str().unwrap();
+        assert!(mod_id.starts_with("amg_cluster_logo__sweep"));
+        let armor = create_res["armored_text"].as_str().unwrap();
+        assert!(armor.contains("BEGIN STERNGATE COMMUNITY MOD"));
+
+        // 2. Inspect the created mod via MCP
+        let inspect_args = json!({
+            "mod_content": armor,
+            "vin": "WDB2110061A123456",
+            "battery_voltage": 12.6
+        });
+
+        let inspect_res = tools::handle_tool_call("sterngate_inspect_community_mod", &inspect_args)
+            .await
+            .unwrap();
+
+        assert!(inspect_res["success"].as_bool().unwrap());
+        assert!(inspect_res["integrity"]["is_valid"].as_bool().unwrap());
+        assert!(inspect_res["compatibility"]["matched_vehicle"]
+            .as_bool()
+            .unwrap());
+
+        // 3. Apply the mod via MCP
+        let apply_args = json!({
+            "mod_content": armor,
+            "vin": "WDB2110061A123456",
+            "battery_voltage": 12.8,
+            "force": false
+        });
+
+        let apply_res = tools::handle_tool_call("sterngate_apply_community_mod", &apply_args)
+            .await
+            .unwrap();
+
+        assert!(apply_res["success"].as_bool().unwrap());
+        assert_eq!(apply_res["steps_completed"].as_u64().unwrap(), 1);
+        assert!(apply_res["git_commit_sha"].as_str().is_some());
     }
 }

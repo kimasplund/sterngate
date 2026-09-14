@@ -8,6 +8,7 @@ pub mod flash;
 pub mod frame;
 pub mod garage;
 pub mod i18n;
+pub mod modpack;
 pub mod parameter;
 pub mod profile;
 pub mod service;
@@ -36,6 +37,12 @@ pub use flash::{
 pub use frame::CanFrame;
 pub use garage::{DecodedVin, GitCommitInfo, VehicleEcuSnapshot, VehicleGarage, VehicleRecord};
 pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
+pub use modpack::{
+    armor::{decode_from_armor, encode_to_armor, ARMOR_FOOTER, ARMOR_HEADER},
+    fec::{FecStatus, ReedSolomonCodec},
+    ModAction, ModCategory, ModIntegrity, ModMetadata, ModRiskLevel, ModTargetFilter,
+    ModValidationReport, SterngateMod,
+};
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
 pub use service::{

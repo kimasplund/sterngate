@@ -543,6 +543,91 @@
         </div>
         <div id="ima-display-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; margin-bottom: 0.5rem;"></div>
       </div>
+
+      <!-- Community Mods & Tuning Packages (.sgmod) with Reed-Solomon FEC -->
+      <div class="card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span>📦 Community Mods & Tuning Packages (.sgmod)</span>
+          <span class="badge badge-voltage">Reed-Solomon FEC + CRC32</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Self-verifying, fault-correcting community modifications. Verifies vehicle chassis and ECU hardware IDs before executing, detects and auto-repairs up to 8 corrupted bytes in transit via finite-field Reed-Solomon FEC, and creates a pre-mod Git snapshot for 1-click rollback.
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem;">
+          <!-- Section A: Import, Inspect & Apply Mod -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <b style="color: #fff; display: block; margin-bottom: 0.5rem;">📥 Import & Apply Mod</b>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+              Paste ASCII Armored snippet (<code style="color: #58a6ff;">-----BEGIN STERNGATE COMMUNITY MOD-----</code>) or select a <code style="color: #58a6ff;">.sgmod</code> file:
+            </div>
+            <textarea id="mod-import-textarea" rows="6" placeholder="Paste armored mod text or JSON here..." style="width: 100%; font-family: monospace; font-size: 0.75rem; background: #161b22; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.5rem; resize: vertical;"></textarea>
+            
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+              <input type="file" id="mod-file-input" accept=".sgmod,.json,.txt" style="display: none;" onchange="handleModFileSelect(event)">
+              <button class="btn" onclick="document.getElementById('mod-file-input').click()">Browse File...</button>
+              <button class="btn btn-primary" onclick="inspectCommunityMod()">Inspect & Verify FEC</button>
+              <button class="btn" id="btn-apply-mod" style="background: #238636; color: #fff;" onclick="applyCommunityMod()" disabled>Apply to Vehicle</button>
+            </div>
+
+            <!-- Mod Inspection Preview -->
+            <div id="mod-preview-box" style="display: none; background: #161b22; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <b id="mod-preview-title" style="color: #58a6ff;"></b>
+                <span id="mod-fec-badge" class="badge"></span>
+              </div>
+              <div id="mod-preview-meta" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;"></div>
+              <div id="mod-preview-checks" style="font-size: 0.8rem; margin-bottom: 0.5rem;"></div>
+              <div id="mod-preview-actions" style="font-size: 0.75rem; font-family: monospace; max-height: 120px; overflow-y: auto; background: #0d1117; padding: 0.4rem; border-radius: 4px;"></div>
+            </div>
+          </div>
+
+          <!-- Section B: Create & Share Custom Mod -->
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;">
+            <b style="color: #fff; display: block; margin-bottom: 0.5rem;">📤 Create & Share Custom Mod</b>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Package a custom DID coding or tuning parameter into an armored, FEC-protected <code style="color: #58a6ff;">.sgmod</code> package.
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <input id="create-mod-name" type="text" placeholder="Mod Name (e.g. W211 Agility Mode)" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+              <input id="create-mod-author" type="text" placeholder="Author / Handle" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+            </div>
+
+            <textarea id="create-mod-desc" rows="2" placeholder="Description & driving impressions..." style="width: 100%; font-size: 0.8rem; background: #161b22; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0.4rem; margin-bottom: 0.5rem; resize: vertical;"></textarea>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <input id="create-mod-chassis" type="text" placeholder="Chassis (e.g. W211, S211)" value="W211" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+              <input id="create-mod-ecu" type="text" placeholder="ECU (e.g. EDC16)" value="EDC16" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+              <select id="create-mod-category" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+                <option value="performance">Performance</option>
+                <option value="transmission">Transmission</option>
+                <option value="comfort">Comfort</option>
+                <option value="lighting">Lighting</option>
+                <option value="emissions">Emissions</option>
+                <option value="retrofit">Retrofit</option>
+              </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <input id="create-mod-did" type="text" placeholder="DID (e.g. 0110)" value="0110" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+              <input id="create-mod-data" type="text" placeholder="Hex Bytes (e.g. 012C)" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+              <input id="create-mod-mask" type="text" placeholder="Bitmask (optional)" style="background: #161b22; border: 1px solid var(--border); color: var(--text); padding: 0.4rem; border-radius: 6px;">
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;" onclick="generateCommunityMod()">Generate Armored Mod Package</button>
+            <textarea id="create-mod-output" rows="4" readonly placeholder="Generated ASCII Armored mod snippet will appear here..." style="width: 100%; font-family: monospace; font-size: 0.7rem; background: #161b22; border: 1px solid var(--border); color: #7ee787; border-radius: 6px; padding: 0.4rem; resize: vertical; display: none;"></textarea>
+            <div id="create-mod-actions" style="display: none; gap: 0.5rem; margin-top: 0.4rem;">
+              <button class="btn" style="flex: 1;" onclick="copyArmoredModToClipboard()">📋 Copy Armor</button>
+              <button class="btn" style="flex: 1;" onclick="downloadGeneratedModFile()">💾 Download .sgmod</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="community-mods-logs" class="log-box" style="margin-top: 1rem; height: 80px;">
+          [COMMUNITY MODS] Import an armored mod snippet or generate one above.<br>
+        </div>
+      </div>
     </div>
   </div>
 

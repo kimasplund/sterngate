@@ -1928,6 +1928,243 @@ async function pollCascadeStatus() {
   } catch (e) {}
 }
 
+// --- Community Mods & Tuning Packages (.sgmod) ---
+let currentInspectedMod = null;
+
+function logCommunityMod(msg) {
+  const box = document.getElementById('community-mods-logs');
+  if (box) {
+    const time = new Date().toLocaleTimeString();
+    box.innerHTML += `[${time}] ${msg}<br>`;
+    box.scrollTop = box.scrollHeight;
+  }
+}
+
+function handleModFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('mod-import-textarea').value = e.target.result;
+    logCommunityMod(`Loaded file '${file.name}' (${file.size} bytes). Click "Inspect & Verify FEC".`);
+  };
+  reader.readAsText(file);
+}
+
+async function inspectCommunityMod() {
+  const content = document.getElementById('mod-import-textarea').value.trim();
+  if (!content) {
+    alert('Please paste armored mod text or load a .sgmod file first.');
+    return;
+  }
+
+  logCommunityMod('Inspecting mod package and computing Reed-Solomon syndromes...');
+  const previewBox = document.getElementById('mod-preview-box');
+  const applyBtn = document.getElementById('btn-apply-mod');
+  applyBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/v1/mods/inspect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: content,
+        vin: 'WDB2112061A000001',
+        battery_voltage: 12.8
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      logCommunityMod(`❌ Inspection failed: ${data.error || 'Invalid mod package'}`);
+      alert(`Inspection failed: ${data.error || 'Invalid mod package'}`);
+      return;
+    }
+
+    currentInspectedMod = data.mod;
+    const val = data.validation;
+
+    previewBox.style.display = 'block';
+    document.getElementById('mod-preview-title').textContent = `${data.mod.metadata.name} (v${data.mod.metadata.version})`;
+
+    const fecBadge = document.getElementById('mod-fec-badge');
+    if (val.fec_status === 'Intact') {
+      fecBadge.textContent = 'FEC: INTACT (0 ERRORS)';
+      fecBadge.className = 'badge badge-ready';
+    } else if (val.fec_status && val.fec_status.Repaired) {
+      fecBadge.textContent = `FEC: REPAIRED (${val.fec_status.Repaired.corrected_byte_count} BYTES)`;
+      fecBadge.className = 'badge badge-voltage';
+    } else {
+      fecBadge.textContent = 'FEC: UNRECOVERABLE';
+      fecBadge.className = 'badge badge-recording';
+    }
+
+    document.getElementById('mod-preview-meta').innerHTML = `
+      Author: <b>${data.mod.metadata.author}</b> | Category: <b>${data.mod.metadata.category}</b> | Risk: <b>${data.mod.metadata.risk_level}</b><br>
+      ${data.mod.metadata.description}
+    `;
+
+    let checksHtml = '<div style="margin-top: 0.25rem;">';
+    for (const note of val.compatibility_notes || []) {
+      checksHtml += `<div style="color: #3fb950;">${note}</div>`;
+    }
+    for (const warn of val.warning_messages || []) {
+      checksHtml += `<div style="color: #f85149;">⚠️ ${warn}</div>`;
+    }
+    checksHtml += '</div>';
+    document.getElementById('mod-preview-checks').innerHTML = checksHtml;
+
+    let actionsHtml = '<b>Target Actions:</b><br>';
+    for (const act of data.mod.actions || []) {
+      if (act.type === 'write_did') {
+        actionsHtml += `• Write DID 0x${act.did.toString(16).toUpperCase()}: ${act.description} [${act.data.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}]<br>`;
+      } else {
+        actionsHtml += `• Routine 0x${act.routine_id.toString(16).toUpperCase()}: ${act.description}<br>`;
+      }
+    }
+    document.getElementById('mod-preview-actions').innerHTML = actionsHtml;
+
+    if (val.is_valid && val.matched_vehicle) {
+      applyBtn.disabled = false;
+      logCommunityMod(`✓ Mod verified! Reed-Solomon checksum valid. Ready to apply.`);
+    } else {
+      logCommunityMod(`⚠️ Mod inspected with warnings: ${val.warning_messages.join('; ')}`);
+    }
+  } catch (err) {
+    logCommunityMod(`❌ Network error inspecting mod: ${err.message}`);
+  }
+}
+
+async function applyCommunityMod() {
+  const content = document.getElementById('mod-import-textarea').value.trim();
+  if (!content) return;
+
+  if (!confirm(`Apply community mod '${currentInspectedMod ? currentInspectedMod.metadata.name : 'Selected Mod'}' to connected vehicle?\n\nAn atomic snapshot will be recorded to vehicle Git history before writing.`)) {
+    return;
+  }
+
+  logCommunityMod('Connecting to ECU and applying mod with atomic Git backup...');
+  const applyBtn = document.getElementById('btn-apply-mod');
+  applyBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/v1/mods/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: content,
+        vin: 'WDB2112061A000001',
+        battery_voltage: 12.8,
+        force: false
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      logCommunityMod(`❌ Failed to apply mod: ${data.error || 'Vehicle rejected modification'}`);
+      alert(`Failed to apply mod: ${data.error || 'Vehicle rejected modification'}`);
+      applyBtn.disabled = false;
+      return;
+    }
+
+    logCommunityMod(`✓ SUCCESS: ${data.report.message}`);
+    if (data.report.git_commit_sha) {
+      logCommunityMod(`  • Git Garage Commit: ${data.report.git_commit_sha.substring(0, 8)}`);
+    }
+    alert(`Mod Applied Successfully!\n\n${data.report.message}\nGit History Commit: ${data.report.git_commit_sha || 'Recorded'}`);
+  } catch (err) {
+    logCommunityMod(`❌ Error applying mod: ${err.message}`);
+    applyBtn.disabled = false;
+  }
+}
+
+async function generateCommunityMod() {
+  const name = document.getElementById('create-mod-name').value.trim();
+  const author = document.getElementById('create-mod-author').value.trim();
+  const desc = document.getElementById('create-mod-desc').value.trim();
+  const chassisStr = document.getElementById('create-mod-chassis').value.trim();
+  const ecu = document.getElementById('create-mod-ecu').value.trim();
+  const category = document.getElementById('create-mod-category').value;
+  const didStr = document.getElementById('create-mod-did').value.trim();
+  const dataHex = document.getElementById('create-mod-data').value.trim();
+  const maskHex = document.getElementById('create-mod-mask').value.trim();
+
+  if (!name || !author || !didStr || !dataHex) {
+    alert('Please fill in Mod Name, Author, DID, and Data Hex.');
+    return;
+  }
+
+  const did = parseInt(didStr, 16);
+  if (isNaN(did)) {
+    alert('Invalid DID hex (e.g. 0110)');
+    return;
+  }
+
+  logCommunityMod(`Generating Reed-Solomon parity and ASCII armor for '${name}'...`);
+
+  try {
+    const res = await fetch('/api/v1/mods/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        author: author,
+        description: desc,
+        category: category,
+        risk_level: 'moderate',
+        chassis: chassisStr.split(',').map(s => s.trim()).filter(Boolean),
+        ecu_name: ecu,
+        did: did,
+        data_hex: dataHex,
+        bitmask_hex: maskHex || undefined,
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      logCommunityMod(`❌ Mod generation failed: ${data.error || 'Server error'}`);
+      return;
+    }
+
+    const outputArea = document.getElementById('create-mod-output');
+    const actionsDiv = document.getElementById('create-mod-actions');
+    outputArea.style.display = 'block';
+    outputArea.value = data.armored_text;
+    actionsDiv.style.display = 'flex';
+
+    logCommunityMod(`✓ Mod '${name}' generated with RS(255,239) error-correction parity! Ready to share.`);
+  } catch (err) {
+    logCommunityMod(`❌ Error generating mod: ${err.message}`);
+  }
+}
+
+function copyArmoredModToClipboard() {
+  const text = document.getElementById('create-mod-output').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('ASCII Armored mod copied to clipboard! You can paste this directly on forums, chat, or Sterngate.');
+  }).catch(() => {
+    const outputArea = document.getElementById('create-mod-output');
+    outputArea.select();
+    document.execCommand('copy');
+    alert('Copied to clipboard!');
+  });
+}
+
+function downloadGeneratedModFile() {
+  const text = document.getElementById('create-mod-output').value;
+  if (!text) return;
+  const name = (document.getElementById('create-mod-name').value.trim() || 'community_mod')
+    .toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.sgmod`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 // Initial triggers
 document.addEventListener('DOMContentLoaded', () => {
   try {

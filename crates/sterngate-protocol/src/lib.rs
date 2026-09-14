@@ -4,6 +4,7 @@ pub mod gate;
 pub mod importer;
 pub mod isotp;
 pub mod kwp2000;
+pub mod modrunner;
 pub mod scanner;
 pub mod seedkey;
 pub mod service;
@@ -15,6 +16,7 @@ pub use gate::TransactionGate;
 pub use importer::{ImportReport, ProfileImporter};
 pub use isotp::IsoTpChannel;
 pub use kwp2000::KwpClient;
+pub use modrunner::{ModExecutionReport, ModRunner};
 pub use scanner::{ModuleScanResult, VehicleDiagnosticReport, VehicleScanner};
 pub use seedkey::{DaimlerSeedKey, DaimlerSolver, SeedKeySolver};
 pub use service::ServiceRoutineManager;
@@ -435,5 +437,83 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&temp_in);
         let _ = std::fs::remove_dir_all(&temp_out);
+    }
+
+    #[tokio::test]
+    async fn test_mod_runner_execution_and_safety_checks() {
+        use sterngate_core::{
+            ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, SterngateMod,
+        };
+
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+
+        let metadata = ModMetadata {
+            mod_id: "w211-vmax-300".into(),
+            name: "W211 VMax 300 km/h".into(),
+            version: "1.0.0".into(),
+            author: "TunerKim".into(),
+            description: "Raises road speed limiter threshold to 300 km/h".into(),
+            category: ModCategory::Performance,
+            risk_level: ModRiskLevel::Moderate,
+            instructions: Some("Engine off, ignition on".into()),
+            created_at: "2026-09-14T12:00:00Z".into(),
+        };
+
+        let target = ModTargetFilter {
+            chassis: vec!["W211".into(), "S211".into()],
+            ecu_name: "EDC16".into(),
+            tx_id: 0x7E0,
+            rx_id: 0x7E8,
+            compatible_hw_ids: vec![],
+            compatible_sw_ids: vec![],
+            min_battery_voltage: 12.0,
+            requires_engine_off: true,
+        };
+
+        let actions = vec![ModAction::WriteDid {
+            did: 0x0110,
+            data: vec![0x01, 0x2C], // 300 km/h
+            bitmask: None,
+            expected_original_data: None,
+            description: "Set VMax to 300".into(),
+        }];
+
+        let mut modpack = SterngateMod::create(metadata, target, actions, vec![]).unwrap();
+
+        // 1. Inspect compatibility
+        let report = ModRunner::inspect_compatibility(
+            &mut iface,
+            &modpack,
+            Some("WDB2112061A123456"),
+            Some(12.6),
+        )
+        .await
+        .unwrap();
+        assert!(report.is_valid);
+        assert!(report.matched_vehicle);
+
+        // 2. Chassis mismatch rejection
+        let chassis_err =
+            ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2040011A999999", 12.6, false).await;
+        assert!(chassis_err.is_err());
+        assert!(chassis_err
+            .unwrap_err()
+            .to_string()
+            .contains("chassis mismatch"));
+
+        // 3. Low voltage rejection
+        let volt_err =
+            ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2112061A123456", 11.5, false).await;
+        assert!(volt_err.is_err());
+        assert!(volt_err.unwrap_err().to_string().contains("voltage"));
+
+        // 4. Successful execution
+        let exec = ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2112061A123456", 12.6, false)
+            .await
+            .unwrap();
+        assert!(exec.success);
+        assert_eq!(exec.steps_completed, 1);
+        assert!(exec.git_commit_sha.is_some());
     }
 }

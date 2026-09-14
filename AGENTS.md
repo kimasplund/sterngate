@@ -112,6 +112,7 @@ Specialized agent skills are maintained under `.agents/skills/`:
 - **`sterngate-mcp`**: Integration guide for calling Sterngate MCP tools and resources.
 - **`vehicle-profiles`**: Guide for converting CBF/ODX files and defining JSON vehicle profiles.
 - **`safe-flashing`**: Pre-flight checklist, voltage interlocks, and recovery runbooks.
+- **`community-mods`**: Authoring, validation, Reed-Solomon FEC self-healing, and deployment for shareable `.sgmod` packages.
 
 Whenever you add or modify protocols, CLI flags, or profile schemas, you **MUST** update the corresponding skill file.
 
