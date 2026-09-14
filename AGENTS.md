@@ -76,7 +76,7 @@ crates/
    - `ServiceRoutineManager`: Safety-critical workshop service routines (SBC pad mode 0 bar deactivation/reactivation, Common Rail IMA coding, suspension corner actuation).
 
 4. **`sterngate-p2p`**:
-   - Wraps Iroh for P2P QUIC communication between `--client` (car-side SBC) and `--server` (technician machine).
+   - Wraps Iroh for P2P QUIC communication between `--bridge` / `--client` (car-side SBC host) and `--tech` / `--server` (remote technician client).
    - Generates and dials `NodeTicket` strings.
 
 5. **`sterngate-server`**:
@@ -91,8 +91,8 @@ crates/
 7. **`sterngate-cli`**:
    - Clap CLI interface unifying all operational modes:
      * `sterngate --local`: Standalone SBC + local UI.
-     * `sterngate --client`: Customer OBD bridge + Iroh endpoint.
-     * `sterngate --server --ticket <TICKET>`: Remote technician node.
+     * `sterngate --bridge` (alias `--client`, `--car`): In-car diagnostic bridge + Iroh P2P host.
+     * `sterngate --tech --ticket <TICKET>` (alias `--server`, `--ticket`): Remote technician diagnostic client.
      * `sterngate mcp`: Model Context Protocol server.
      * `sterngate mock`: Virtual simulation mode for zero-hardware testing.
      * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities (dtc, live, clear, routine, scan, discover).

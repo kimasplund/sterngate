@@ -50,3 +50,4 @@ If you use Sterngate to perform variant coding, routine actuations, or firmware 
 ## 5. Acceptance of Terms
 
 **IF YOU DO NOT AGREE TO THESE TERMS, DO NOT CONNECT THIS SOFTWARE TO ANY MOTOR VEHICLE OR AUTOMOTIVE CONTROLLER. REMOVE AND DELETE ALL COPIES OF THIS SOFTWARE IMMEDIATELY.**
+

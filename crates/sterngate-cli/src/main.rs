@@ -23,9 +23,11 @@ use sterngate_server::{run_server, AppState};
 enum OperatingMode {
     /// Standalone SBC: Local CAN + Web UI dashboard
     Local,
-    /// Car-side Bridge: CAN + Iroh Endpoint P2P listener (Customer)
+    /// In-Car Diagnostic Bridge & P2P Host: CAN + Iroh Endpoint P2P listener
+    #[value(alias = "bridge", alias = "car", alias = "host")]
     Client,
-    /// Tech Machine: Iroh Dialer + Technician Web UI (Technician)
+    /// Remote Technician Client: Iroh Dialer + Technician Web UI
+    #[value(alias = "tech", alias = "remote")]
     Server,
 }
 
@@ -43,12 +45,12 @@ struct Cli {
     #[arg(long)]
     local: bool,
 
-    /// Car-side customer node shortcut
-    #[arg(long)]
+    /// In-Car Diagnostic Bridge & P2P Host shortcut (generates ticket and listens)
+    #[arg(long, alias = "bridge", alias = "car", alias = "host")]
     client: bool,
 
-    /// Remote technician node shortcut
-    #[arg(long)]
+    /// Remote technician client shortcut (dials car node via --ticket)
+    #[arg(long, alias = "tech", alias = "remote")]
     server: bool,
 
     /// Shortcut to use native Linux Tactrix OpenPort 2.0 interface
@@ -459,7 +461,7 @@ async fn main() -> Result<()> {
         Some(OperatingMode::Local)
     } else if cli.client {
         Some(OperatingMode::Client)
-    } else if cli.server {
+    } else if cli.server || (cli.ticket.is_some() && cli.mode.is_none()) {
         Some(OperatingMode::Server)
     } else {
         cli.mode
@@ -1794,8 +1796,10 @@ async fn main() -> Result<()> {
         }
         OperatingMode::Client => {
             info!("============================================================");
-            info!("  Starting Sterngate in CLIENT mode (Car-Side P2P Bridge)");
+            info!("  Starting Sterngate: Car-Side Diagnostic Bridge (P2P Host)");
+            info!("  Role: On-Vehicle Gateway Bridge & Ticket Host");
             info!("  Interface: {}", cli.can_interface);
+            info!("  Notice: Use at your own risk. See DISCLAIMER.md.");
             info!("============================================================");
 
             let node = P2pNode::new().await?;
@@ -1807,7 +1811,7 @@ async fn main() -> Result<()> {
                 ticket
             );
 
-            info!("Waiting for incoming connection from technician...");
+            info!("Waiting for incoming connection from remote technician client...");
             while let Some(incoming) = node.accept().await {
                 info!("Incoming connection received!");
                 if let Ok(connecting) = incoming.accept() {
@@ -1818,10 +1822,13 @@ async fn main() -> Result<()> {
         OperatingMode::Server => {
             let ticket_str = cli
                 .ticket
-                .context("Server mode requires --ticket <TICKET>")?;
+                .context("Technician mode requires --ticket <TICKET>")?;
             info!("============================================================");
-            info!("  Starting Sterngate in SERVER mode (Remote Technician Node)");
-            info!("  Connecting to remote vehicle node via Iroh QUIC...");
+            info!("  Starting Sterngate: Remote Technician Client (P2P Dialer)");
+            info!("  Role: Remote Technician Console (Tester)");
+            info!("  Connecting to car-side diagnostic bridge via Iroh QUIC...");
+            info!("  Technician Dashboard: http://localhost:{}", cli.port);
+            info!("  Notice: Use at your own risk. See DISCLAIMER.md.");
             info!("============================================================");
 
             let target = P2pNode::parse_ticket(&ticket_str)?;

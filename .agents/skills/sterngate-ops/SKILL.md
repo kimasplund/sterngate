@@ -11,13 +11,13 @@ Use this skill when building, starting, or verifying Sterngate in any of its ope
 
 ## 1. Quick Mode Selection
 
-| Mode | Command | Use Case | Requirements |
-| :--- | :--- | :--- | :--- |
-| **Local** | `sterngate --local` | In-car standalone SBC (Raspberry Pi / laptop) serving Web UI on Wi-Fi | Local CAN adapter (`can0`) |
-| **Client** | `sterngate --client` | Customer car-side node bridging CAN to P2P Iroh tunnel | Local CAN adapter (`can0`) + internet |
-| **Server** | `sterngate --server --ticket <TICKET>` | Remote technician laptop dialing customer node | Internet access |
-| **Mock** | `sterngate mock` | Offline development and CI/CD testing with simulated W211 | None (zero hardware needed) |
-| **MCP** | `sterngate mcp` | Running as a Model Context Protocol tool provider for AI agents | stdio |
+| Mode | Command | Intuitive Alias | Use Case | Requirements |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local** | `sterngate --local` | - | In-car standalone SBC (Raspberry Pi / laptop) serving Web UI on Wi-Fi | Local CAN adapter (`can0` or `--openport`) |
+| **Bridge (Host)** | `sterngate --bridge` | `--car` / `--client` | In-car gateway bridge (P2P Host / DoIP Server) generating ticket and listening | Local CAN adapter + internet |
+| **Tech (Client)** | `sterngate --tech --ticket <TICKET>` | `--ticket <TICKET>` / `--server` | Remote technician workstation (Tester / Dialer) dialing car node | Internet access |
+| **Mock** | `sterngate mock` | - | Offline development and CI/CD testing with simulated W211 | None (zero hardware needed) |
+| **MCP** | `sterngate mcp` | - | Running as a Model Context Protocol tool provider for AI agents | stdio |
 
 ---
 
@@ -56,22 +56,31 @@ This spawns the internal `VirtualCanInterface`, simulating a Mercedes-Benz W211 
 
 ## 4. P2P Remote Diagnostics Flow
 
-### Step A: Car-Side Customer
+### Step A: Car-Side Vehicle Bridge (P2P Host)
 ```bash
-sterngate --client --can-interface can0
+# With SocketCAN adapter
+sterngate --bridge --can-interface can0
+
+# Or with Tactrix OpenPort 2.0
+sterngate --bridge --openport
 ```
 Output:
 ```
 =============================================================
-  Sterngate Car-Side Node Active
-  Node Ticket: node:abc123456...
+  Starting Sterngate: Car-Side Diagnostic Bridge (P2P Host)
+  Role: On-Vehicle Gateway Bridge & Ticket Host
 =============================================================
-Share this ticket with your remote technician.
+>>> SHARE THIS TICKET WITH YOUR REMOTE TECHNICIAN <<<
+node:abc123456...
 ```
 
-### Step B: Remote Technician
+### Step B: Remote Technician Client (P2P Dialer)
 ```bash
-sterngate --server --ticket node:abc123456... --port 3000
+# Explicit tech mode
+sterngate --tech --ticket node:abc123456... --port 3000
+
+# Or simply pass the ticket directly
+sterngate --ticket node:abc123456... --port 3000
 ```
 The technician's browser opens at `http://localhost:3000`, connected over an end-to-end encrypted QUIC tunnel directly to the vehicle.
 

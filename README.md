@@ -97,21 +97,25 @@ sterngate --local --can-interface can0 --port 8080
 sterngate --local --openport --port 8080
 ```
 
-#### B. Customer Car-Bridge Mode (P2P Listener)
+#### B. Car-Side Diagnostic Bridge & P2P Host (`--bridge` / `--car` / `--client`)
 ```bash
-# Bridging SocketCAN
-sterngate --client --can-interface can0
+# Bridging SocketCAN (generates P2P ticket and listens)
+sterngate --bridge --can-interface can0
 
-# Bridging Tactrix OpenPort 2.0
-sterngate --client --openport
+# Bridging native Linux Tactrix OpenPort 2.0
+sterngate --bridge --openport
 ```
 Prints an encrypted Iroh Node Ticket to share with the remote technician.
 
-#### C. Remote Technician Mode (Dialing the Car)
+#### C. Remote Technician Client Mode (`--tech` / `--ticket` / `--server`)
 ```bash
-sterngate --server --ticket <NODE_TICKET> --port 3000
+# Dial the car-side bridge and open local technician dashboard on port 3000
+sterngate --tech --ticket <NODE_TICKET> --port 3000
+
+# Shortcut (passing --ticket automatically activates technician client mode)
+sterngate --ticket <NODE_TICKET> --port 3000
 ```
-Connects over end-to-end encrypted QUIC directly into the car's gateway and serves the diagnostic dashboard on localhost:3000.
+Connects over an end-to-end encrypted QUIC tunnel directly into the car's gateway and serves the diagnostic dashboard on `http://localhost:3000`.
 
 #### D. Model Context Protocol (MCP) Server for AI Agents
 ```bash
