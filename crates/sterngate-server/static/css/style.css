@@ -157,6 +157,18 @@ h1 {
   align-items: center;
 }
 
+/* Section header inside a card (icon + label), used by the Map Studio tab */
+.card-header {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .gauge-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -246,6 +258,16 @@ h1 {
 
 .btn-primary:hover {
   background: #2ea043;
+}
+
+.btn-warning {
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.btn-warning:hover {
+  background: rgba(210, 153, 34, 0.3);
 }
 
 .btn-group {

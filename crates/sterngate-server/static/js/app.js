@@ -8,8 +8,12 @@ let currentSafetyOptions = null;
 
 // --- Tab Navigation ---
 function switchTab(tabId) {
-  const tabs = ['telemetry', 'health', 'workshop', 'coding', 'flashing', 'catalog'];
-  if (!tabs.includes(tabId)) tabId = 'telemetry';
+  // Derived from the nav strip itself: a hardcoded list silently fell back to
+  // telemetry when a new tab (Map Studio & Tuning) was added to index.html.
+  const tabs = Array.from(document.querySelectorAll('.nav-tabs .tab-btn'))
+    .map(btn => btn.getAttribute('data-tab'))
+    .filter(Boolean);
+  if (!tabs.includes(tabId)) tabId = tabs[0] || 'telemetry';
 
   document.querySelectorAll('.nav-tabs .tab-btn').forEach(btn => {
     if (btn.getAttribute('data-tab') === tabId) {
