@@ -13,10 +13,11 @@ use sha2::Digest;
 use std::sync::Arc;
 use sterngate_core::{
     lookup_routine_name, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc,
-    FlashPackageManifest, FlashProgress, Language, SuspensionLeakDetector, SuspensionSample,
-    TelemetrySnapshot, VehicleGarage, VehicleProfile,
+    EcuCatalog, FlashPackageManifest, FlashProgress, Language, SbcServiceAction, SuspensionCorner,
+    SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot,
+    VehicleGarage, VehicleProfile,
 };
-use sterngate_protocol::{UdsClient, VehicleScanner};
+use sterngate_protocol::{BusDiscoverer, ServiceRoutineManager, UdsClient, VehicleScanner};
 
 pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -71,6 +72,12 @@ pub fn create_router(state: Arc<AppState>) -> Router {
             get(get_compressor_status),
         )
         .route("/api/v1/abc/control", post(control_abc))
+        .route("/api/v1/service/sbc", post(service_sbc))
+        .route("/api/v1/service/ima", get(get_service_ima))
+        .route("/api/v1/service/ima", post(post_service_ima))
+        .route("/api/v1/service/suspension", post(service_suspension))
+        .route("/api/v1/diag/discover", post(diag_discover))
+        .route("/api/v1/diag/report.html", get(get_diag_report_html))
         .with_state(state)
 }
 
@@ -945,6 +952,383 @@ async fn control_abc(
                 "success": false,
                 "error": format!("Failed to dispatch ABC routine: {}", e),
             })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SbcServicePayload {
+    action: SbcServiceAction,
+    #[serde(default)]
+    tx_id: Option<u32>,
+    #[serde(default)]
+    rx_id: Option<u32>,
+}
+
+async fn service_sbc(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SbcServicePayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let tx_id = payload.tx_id.unwrap_or(0x7E2);
+    let rx_id = payload.rx_id.unwrap_or(0x7EA);
+
+    let mut iface = state.interface.lock().await;
+    let res = match payload.action {
+        SbcServiceAction::Deactivate => {
+            ServiceRoutineManager::deactivate_sbc(&mut **iface, tx_id, rx_id).await
+        }
+        SbcServiceAction::Reactivate => {
+            ServiceRoutineManager::reactivate_sbc(&mut **iface, tx_id, rx_id).await
+        }
+        SbcServiceAction::Bleed => Err(sterngate_core::SterngateError::ProtocolError(
+            "Guided SBC bleeding sequence must be executed via interactive workshop mode".into(),
+        )),
+    };
+
+    match res {
+        Ok(status) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "status": status,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("SBC service routine failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct ImaQuery {
+    #[serde(default)]
+    ecu_tx: Option<u32>,
+    #[serde(default)]
+    ecu_rx: Option<u32>,
+    #[serde(default)]
+    cylinder_count: Option<u8>,
+    #[serde(default)]
+    cylinder: Option<u8>,
+}
+
+async fn get_service_ima(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ImaQuery>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let ecu_tx = query.ecu_tx.unwrap_or(0x7E0);
+    let ecu_rx = query.ecu_rx.unwrap_or(0x7E8);
+
+    let mut iface = state.interface.lock().await;
+
+    if let Some(cyl) = query.cylinder {
+        match ServiceRoutineManager::read_injector_ima(&mut **iface, ecu_tx, ecu_rx, cyl).await {
+            Ok(code) => (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "success": true,
+                    "injectors": vec![code],
+                })),
+            )
+                .into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Failed to read injector IMA code: {}", e),
+                })),
+            )
+                .into_response(),
+        }
+    } else {
+        let count = query.cylinder_count.unwrap_or(4).clamp(1, 8);
+        let mut results = Vec::new();
+        for cyl in 1..=count {
+            match ServiceRoutineManager::read_injector_ima(&mut **iface, ecu_tx, ecu_rx, cyl).await
+            {
+                Ok(code) => results.push(code),
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "success": false,
+                            "error": format!("Failed to read injector {} IMA: {}", cyl, e),
+                        })),
+                    )
+                        .into_response();
+                }
+            }
+        }
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "injectors": results,
+            })),
+        )
+            .into_response()
+    }
+}
+
+#[derive(Deserialize)]
+struct ImaWritePayload {
+    cylinder: u8,
+    code: String,
+    #[serde(default)]
+    vin: Option<String>,
+    #[serde(default)]
+    ecu_tx: Option<u32>,
+    #[serde(default)]
+    ecu_rx: Option<u32>,
+}
+
+async fn post_service_ima(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ImaWritePayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let ecu_tx = payload.ecu_tx.unwrap_or(0x7E0);
+    let ecu_rx = payload.ecu_rx.unwrap_or(0x7E8);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::write_injector_ima(
+        &mut **iface,
+        ecu_tx,
+        ecu_rx,
+        payload.cylinder,
+        &payload.code,
+    )
+    .await
+    {
+        Ok(ima) => {
+            let garage = VehicleGarage::new(VehicleGarage::default_path());
+            let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
+            let note = format!(
+                "Calibrated injector IMA code for cylinder {}: {}",
+                payload.cylinder, ima.code
+            );
+            let _ = garage.save_coding(vin, "EDC16", &ima.code, None, &note);
+
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "success": true,
+                    "injector": ima,
+                    "message": format!(
+                        "Successfully programmed cylinder {} IMA code to {}",
+                        payload.cylinder, ima.code
+                    ),
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Failed to write injector IMA code: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SuspensionCornerPayload {
+    corner: SuspensionCorner,
+    action: SuspensionCornerAction,
+    #[serde(default)]
+    tx_id: Option<u32>,
+    #[serde(default)]
+    rx_id: Option<u32>,
+}
+
+async fn service_suspension(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<SuspensionCornerPayload>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let tx_id = payload.tx_id.unwrap_or(0x7E3);
+    let rx_id = payload.rx_id.unwrap_or(0x7EB);
+
+    let mut iface = state.interface.lock().await;
+    match ServiceRoutineManager::actuate_suspension_corner(
+        &mut **iface,
+        tx_id,
+        rx_id,
+        payload.corner,
+        payload.action,
+    )
+    .await
+    {
+        Ok(msg) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "corner": payload.corner,
+                "action": payload.action,
+                "message": msg,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Suspension corner actuation failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct BusDiscoverPayload {
+    #[serde(default)]
+    start_id: Option<u32>,
+    #[serde(default)]
+    end_id: Option<u32>,
+    #[serde(default)]
+    timeout_ms: Option<u64>,
+}
+
+async fn diag_discover(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<Option<BusDiscoverPayload>>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
+    let req = payload.unwrap_or(BusDiscoverPayload {
+        start_id: None,
+        end_id: None,
+        timeout_ms: None,
+    });
+    let start = req.start_id.unwrap_or(0x7E0);
+    let end = req.end_id.unwrap_or(0x7EF);
+    let timeout = req.timeout_ms.unwrap_or(20);
+
+    let catalog_res = EcuCatalog::load_default();
+    let catalog_ref = catalog_res.as_ref().ok();
+
+    let mut iface = state.interface.lock().await;
+    match BusDiscoverer::discover_ecus(&mut **iface, start..=end, timeout, catalog_ref).await {
+        Ok(ecus) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "success": true,
+                "count": ecus.len(),
+                "ecus": ecus,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Bus discovery failed: {}", e),
+            })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct ReportHtmlQuery {
+    #[serde(default)]
+    lang: Option<String>,
+}
+
+async fn get_diag_report_html(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ReportHtmlQuery>,
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            [("content-type", "text/plain; charset=utf-8")],
+            "System is locked in a flashing routine".to_string(),
+        )
+            .into_response();
+    }
+
+    let language: Language = query
+        .lang
+        .as_deref()
+        .unwrap_or("en")
+        .parse()
+        .unwrap_or_default();
+    let mut iface = state.interface.lock().await;
+    match VehicleScanner::scan(&mut **iface, language).await {
+        Ok(report) => {
+            let html = report.to_html(language);
+            (
+                StatusCode::OK,
+                [("content-type", "text/html; charset=utf-8")],
+                html,
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            [("content-type", "text/plain; charset=utf-8")],
+            format!("Diagnostic scan failed: {}", e),
         )
             .into_response(),
     }

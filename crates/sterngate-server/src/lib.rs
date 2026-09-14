@@ -520,4 +520,127 @@ mod tests {
         assert_eq!(danger_res["overall_severity"], "ImminentDanger");
         assert!(danger_res["alerts"].as_array().unwrap().len() >= 4);
     }
+
+    #[tokio::test]
+    async fn test_service_and_discovery_and_report_endpoints() {
+        let mut iface = Box::new(VirtualCanInterface::new());
+        let _ = iface.open().await;
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher));
+
+        // 1. POST /api/v1/service/sbc Deactivate
+        let sbc_deact = json!({
+            "action": "Deactivate"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/service/sbc")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&sbc_deact).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let sbc_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(sbc_res["success"].as_bool().unwrap());
+        assert_eq!(sbc_res["status"]["accumulator_pressure_bar"], 0.0);
+
+        // 2. POST /api/v1/service/sbc Reactivate
+        let sbc_react = json!({
+            "action": "Reactivate"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/service/sbc")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&sbc_react).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 3. GET /api/v1/service/ima (single cylinder)
+        let req = Request::builder()
+            .uri("/api/v1/service/ima?cylinder=1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let ima_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(ima_res["success"].as_bool().unwrap());
+        assert_eq!(ima_res["injectors"].as_array().unwrap().len(), 1);
+
+        // 4. POST /api/v1/service/ima (write calibration)
+        let ima_write = json!({
+            "cylinder": 1,
+            "code": "7B8HNA"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/service/ima")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&ima_write).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 5. POST /api/v1/service/suspension
+        let susp_act = json!({
+            "corner": "RearLeft",
+            "action": "Inflate"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/service/suspension")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&susp_act).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 6. POST /api/v1/diag/discover
+        let disc_payload = json!({
+            "start_id": 2016, // 0x7E0
+            "end_id": 2024,   // 0x7E8
+            "timeout_ms": 15
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/diag/discover")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&disc_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let disc_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(disc_res["success"].as_bool().unwrap());
+
+        // 7. GET /api/v1/diag/report.html
+        let req = Request::builder()
+            .uri("/api/v1/diag/report.html?lang=en")
+            .body(Body::empty())
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "text/html; charset=utf-8"
+        );
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let html_str = String::from_utf8_lossy(&body_bytes);
+        assert!(html_str.contains("<!DOCTYPE html>"));
+        assert!(html_str.contains("Sterngate"));
+    }
 }

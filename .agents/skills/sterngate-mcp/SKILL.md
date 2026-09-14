@@ -65,6 +65,10 @@ Or when running the compiled release binary:
 | `sterngate_check_cascade_warnings` | `sbc_accumulator_pressure_bar` (opt), `max_cylinder_balance_trim_mm3` (opt), `tcc_slip_rpm` (opt), `compressor_continuous_run_sec` (opt), `suspension_height_drop_rate_mm_h` (opt) | Inspects vehicle vitals against 7 notorious Mercedes 'Cascade of Death' failure modes (SBC accumulator, Black Death blow-by, 722.6 pilot bushing wicking, TCC slip, DPF/M55 short, cam magnet oil wicking, air suspension). |
 | `sterngate_compare_drive_runs` | `run_a` (opt), `run_b` (opt), `baseline_...` (opt), `target_...` (opt) | Performs A/B comparative benchmark between two drive telemetry runs to evaluate whether parameter/mechanical changes were beneficial (fuel consumption, TCC slip, boost). |
 | `sterngate_verify_flash_staging` | `target_module`, `expected_hw_id`, `sha256`, `crc32` | Evaluates a staged flash binary against safety checks (battery voltage $\ge 12.5\text{ V}$, CRC32, SHA256, HW match). |
+| `sterngate_discover_ecus` | `start_id` (opt), `end_id` (opt), `timeout_ms` (opt) | Scans CAN bus IDs and interrogates responsive ECUs with identification DIDs, correlating with 990-ECU database. |
+| `sterngate_service_routine` | `routine`, `cylinder` (opt), `code` (opt), `corner` (opt), `action` (opt), `vin` (opt) | Dispatches safety-critical workshop routines: SBC brake pad mode, Common Rail IMA coding (with git tracking), and air suspension leveling. |
+| `sterngate_flash_ecu` | `target_module` (opt), `battery_voltage` (opt), `dry_run` (opt) | Safely executes or simulates detached ECU flashing with battery voltage interlock ($\ge 12.5\text{ V}$). |
+| `sterngate_export_report` | `lang` (opt: `en`, `de`, `sv`), `output_path` (opt) | Executes vehicle scan and exports self-contained HTML diagnostic report. |
 
 ---
 
@@ -77,7 +81,9 @@ Or when running the compiled release binary:
 | `sterngate://profile/w211_om646` | W211 OM646 Profile | Full DID mappings, scaling equations, and module definitions for W211 CDI. |
 | `sterngate://ecu/status` | ECU Bus Status | Active CAN interface, baudrate, battery voltage, and flasher lockout status. |
 | `sterngate://garage/vehicles` | Vehicle Garage Database | List of tracked vehicles with decoded VINs, installed ECUs, and Git configuration history. |
-| `sterngate://cascades/catalog` | Mercedes Cascades of Death | Descriptions, thresholds, and root part numbers for 7 infamous Mercedes cascading failure modes. |
+| `sterngate://cascades/catalog` | Mercedes Cascades of Death | Descriptions, thresholds, and root part numbers for 13 infamous Mercedes cascading failure modes. |
+| `sterngate://service/routines` | Workshop Service Routines | Descriptions, routine IDs, and safety interlocks for SBC pad mode, IMA coding, and air suspension leveling. |
+
 
 ---
 

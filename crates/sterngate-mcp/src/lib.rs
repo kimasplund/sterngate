@@ -431,4 +431,145 @@ mod tests {
             "PRESSURE_LIMITED_120BAR"
         );
     }
+
+    #[tokio::test]
+    async fn test_mcp_discovery_service_flash_and_report_tools() {
+        // 1. sterngate_discover_ecus
+        let disc_res = tools::handle_tool_call(
+            "sterngate_discover_ecus",
+            &json!({
+                "start_id": 2016, // 0x7E0
+                "end_id": 2024,   // 0x7E8
+                "timeout_ms": 15
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(disc_res.get("success").unwrap().as_bool().unwrap());
+        assert!(disc_res.get("discovered_count").unwrap().as_u64().unwrap() >= 1);
+
+        // 2. sterngate_service_routine: sbc_deactivate
+        let sbc_deact = tools::handle_tool_call(
+            "sterngate_service_routine",
+            &json!({"routine": "sbc_deactivate"}),
+        )
+        .await
+        .unwrap();
+        assert!(sbc_deact.get("success").unwrap().as_bool().unwrap());
+        assert_eq!(
+            sbc_deact["status"]["accumulator_pressure_bar"]
+                .as_f64()
+                .unwrap(),
+            0.0
+        );
+
+        // 3. sterngate_service_routine: sbc_reactivate
+        let sbc_react = tools::handle_tool_call(
+            "sterngate_service_routine",
+            &json!({"routine": "sbc_reactivate"}),
+        )
+        .await
+        .unwrap();
+        assert!(sbc_react.get("success").unwrap().as_bool().unwrap());
+        assert!(
+            sbc_react["status"]["accumulator_pressure_bar"]
+                .as_f64()
+                .unwrap()
+                > 100.0
+        );
+
+        // 4. sterngate_service_routine: read_ima
+        let read_ima = tools::handle_tool_call(
+            "sterngate_service_routine",
+            &json!({"routine": "read_ima", "cylinder": 1}),
+        )
+        .await
+        .unwrap();
+        assert!(read_ima.get("success").unwrap().as_bool().unwrap());
+        assert_eq!(read_ima["injector"]["cylinder"].as_u64().unwrap(), 1);
+
+        // 5. sterngate_service_routine: write_ima
+        let write_ima = tools::handle_tool_call(
+            "sterngate_service_routine",
+            &json!({
+                "routine": "write_ima",
+                "cylinder": 1,
+                "code": "7B8HNA"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(write_ima.get("success").unwrap().as_bool().unwrap());
+        assert!(write_ima.get("git_recorded").unwrap().as_bool().unwrap());
+
+        // 6. sterngate_service_routine: suspension_corner
+        let susp = tools::handle_tool_call(
+            "sterngate_service_routine",
+            &json!({
+                "routine": "suspension_corner",
+                "corner": "RearLeft",
+                "action": "inflate"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(susp.get("success").unwrap().as_bool().unwrap());
+
+        // 7. sterngate_flash_ecu: voltage interlock failure (<12.5V)
+        let flash_fail = tools::handle_tool_call(
+            "sterngate_flash_ecu",
+            &json!({
+                "target_module": "EDC16",
+                "battery_voltage": 11.9
+            }),
+        )
+        .await;
+        assert!(flash_fail.is_err());
+        assert!(flash_fail
+            .unwrap_err()
+            .contains("FLASH INTERLOCK VIOLATION"));
+
+        // 8. sterngate_flash_ecu: dry_run
+        let flash_dry = tools::handle_tool_call(
+            "sterngate_flash_ecu",
+            &json!({
+                "target_module": "EDC16",
+                "battery_voltage": 13.8,
+                "dry_run": true
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(flash_dry
+            .get("preflight_passed")
+            .unwrap()
+            .as_bool()
+            .unwrap());
+
+        // 9. sterngate_flash_ecu: full execution
+        let flash_full = tools::handle_tool_call(
+            "sterngate_flash_ecu",
+            &json!({
+                "target_module": "EDC16",
+                "battery_voltage": 13.8
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(flash_full.get("success").unwrap().as_bool().unwrap());
+
+        // 10. sterngate_export_report
+        let rep_res = tools::handle_tool_call("sterngate_export_report", &json!({"lang": "en"}))
+            .await
+            .unwrap();
+        assert!(rep_res.get("success").unwrap().as_bool().unwrap());
+        assert!(rep_res["html_size_bytes"].as_u64().unwrap() > 500);
+
+        // 11. Resource: sterngate://service/routines
+        let serv_res = resources::read_resource("sterngate://service/routines").unwrap();
+        assert_eq!(
+            serv_res.get("routines").unwrap().as_array().unwrap().len(),
+            4
+        );
+    }
 }

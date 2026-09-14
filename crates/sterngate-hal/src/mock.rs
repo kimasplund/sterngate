@@ -32,10 +32,8 @@ impl VirtualCanInterface {
 
     fn generate_telemetry_frame(&self, req_id: u32, payload: &[u8]) -> Option<CanFrame> {
         let resp_id = match req_id {
-            0x7DF | 0x7E0 => 0x7E8,
-            0x7E1 => 0x7E9,
-            0x7E4 => 0x7EC,
-            0x7E6 => 0x7EE,
+            0x7DF => 0x7E8,
+            id if (0x700..=0x7EF).contains(&id) => id + 8,
             _ => 0x7E8,
         };
 
@@ -45,6 +43,22 @@ impl VirtualCanInterface {
 
         let pci = payload[0];
         let pci_type = pci >> 4;
+
+        if pci_type == 1 {
+            // ISO-TP First Frame: Send Flow Control (0x30: ContinueToSend)
+            return Some(CanFrame::new_standard(
+                resp_id as u16,
+                &[0x30, 0x00, 0x00, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA],
+            ));
+        }
+
+        if pci_type == 2 {
+            // ISO-TP Consecutive Frame: Acknowledge write completion (0x6E)
+            return Some(CanFrame::new_standard(
+                resp_id as u16,
+                &[0x03, 0x6E, 0x20, 0x31, 0xAA, 0xAA, 0xAA, 0xAA],
+            ));
+        }
 
         let service = if pci_type == 0 {
             if payload.len() > 1 {
@@ -171,6 +185,54 @@ impl VirtualCanInterface {
                         resp_id as u16,
                         &[0x04, 0x62, 0x20, 0x51, 0x8E, 0xAA, 0xAA, 0xAA],
                     )),
+                    // Identification DIDs
+                    // Spare Part Number (0xF187) -> "A6461500879" (first 4 bytes)
+                    0xF187 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x87, b'6', b'4', b'6', b'1'],
+                    )),
+                    // Software Application / Calibration (0xF188)
+                    0xF188 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x88, 0x10, 0x37, 0x38, 0x66],
+                    )),
+                    // Software Version (0xF189)
+                    0xF189 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x89, 0x00, 0x24, 0x48, 0x33],
+                    )),
+                    // VIN (0xF190) -> "WDB2"
+                    0xF190 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x90, b'W', b'D', b'B', b'2'],
+                    )),
+                    // Hardware Version (0xF191)
+                    0xF191 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x91, 0x00, 0x01, 0x53, 0x54],
+                    )),
+                    // System Name (0xF197) -> "CR4 "
+                    0xF197 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0xF1, 0x97, b'C', b'R', b'4', b' '],
+                    )),
+                    // Common Rail Injector IMA Calibration Codes (0x2030..0x2033)
+                    0x2030 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0x20, 0x30, b'7', b'B', b'8', b'H'],
+                    )),
+                    0x2031 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0x20, 0x31, b'A', b'8', b'B', b'1'],
+                    )),
+                    0x2032 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0x20, 0x32, b'9', b'K', b'4', b'M'],
+                    )),
+                    0x2033 => Some(CanFrame::new_standard(
+                        resp_id as u16,
+                        &[0x07, 0x62, 0x20, 0x33, b'5', b'J', b'7', b'T'],
+                    )),
                     _ => {
                         Some(CanFrame::new_standard(
                             resp_id as u16,
@@ -223,15 +285,21 @@ impl VirtualCanInterface {
                         // 0x0202: DPF Regeneration Trigger
                         // 0x0203: Throttle Valve / EGR Lower Stop Relearn
                         // 0x0205: SBC Brake Hydraulic Bleeding Routine
+                        // 0x0206: SBC Brake Pad Service Deactivation (0 bar, finger safety)
+                        // 0x0207: SBC Brake System Reactivation & Bleed
                         // 0x0210: Compressor Relay Force Inhibit (Burnout Safe Mode)
                         // 0x0211: Suspension Workshop / Transport Mode (Leveling Inhibit)
                         // 0x0212: Suspension Normal Operation Restore
+                        // 0x0213: Suspension Corner Inflate
+                        // 0x0214: Suspension Corner Deflate
+                        // 0x0215: Suspension Zero-Level Sensor Calibration
                         // 0x0220: ABC System Pressure Fallback Dump (120 bar)
                         // 0x0221: ABC Strut Isolation Valve Lock
                         // 0x0222: ABC Normal Active Suspension Restore
                         // 0xFF00: Erase Flash Routine
-                        0xFF01 | 0x0201 | 0x0202 | 0x0203 | 0x0205 | 0x0210 | 0x0211 | 0x0212
-                        | 0x0220 | 0x0221 | 0x0222 | 0xFF00 => Some(CanFrame::new_standard(
+                        0xFF01 | 0x0201 | 0x0202 | 0x0203 | 0x0205 | 0x0206 | 0x0207 | 0x0210
+                        | 0x0211 | 0x0212 | 0x0213 | 0x0214 | 0x0215 | 0x0220 | 0x0221 | 0x0222
+                        | 0xFF00 => Some(CanFrame::new_standard(
                             resp_id as u16,
                             &[0x05, 0x71, sub_fn, r_hi, r_lo, 0x00],
                         )),

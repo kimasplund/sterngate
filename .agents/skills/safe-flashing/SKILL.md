@@ -81,3 +81,25 @@ All mutating commands (variant coding, parameter writes, routine actuation, and 
    - Once a flashing or long-running routine is validated and started, the core worker executes detached locally.
    - Loss of WebSocket connection, browser closing, or P2P QUIC disconnect NEVER interrupts the $S_3$ keep-alive or in-flight transfer blocks.
 
+---
+
+## 5. CLI Flashing Suite Commands
+
+Sterngate provides direct terminal commands with built-in safety interlocks:
+
+```bash
+# 1. Stage and cryptographically verify firmware ROM
+sterngate flash stage --module EDC16 --file /path/to/stage1.bin \
+  --hw-id 0281012234 --sw-id 1037372120 --start-address 0x00040000
+
+# 2. Run pre-flight safety checks (voltage >= 12.5V, HW ID match, CRC32/SHA256)
+sterngate flash preflight --manifest /var/run/sterngate/flash_manifest.json
+
+# 3. Start detached flash sequence (requires interactive confirmation or --yes)
+sterngate flash start --manifest /var/run/sterngate/flash_manifest.json --yes
+
+# 4. Monitor live progress of detached flashing worker
+sterngate flash status
+```
+
+

@@ -333,7 +333,58 @@ curl -s -X POST http://localhost:8080/api/v1/analyze/cascades \
 
 ---
 
-## 11. Verification Checklist
+## 11. Workshop Service Routines, Bus Discovery & Flashing CLI
+
+### A. Bus Discovery & Automated Profile Generation
+```bash
+# Probes CAN bus IDs (0x700..0x7EF) and interrogates responsive ECUs
+sterngate diag discover --start 0x7E0 --end 0x7EF
+
+# Automatically generate declarative JSON profile matching catalog
+sterngate profile generate --name "mercedes_custom_w211" --out profiles/custom.json
+```
+
+### B. Workshop Service Routines
+```bash
+# SBC Brake Pad Replacement Mode (0 bar pressure dump & finger safety lock)
+sterngate service sbc --action deactivate
+# Reactivate and run hydraulic high-pressure self-bleed check
+sterngate service sbc --action reactivate
+
+# Read Common Rail Injector IMA production calibration codes
+sterngate service ima --cylinder 1
+# Write IMA code and record git commit in vehicle garage
+sterngate service ima --cylinder 1 --code 7B8HNA --vin WDB2112061A000001
+
+# Air Suspension Corner Actuation & Calibration
+sterngate service suspension --corner rear-left --action inflate
+sterngate service suspension --corner all --action calibrate-zero
+```
+
+### C. Variant Coding & Git Version Tracking
+```bash
+# Read hex coding string from ECU
+sterngate coding read --module EDC16 --did 0x0100
+
+# Write coding string with command envelope protection & git commit
+sterngate coding write --module EDC16 --did 0x0100 --data 01020304 --vin WDB2112061A000001 --note "Speed limiter 250 km/h"
+
+# Backup all module codings into vehicle git garage
+sterngate coding backup --vin WDB2112061A000001
+
+# Diff current vehicle configuration against previous git commit
+sterngate coding diff --vin WDB2112061A000001
+```
+
+### D. HTML Diagnostic Report Export
+```bash
+# Perform multi-ECU quick scan and export self-contained HTML report
+sterngate diag scan --export-html report.html --lang en
+```
+
+---
+
+## 12. Verification Checklist
 
 1. **Verify Binary Compiles**:
    ```bash
@@ -351,7 +402,10 @@ curl -s -X POST http://localhost:8080/api/v1/analyze/cascades \
    curl -s http://localhost:8080/api/v1/vehicle/scan | jq .
    curl -s http://localhost:8080/api/v1/vehicles | jq .
    curl -s http://localhost:8080/api/v1/analyze/suspension | jq .
+   curl -s http://localhost:8080/api/v1/service/ima | jq .
+   curl -s http://localhost:8080/api/v1/diag/report.html -o report.html
    ```
+
 
 
 

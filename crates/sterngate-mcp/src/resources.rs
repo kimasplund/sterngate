@@ -37,6 +37,12 @@ pub fn get_resources_list() -> Value {
             "name": "Mercedes Cascades of Death Catalog",
             "description": "Catalog of 7 infamous Mercedes cascading failure chains, root triggers, part numbers, and failure mechanisms.",
             "mimeType": "application/json"
+        },
+        {
+            "uri": "sterngate://service/routines",
+            "name": "Workshop Service Routines Catalog",
+            "description": "Safety-critical actuation and calibration routines: SBC brake pad mode, Common Rail IMA coding, and air suspension corner level calibration.",
+            "mimeType": "application/json"
         }
     ])
 }
@@ -181,6 +187,42 @@ pub fn read_resource(uri: &str) -> Result<Value, String> {
                     "root_part": "Original orange silicone oil cooler seals A 642 188 01 80 bake rock-hard ($4.50)",
                     "catastrophic_outcome": "Highway high-speed oil depletion out bellhousing weep hole, rod bearing starvation ($7,500+)",
                     "threshold": "Dynamic oil level loss rate >0.10 mm/100km (warning), >0.25 mm/100km (imminent)"
+                }
+            ]
+        })),
+        "sterngate://service/routines" => Ok(json!({
+            "routines": [
+                {
+                    "id": "sbc_deactivate",
+                    "routine_id": "0x0206",
+                    "name": "SBC Brake Pad Service Mode Deactivation",
+                    "description": "Dumps 160 bar accumulator into reservoir, retracts pistons, locks brake pedal & door wake-up triggers to prevent severed fingers during caliper work.",
+                    "target_module": "SBC (0x7E2/0x7EA)",
+                    "safety_interlock": "Vehicle stationary, ignition ON, engine OFF."
+                },
+                {
+                    "id": "sbc_reactivate",
+                    "routine_id": "0x0207",
+                    "name": "SBC Brake Pad Service Mode Reactivation",
+                    "description": "Recharges high-pressure accumulator to ~160 bar, runs high-pressure self-bleed check, restores normal hydraulic braking function.",
+                    "target_module": "SBC (0x7E2/0x7EA)",
+                    "safety_interlock": "Caliper and pads fully assembled, fluid reservoir checked."
+                },
+                {
+                    "id": "ima_coding",
+                    "dids": "0x2030..0x2036",
+                    "name": "Common Rail Injector IMA Calibration",
+                    "description": "Read and write production tolerance compensation codes (6 or 7 alphanumeric characters) to ensure smooth-running idle and avoid cylinder balance wear.",
+                    "target_module": "EDC16 (0x7E0/0x7E8)",
+                    "safety_interlock": "Engine OFF, ignition ON. Coding recorded in git garage."
+                },
+                {
+                    "id": "suspension_corner",
+                    "routine_ids": "0x0213, 0x0214, 0x0215",
+                    "name": "Air Suspension Corner Actuation & Zero Calibration",
+                    "description": "Individual corner inflate/deflate for leak tracing and workshop leveling, plus zero-height sensor calibration.",
+                    "target_module": "ENR/AIRMATIC (0x7E3/0x7EB)",
+                    "safety_interlock": "Doors closed, vehicle on level surface."
                 }
             ]
         })),

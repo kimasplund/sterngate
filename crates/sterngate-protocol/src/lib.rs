@@ -1,17 +1,21 @@
+pub mod discoverer;
 pub mod flasher;
 pub mod gate;
 pub mod isotp;
 pub mod kwp2000;
 pub mod scanner;
 pub mod seedkey;
+pub mod service;
 pub mod uds;
 
+pub use discoverer::BusDiscoverer;
 pub use flasher::FlashingWorker;
 pub use gate::TransactionGate;
 pub use isotp::IsoTpChannel;
 pub use kwp2000::KwpClient;
 pub use scanner::{ModuleScanResult, VehicleDiagnosticReport, VehicleScanner};
 pub use seedkey::{DaimlerSeedKey, DaimlerSolver, SeedKeySolver};
+pub use service::ServiceRoutineManager;
 pub use uds::UdsClient;
 
 #[cfg(test)]
@@ -182,5 +186,94 @@ mod tests {
             .await
             .unwrap();
         assert!(res_restore.contains("0x0212"));
+    }
+
+    #[tokio::test]
+    async fn test_bus_discovery_and_profile_generation() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        // Discover ECUs across 0x7E0..=0x7E2
+        let discovered = BusDiscoverer::discover_ecus(&mut sim, 0x7E0..=0x7E2, 20, None)
+            .await
+            .unwrap();
+
+        assert!(!discovered.is_empty());
+        let edc = discovered.iter().find(|e| e.tx_id == 0x7E0).unwrap();
+        assert_eq!(edc.rx_id, 0x7E8);
+        assert!(edc.part_number.is_some());
+
+        // Generate profile
+        let profile = BusDiscoverer::generate_profile(
+            &discovered,
+            "Mercedes-Benz",
+            "W211",
+            "discovered_w211",
+        );
+        assert_eq!(profile.oem, "Mercedes-Benz");
+        assert!(!profile.modules.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_workshop_service_routines() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        // 1. SBC Deactivation
+        let sbc_deact = ServiceRoutineManager::deactivate_sbc(&mut sim, 0x7E2, 0x7EA)
+            .await
+            .unwrap();
+        assert!(sbc_deact.success);
+        assert_eq!(sbc_deact.accumulator_pressure_bar, 0.0);
+        assert!(sbc_deact.wake_up_suppressed);
+
+        // 2. SBC Reactivation
+        let sbc_react = ServiceRoutineManager::reactivate_sbc(&mut sim, 0x7E2, 0x7EA)
+            .await
+            .unwrap();
+        assert!(sbc_react.success);
+        assert_eq!(sbc_react.accumulator_pressure_bar, 158.0);
+        assert!(!sbc_react.wake_up_suppressed);
+
+        // 3. Common Rail IMA Coding (Read & Write)
+        let ima_read = ServiceRoutineManager::read_injector_ima(&mut sim, 0x7E0, 0x7E8, 1)
+            .await
+            .unwrap();
+        assert_eq!(ima_read.cylinder, 1);
+        assert!(!ima_read.code.is_empty());
+
+        let ima_write =
+            ServiceRoutineManager::write_injector_ima(&mut sim, 0x7E0, 0x7E8, 2, "A8B12F")
+                .await
+                .unwrap();
+        assert_eq!(ima_write.cylinder, 2);
+        assert_eq!(ima_write.code, "A8B12F");
+
+        // 4. Air suspension corner actuation
+        use sterngate_core::{SuspensionCorner, SuspensionCornerAction};
+        let act = ServiceRoutineManager::actuate_suspension_corner(
+            &mut sim,
+            0x7E4,
+            0x7EC,
+            SuspensionCorner::RearLeft,
+            SuspensionCornerAction::Inflate,
+        )
+        .await
+        .unwrap();
+        assert!(act.contains("Rear-Left"));
+        assert!(act.contains("0x0213"));
+    }
+
+    #[tokio::test]
+    async fn test_html_diagnostic_report_export() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        let report = VehicleScanner::scan(&mut sim, Language::En).await.unwrap();
+        let html = report.to_html(Language::En);
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("Sterngate Automotive Diagnostic Health Report"));
+        assert!(html.contains(&report.vin));
+        assert!(html.contains("System Voltage"));
     }
 }

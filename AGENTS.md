@@ -72,19 +72,21 @@ crates/
    - `SeedKeyRegistry`: Algorithmic solvers (Daimler standard Level 01, Level 03, Level 0B) without proprietary Windows DLLs.
    - `FlashingWorker`: Decoupled Tokio state machine managing erase, download, transfer, exit, and CRC routines.
    - `VehicleScanner`: Multi-ECU gateway scanner, ENR compressor control, and ABC hydraulic surge limiter.
+   - `BusDiscoverer`: CAN ID range probing (`0x700..0x7EF`), identification DID interrogation, and auto profile generation.
+   - `ServiceRoutineManager`: Safety-critical workshop service routines (SBC pad mode 0 bar deactivation/reactivation, Common Rail IMA coding, suspension corner actuation).
 
 4. **`sterngate-p2p`**:
    - Wraps Iroh for P2P QUIC communication between `--client` (car-side SBC) and `--server` (technician machine).
    - Generates and dials `NodeTicket` strings.
 
 5. **`sterngate-server`**:
-   - Exposes REST routes (`/api/v1/telemetry`, `/api/v1/dtc`, `/api/v1/coding`, `/api/v1/flash`, `/api/v1/vehicles`, `/api/v1/analyze/cascades`, `/api/v1/abc/control`).
+   - Exposes REST routes (`/api/v1/telemetry`, `/api/v1/dtc`, `/api/v1/coding`, `/api/v1/flash`, `/api/v1/vehicles`, `/api/v1/analyze/cascades`, `/api/v1/abc/control`, `/api/v1/service/sbc`, `/api/v1/service/ima`, `/api/v1/service/suspension`, `/api/v1/diag/discover`, `/api/v1/diag/report.html`).
    - Streams live parameters over WebSockets at 20–50 Hz.
    - Serves the embedded single-page dashboard at `http://localhost:8080` localized in English, German, and Swedish.
 
 6. **`sterngate-mcp`**:
    - Implements JSON-RPC 2.0 stdio Model Context Protocol.
-   - Enables AI agents to read DTCs, inspect live telemetry, check vehicle profiles, evaluate 13 cascades of death, actuate compressor/ABC safety guards, and run pre-flash checks.
+   - Enables AI agents to read DTCs, inspect live telemetry, check vehicle profiles, evaluate 13 cascades of death, actuate compressor/ABC safety guards, run pre-flash checks, discover uncataloged ECUs, dispatch workshop service routines, execute detached flashing, and export HTML diagnostic reports.
 
 7. **`sterngate-cli`**:
    - Clap CLI interface unifying all operational modes:
@@ -93,9 +95,12 @@ crates/
      * `sterngate --server --ticket <TICKET>`: Remote technician node.
      * `sterngate mcp`: Model Context Protocol server.
      * `sterngate mock`: Virtual simulation mode for zero-hardware testing.
-     * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities (dtc, live, clear, routine, scan).
+     * `sterngate diag <subcommand>`: Direct CLI diagnostic utilities (dtc, live, clear, routine, scan, discover).
+     * `sterngate flash <subcommand>`: Direct terminal ECU flashing suite (stage, preflight, start, status).
+     * `sterngate service <subcommand>`: Workshop service routines (sbc, ima, suspension).
+     * `sterngate coding <subcommand>`: Variant coding & Git garage history (read, write, backup, diff).
      * `sterngate ecu <subcommand>`: 990-ECU diagnostic catalog index (stats, search, inspect).
-     * `sterngate profile <subcommand>`: Vehicle profile management (list, inspect).
+     * `sterngate profile <subcommand>`: Vehicle profile management (list, inspect, generate).
      * `sterngate analyze <subcommand>`: Predictive analytics and containment (suspension, compare, cascades, abc).
 
 ---

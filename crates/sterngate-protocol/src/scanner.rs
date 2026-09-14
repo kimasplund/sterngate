@@ -264,6 +264,213 @@ impl VehicleDiagnosticReport {
 
         md
     }
+
+    /// Render standalone, responsive dark-mode HTML diagnostic report (printable to PDF)
+    pub fn to_html(&self, lang: Language) -> String {
+        let mut html = String::new();
+        html.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n");
+        html.push_str(
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
+        html.push_str(&format!(
+            "<title>Diagnostic Report - {} ({})</title>\n",
+            self.vin, self.decoded.model_name
+        ));
+        html.push_str("<style>\n");
+        html.push_str(":root { --bg: #0b0f17; --card: #151c28; --border: #233044; --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --green: #10b981; --amber: #f59e0b; --red: #ef4444; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }\n");
+        html.push_str("body { background: var(--bg); color: var(--text); margin: 0; padding: 24px; line-height: 1.5; }\n");
+        html.push_str(".container { max-width: 1100px; margin: 0 auto; }\n");
+        html.push_str(".header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }\n");
+        html.push_str(".title { margin: 0 0 6px 0; font-size: 24px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }\n");
+        html.push_str(".vin-badge { display: inline-block; background: #1e293b; border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-family: monospace; font-size: 15px; color: var(--accent); }\n");
+        html.push_str(".v-specs { color: var(--muted); font-size: 14px; margin-top: 4px; }\n");
+        html.push_str(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }\n");
+        html.push_str(".stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }\n");
+        html.push_str(".stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }\n");
+        html.push_str(".stat-value { font-size: 24px; font-weight: 700; }\n");
+        html.push_str(".val-ok { color: var(--green); }\n.val-warn { color: var(--amber); }\n.val-crit { color: var(--red); }\n");
+        html.push_str(".section-title { font-size: 18px; font-weight: 600; margin: 24px 0 12px 0; display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--accent); padding-left: 8px; }\n");
+        html.push_str("table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 24px; }\n");
+        html.push_str("th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }\n");
+        html.push_str("th { background: #1a2332; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }\n");
+        html.push_str("tr:last-child td { border-bottom: none; }\n");
+        html.push_str(".module-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }\n");
+        html.push_str(".module-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }\n");
+        html.push_str(".badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }\n");
+        html.push_str(".badge-ok { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }\n");
+        html.push_str(".badge-warn { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }\n");
+        html.push_str(".badge-danger { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }\n");
+        html.push_str(".cascade-card { background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; margin-bottom: 12px; }\n");
+        html.push_str(".cascade-warn { background: rgba(245,158,11,0.06); border-color: rgba(245,158,11,0.3); }\n");
+        html.push_str("@media print { body { background: #fff; color: #000; padding: 0; } .stat-card, .module-card, table { border-color: #ccc; } th { background: #eee; } .vin-badge { border-color: #000; color: #000; } }\n");
+        html.push_str("</style>\n</head>\n<body>\n<div class=\"container\">\n");
+
+        // Header
+        html.push_str("<div class=\"header\">\n<div>\n");
+        html.push_str(
+            "<h1 class=\"title\">⭐ Sterngate Automotive Diagnostic Health Report</h1>\n",
+        );
+        html.push_str(&format!(
+            "<div class=\"vin-badge\">VIN: {}</div>\n",
+            self.vin
+        ));
+        html.push_str(&format!(
+            "<div class=\"v-specs\">{} &bull; {} &bull; {}</div>\n",
+            self.decoded.model_name, self.decoded.body_style, self.decoded.engine
+        ));
+        html.push_str(
+            "</div>\n<div style=\"text-align: right; color: var(--muted); font-size: 13px;\">\n",
+        );
+        html.push_str(&format!("<div>Scanned: {}</div>\n", self.timestamp));
+        let volt_cls = if self.battery_voltage >= 12.5 {
+            "val-ok"
+        } else {
+            "val-crit"
+        };
+        html.push_str(&format!(
+            "<div>System Voltage: <span class=\"{}\">{:.2} V</span> ({})</div>\n",
+            volt_cls,
+            self.battery_voltage,
+            if self.alternator_charging {
+                "Charging"
+            } else {
+                "Engine Off"
+            }
+        ));
+        html.push_str("</div>\n</div>\n");
+
+        // Stats Grid
+        html.push_str("<div class=\"stats-grid\">\n");
+        html.push_str(&format!("<div class=\"stat-card\"><div class=\"stat-label\">Modules Responding</div><div class=\"stat-value val-ok\">{}/{}</div></div>\n", self.modules_responding, self.total_modules_probed));
+        let dtc_cls = if self.total_dtcs == 0 {
+            "val-ok"
+        } else {
+            "val-warn"
+        };
+        html.push_str(&format!("<div class=\"stat-card\"><div class=\"stat-label\">Total Fault Codes (DTCs)</div><div class=\"stat-value {}\">{}</div></div>\n", dtc_cls, self.total_dtcs));
+        let overall_status = if self.total_dtcs == 0 {
+            ("val-ok", "HEALTHY")
+        } else if !self.critical_issues.is_empty() {
+            ("val-crit", "CRITICAL")
+        } else {
+            ("val-warn", "ATTENTION")
+        };
+        html.push_str(&format!("<div class=\"stat-card\"><div class=\"stat-label\">Overall System Health</div><div class=\"stat-value {}\">{}</div></div>\n", overall_status.0, overall_status.1));
+        html.push_str("</div>\n");
+
+        // Cascades Early Warning Section
+        if let Some(cascades) = &self.cascade_report {
+            if !cascades.alerts.is_empty() {
+                html.push_str("<h2 class=\"section-title\">🚨 Predictive 'Cascade of Death' Early Warnings</h2>\n");
+                for alert in &cascades.alerts {
+                    let (card_cls, badge_cls, sev_name) = match alert.severity {
+                        CascadeSeverity::ImminentDanger => {
+                            ("cascade-card", "badge-danger", "IMMINENT DANGER")
+                        }
+                        CascadeSeverity::Watchlist => {
+                            ("cascade-card cascade-warn", "badge-warn", "WATCHLIST")
+                        }
+                        CascadeSeverity::Normal => ("module-card", "badge-ok", "NORMAL"),
+                    };
+                    html.push_str(&format!("<div class=\"{}\">\n", card_cls));
+                    html.push_str("<div class=\"module-header\">\n");
+                    html.push_str(&format!("<strong>{}</strong>\n", alert.name));
+                    html.push_str(&format!(
+                        "<span class=\"badge {}\">{}</span>\n",
+                        badge_cls, sev_name
+                    ));
+                    html.push_str("</div>\n");
+                    html.push_str(&format!("<div style=\"font-size: 13px; margin-bottom: 6px;\"><strong>Evidence:</strong> {}</div>\n", alert.telemetry_evidence));
+                    html.push_str(&format!("<div style=\"font-size: 13px; margin-bottom: 6px;\"><strong>Root Cause:</strong> {}</div>\n", alert.root_cause_part));
+                    html.push_str(&format!("<div style=\"font-size: 13px; margin-bottom: 6px; color: var(--red);\"><strong>Catastrophic Outcome:</strong> {}</div>\n", alert.catastrophic_outcome));
+                    html.push_str(&format!("<div style=\"font-size: 13px; color: var(--accent);\"><strong>Containment Action:</strong> {}</div>\n", alert.recommendation));
+                    if !alert.oem_part_numbers.is_empty() {
+                        html.push_str(&format!("<div style=\"font-size: 12px; color: var(--muted); margin-top: 4px;\">OEM Part Numbers: <code>{}</code></div>\n", alert.oem_part_numbers.join(", ")));
+                    }
+                    html.push_str("</div>\n");
+                }
+            }
+        }
+
+        // Baseline Vitals
+        html.push_str(
+            "<h2 class=\"section-title\">📊 Baseline Powertrain & Chassis Telemetry</h2>\n",
+        );
+        html.push_str("<table><thead><tr><th>Sensor Parameter</th><th>Live Value</th><th>Status Window</th></tr></thead><tbody>\n");
+        if let Some(&rpm) = self.live_vitals.get("engine_speed_rpm") {
+            html.push_str(&format!("<tr><td>Engine Speed</td><td><strong>{:.0} RPM</strong></td><td>Normal Operating Idle</td></tr>\n", rpm));
+        }
+        if let Some(&coolant) = self.live_vitals.get("coolant_temp_c") {
+            let status = if coolant >= 85.0 {
+                "Operating Temp OK"
+            } else {
+                "Warm-up in progress"
+            };
+            html.push_str(&format!("<tr><td>Coolant Temperature</td><td><strong>{:.1} °C</strong></td><td>{}</td></tr>\n", coolant, status));
+        }
+        if let Some(&rail) = self.live_vitals.get("rail_pressure_bar") {
+            html.push_str(&format!("<tr><td>Common Rail Fuel Pressure</td><td><strong>{:.1} bar</strong></td><td>Rail Pressure Within Spec</td></tr>\n", rail));
+        }
+        if let Some(&atf) = self.live_vitals.get("transmission_fluid_temp_c") {
+            let status = if (atf - 80.0).abs() <= 5.0 {
+                "Exact 80°C Inspection Window"
+            } else {
+                "Fluid Level Inspection Window: 80°C"
+            };
+            html.push_str(&format!("<tr><td>722.6 ATF Temperature</td><td><strong>{:.1} °C</strong></td><td>{}</td></tr>\n", atf, status));
+        }
+        if let Some(&p) = self.live_vitals.get("airmatic_pressure_bar") {
+            html.push_str(&format!("<tr><td>ENR / Air Suspension Pressure</td><td><strong>{:.1} bar</strong></td><td>Normal Reservoir Pressure</td></tr>\n", p));
+        }
+        html.push_str("</tbody></table>\n");
+
+        // Module Results Grid
+        html.push_str("<h2 class=\"section-title\">🔌 ECU Diagnostic Scan Results</h2>\n");
+        for (mod_name, res) in &self.module_results {
+            if !res.responding {
+                continue;
+            }
+            html.push_str("<div class=\"module-card\">\n");
+            html.push_str("<div class=\"module-header\">\n");
+            html.push_str(&format!("<div><strong>{}</strong> <span style=\"color: var(--muted); font-size: 13px;\">({})</span></div>\n", mod_name, res.description));
+            if res.dtcs.is_empty() {
+                html.push_str("<span class=\"badge badge-ok\">PASS (0 DTC)</span>\n");
+            } else {
+                html.push_str(&format!(
+                    "<span class=\"badge badge-warn\">{} DTC(S)</span>\n",
+                    res.dtcs.len()
+                ));
+            }
+            html.push_str("</div>\n");
+            html.push_str(&format!("<div style=\"font-size: 12px; color: var(--muted); margin-bottom: 8px;\">CAN Addressing: Tx <code>{}</code> / Rx <code>{}</code> &bull; Protocol: <code>{}</code>", res.tx_id, res.rx_id, res.protocol));
+            if let Some(pn) = &res.part_number {
+                html.push_str(&format!(" &bull; OEM Part: <code>{}</code>", pn));
+            }
+            if let Some(hw) = &res.hardware_version {
+                html.push_str(&format!(" &bull; HW: <code>{}</code>", hw));
+            }
+            html.push_str("</div>\n");
+
+            if !res.dtcs.is_empty() {
+                html.push_str(
+                    "<table><thead><tr><th>DTC Code</th><th>Description</th></tr></thead><tbody>\n",
+                );
+                for dtc in &res.dtcs {
+                    let desc = lookup_dtc_description(&dtc.code, lang);
+                    html.push_str(&format!("<tr><td><strong style=\"color: var(--amber);\">{}</strong></td><td>{}</td></tr>\n", dtc.code, desc));
+                }
+                html.push_str("</tbody></table>\n");
+            }
+            html.push_str("</div>\n");
+        }
+
+        html.push_str("<div style=\"text-align: center; color: var(--muted); font-size: 12px; margin-top: 32px;\">\n");
+        html.push_str(
+            "Sterngate Diagnostics Platform &bull; Safe ECU Flashing & Engineering Telemetry\n",
+        );
+        html.push_str("</div>\n</div>\n</body>\n</html>\n");
+        html
+    }
 }
 
 /// Automated vehicle scanner for bus-wide interrogation

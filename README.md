@@ -211,6 +211,78 @@ sterngate ecu inspect VGSNAG2
 
 ---
 
+## 10. Bus Discovery, Flashing Suite & Workshop Service Routines
+
+### A. Bus Discovery & Automated Profile Generation
+Interrogate uncataloged vehicle networks without proprietary engineering tools:
+```bash
+# Probes CAN IDs (0x7E0..0x7EF), reads identification DIDs, correlates with 990-ECU database
+sterngate diag discover --start 0x7E0 --end 0x7EF
+
+# Automatically compile discovered ECUs and standard DIDs into a vehicle profile
+sterngate profile generate --name "w211_custom_om646" --out profiles/custom.json
+```
+
+### B. Direct Terminal ECU Flashing Suite
+Safely stage and flash ECU calibration binaries from the terminal with strict hardware and voltage interlocks:
+```bash
+# 1. Stage and cryptographically verify ROM binary
+sterngate flash stage --module EDC16 --file calibration.bin \
+  --hw-id 0281012234 --sw-id 1037372120 --start-address 0x00040000
+
+# 2. Pre-flight verification (battery voltage >= 12.5V, SHA-256, Bosch CRC32)
+sterngate flash preflight --manifest /var/run/sterngate/flash_manifest.json
+
+# 3. Start detached flash sequence (with interactive safety confirmation or --yes)
+sterngate flash start --manifest /var/run/sterngate/flash_manifest.json --yes
+
+# 4. Monitor live progress of detached flashing worker
+sterngate flash status
+```
+
+### C. Workshop Service Routines
+Perform safety-critical actuations that previously required Mercedes Xentry/DAS:
+```bash
+# SBC (Sensotronic Brake Control) Brake Pad Replacement Mode:
+# Dumps 160 bar accumulator into reservoir, retracts pistons, locks wake-up triggers
+sterngate service sbc --action deactivate
+# Reactivate and run high-pressure self-bleed check
+sterngate service sbc --action reactivate
+
+# Common Rail Injector IMA (Injector Quantity Adaptation) Coding:
+# Read 6/7-character production tolerance compensation code
+sterngate service ima --cylinder 1
+# Write IMA code and record git commit in vehicle's garage history
+sterngate service ima --cylinder 1 --code 7B8HNA --vin WDB2112061A000001
+
+# Air Suspension Corner Actuation & Sensor Calibration
+sterngate service suspension --corner rear-left --action inflate
+sterngate service suspension --corner all --action calibrate-zero
+```
+
+### D. Variant Coding CLI & Git Garage History
+```bash
+# Read hex coding string from target module
+sterngate coding read --module EDC16 --did 0x0100
+
+# Write verified coding string with CommandEnvelope zero-trust gate
+sterngate coding write --module EDC16 --did 0x0100 --data 01020304 --vin WDB2112061A000001 --note "Disable EGR"
+
+# Backup all module codings into vehicle git garage
+sterngate coding backup --vin WDB2112061A000001
+
+# Diff vehicle coding against prior git revisions
+sterngate coding diff --vin WDB2112061A000001
+```
+
+### E. Standalone High-Resolution HTML Diagnostic Report
+Generate a self-contained, beautifully styled HTML diagnostic report for print or customer handoff:
+```bash
+sterngate diag scan --export-html report.html --lang en
+```
+
+---
+
 ## OBD-II Port Wiring Reference
 
 For Mercedes W211/S211 and most ISO 15765-4 compliant vehicles:

@@ -11,6 +11,9 @@ pub enum SterngateError {
     #[error("ISO-TP protocol error: {0}")]
     IsoTpError(String),
 
+    #[error("Protocol error: {0}")]
+    ProtocolError(String),
+
     #[error("ISO-TP timeout waiting for response")]
     IsoTpTimeout,
 

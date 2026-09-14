@@ -10,6 +10,7 @@ pub mod garage;
 pub mod i18n;
 pub mod parameter;
 pub mod profile;
+pub mod service;
 
 pub use cascades::{
     CascadeAlert, CascadeId, CascadeReport, CascadeSeverity, CascadeTelemetryInput, CascadeWatchdog,
@@ -33,6 +34,10 @@ pub use garage::{DecodedVin, GitCommitInfo, VehicleEcuSnapshot, VehicleGarage, V
 pub use i18n::{lookup_dtc_description, lookup_routine_name, Language};
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
+pub use service::{
+    DiscoveredEcu, ImaClassification, SbcServiceAction, SbcServiceStatus, SuspensionCorner,
+    SuspensionCornerAction,
+};
 
 #[cfg(test)]
 mod tests {
@@ -533,5 +538,31 @@ mod tests {
         assert!(md.contains("A 220 327 02 15"));
         assert!(md.contains("A 272 050 15 04"));
         assert!(md.contains("A 642 188 05 80"));
+    }
+
+    #[test]
+    fn test_workshop_service_models() {
+        let valid_6 = ImaClassification::new(1, "7b8hna");
+        assert!(valid_6.is_valid);
+        assert_eq!(valid_6.code, "7B8HNA");
+        assert_eq!(valid_6.format, "Bosch IMA (6-character)");
+
+        let valid_7 = ImaClassification::new(2, "A8B12FG");
+        assert!(valid_7.is_valid);
+        assert_eq!(valid_7.code, "A8B12FG");
+        assert_eq!(valid_7.format, "Bosch/Delphi EMA (7-character)");
+
+        let invalid = ImaClassification::new(3, "XYZ");
+        assert!(!invalid.is_valid);
+
+        assert_eq!(
+            SuspensionCorner::parse_str("rl"),
+            Some(SuspensionCorner::RearLeft)
+        );
+        assert_eq!(
+            SuspensionCorner::parse_str("front-right"),
+            Some(SuspensionCorner::FrontRight)
+        );
+        assert_eq!(SuspensionCorner::RearLeft.as_str(), "Rear-Left");
     }
 }

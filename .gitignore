@@ -36,4 +36,5 @@ crates/*/data/
 .idea/
 *.swp
 *~
-
+reference/
+*.exe
