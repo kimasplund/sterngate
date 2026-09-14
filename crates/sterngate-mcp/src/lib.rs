@@ -708,4 +708,111 @@ mod tests {
         assert_eq!(apply_res["steps_completed"].as_u64().unwrap(), 1);
         assert!(apply_res["git_commit_sha"].as_str().is_some());
     }
+
+    #[tokio::test]
+    async fn test_mcp_tuning_suite() {
+        use base64::Engine;
+
+        // Build synthetic 2MB EDC16 ROM
+        let mut rom = vec![0xFF; 0x200000];
+        let hw_str = b"0281012238";
+        rom[0x1C0020..0x1C0020 + hw_str.len()].copy_from_slice(hw_str);
+        let sw_str = b"1037386780";
+        rom[0x1C0040..0x1C0040 + sw_str.len()].copy_from_slice(sw_str);
+        let svbl_bytes = 2350u16.to_be_bytes();
+        rom[0x1C2000] = svbl_bytes[0];
+        rom[0x1C2001] = svbl_bytes[1];
+        rom[0x1C1FFE] = 0x00;
+        rom[0x1C1FFF] = 0x00;
+        rom[0x1C2002] = 0x00;
+        rom[0x1C2003] = 0x00;
+
+        let rom_b64 = base64::engine::general_purpose::STANDARD.encode(&rom);
+
+        // 1. sterngate_scan_rom_maps
+        let scan_res =
+            tools::handle_tool_call("sterngate_scan_rom_maps", &json!({ "rom_base64": rom_b64 }))
+                .await
+                .unwrap();
+        assert!(scan_res["success"].as_bool().unwrap());
+        assert!(scan_res["map_count"].as_u64().unwrap() > 0);
+        assert_eq!(
+            scan_res["signatures"]["bosch_hw_id"].as_str().unwrap(),
+            "0281012238"
+        );
+
+        // 2. sterngate_generate_stage_tune (Stage 1)
+        let stage1_res = tools::handle_tool_call(
+            "sterngate_generate_stage_tune",
+            &json!({
+                "rom_base64": rom_b64,
+                "stage": 1,
+                "chassis": "W211 E280 CDI",
+                "ecu_name": "EDC16CP31"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(stage1_res["success"].as_bool().unwrap());
+        assert_eq!(stage1_res["stage"].as_u64().unwrap(), 1);
+        assert!(stage1_res["armored_text"]
+            .as_str()
+            .unwrap()
+            .contains("BEGIN STERNGATE COMMUNITY MOD"));
+
+        // 3. sterngate_generate_stage_tune (Stage 2)
+        let stage2_res = tools::handle_tool_call(
+            "sterngate_generate_stage_tune",
+            &json!({
+                "rom_base64": rom_b64,
+                "stage": 2,
+                "chassis": "W211 E280 CDI",
+                "ecu_name": "EDC16CP31"
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(stage2_res["success"].as_bool().unwrap());
+        assert_eq!(stage2_res["stage"].as_u64().unwrap(), 2);
+
+        // 4. sterngate_kill_dtc
+        let dtc_res = tools::handle_tool_call(
+            "sterngate_kill_dtc",
+            &json!({
+                "rom_base64": rom_b64,
+                "p_codes": ["P0401", "P2002"]
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(dtc_res["success"].as_bool().unwrap());
+        assert_eq!(dtc_res["killed_codes"].as_array().unwrap().len(), 2);
+
+        // 5. sterngate_solve_checksum (verify)
+        let chk_res = tools::handle_tool_call(
+            "sterngate_solve_checksum",
+            &json!({
+                "rom_base64": rom_b64,
+                "fix": false
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(chk_res["success"].as_bool().unwrap());
+        assert!(!chk_res["fixed"].as_bool().unwrap());
+
+        // 6. sterngate_solve_checksum (fix)
+        let fix_res = tools::handle_tool_call(
+            "sterngate_solve_checksum",
+            &json!({
+                "rom_base64": rom_b64,
+                "fix": true
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(fix_res["success"].as_bool().unwrap());
+        assert!(fix_res["fixed"].as_bool().unwrap());
+        assert!(fix_res["report"]["is_valid"].as_bool().unwrap());
+    }
 }

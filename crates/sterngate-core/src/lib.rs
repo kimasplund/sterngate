@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod calibrator;
 pub mod cascades;
 pub mod catalog;
 pub mod command;
@@ -12,6 +13,11 @@ pub mod modpack;
 pub mod parameter;
 pub mod profile;
 pub mod service;
+
+pub use calibrator::{
+    BoschChecksumSolver, BoschMapDetector, ChecksumBlock, ChecksumReport, EcuMap, MapAxis,
+    MapCategory, StageGenerator,
+};
 
 pub use cascades::{
     CascadeAlert, CascadeId, CascadeReport, CascadeSeverity, CascadeTelemetryInput, CascadeWatchdog,
@@ -682,5 +688,115 @@ mod tests {
             message: "Cornering fog lights enabled".into(),
         };
         assert!(c.cornering_lights_enabled);
+    }
+
+    #[test]
+    fn test_map_percentage_modification_and_clamping() {
+        let mut map = EcuMap {
+            name: "Test Torque Limiter".into(),
+            category: MapCategory::Torque,
+            address: 0x1C1000,
+            rows: 1,
+            cols: 3,
+            axis_x: None,
+            axis_y: None,
+            data: vec![300.0, 380.0, 420.0],
+            raw_bytes: vec![0x0B, 0xB8, 0x0E, 0xD8, 0x10, 0x68], // 3000, 3800, 4200 (scaled x10)
+            factor: 0.1,
+            offset: 0.0,
+            unit: "Nm".into(),
+            is_16bit: true,
+            is_signed: false,
+        };
+
+        // Increase by +15% with a max clamp of 430 Nm
+        // 300 * 1.15 = 345.0
+        // 380 * 1.15 = 437.0 -> clamped to 430.0
+        // 420 * 1.15 = 483.0 -> clamped to 430.0
+        map.modify_percentage(1.15, Some(430.0));
+
+        assert!((map.data[0] - 345.0).abs() < 1e-3);
+        assert!((map.data[1] - 430.0).abs() < 1e-3);
+        assert!((map.data[2] - 430.0).abs() < 1e-3);
+
+        // Verify raw bytes updated properly
+        let val0 = u16::from_be_bytes([map.raw_bytes[0], map.raw_bytes[1]]);
+        let val1 = u16::from_be_bytes([map.raw_bytes[2], map.raw_bytes[3]]);
+        let val2 = u16::from_be_bytes([map.raw_bytes[4], map.raw_bytes[5]]);
+        assert_eq!(val0, 3450);
+        assert_eq!(val1, 4300);
+        assert_eq!(val2, 4300);
+    }
+
+    #[test]
+    fn test_bosch_checksum_solver_and_stage_generator() {
+        // Create synthetic 2MB EDC16 ROM
+        let mut rom = vec![0xFF; 0x200000];
+
+        // Plant Bosch HW and SW IDs in ASCII
+        let hw_str = b"0281012238";
+        rom[0x1C0020..0x1C0020 + hw_str.len()].copy_from_slice(hw_str);
+
+        let sw_str = b"1037386780";
+        rom[0x1C0040..0x1C0040 + sw_str.len()].copy_from_slice(sw_str);
+
+        // Plant Single Value Boost Limiter (SVBL) at 0x1C2000: 2350 mbar
+        let svbl_bytes = 2350u16.to_be_bytes();
+        rom[0x1C2000] = svbl_bytes[0];
+        rom[0x1C2001] = svbl_bytes[1];
+        // Neighbors zeroed
+        rom[0x1C1FFE] = 0x00;
+        rom[0x1C1FFF] = 0x00;
+        rom[0x1C2002] = 0x00;
+        rom[0x1C2003] = 0x00;
+
+        // Scan maps
+        let maps = BoschMapDetector::scan_rom(&rom);
+        assert!(!maps.is_empty(), "Detected maps should not be empty");
+
+        let svbl = maps.iter().find(|m| m.name.contains("SVBL"));
+        assert!(svbl.is_some());
+        assert_eq!(svbl.unwrap().data[0], 2350.0);
+
+        // Test Stage 1 generation
+        let stage1 =
+            StageGenerator::generate_stage1(&rom, "W211 E280 CDI", "EDC16CP31", "Sterngate Team")
+                .unwrap();
+        assert_eq!(stage1.metadata.category, ModCategory::Performance);
+        assert_eq!(stage1.target.ecu_name, "EDC16CP31");
+        assert!(stage1
+            .target
+            .compatible_hw_ids
+            .contains(&"0281012238".to_string()));
+        assert!(stage1
+            .target
+            .compatible_sw_ids
+            .contains(&"1037386780".to_string()));
+        assert!(!stage1.actions.is_empty());
+        assert!(!stage1.rollback_actions.is_empty());
+
+        // Test Stage 2 generation
+        let stage2 =
+            StageGenerator::generate_stage2(&rom, "W211 E280 CDI", "EDC16CP31", "Sterngate Team")
+                .unwrap();
+        assert_eq!(stage2.metadata.risk_level, ModRiskLevel::High);
+        assert!(stage2.actions.iter().any(
+            |a| matches!(a, ModAction::PatchFlashMap { map_name, .. } if map_name.contains("EGR"))
+        ));
+
+        // Test Checksum solver
+        let report = BoschChecksumSolver::verify(&rom);
+        assert_eq!(report.blocks.len(), 4);
+        assert!(!report.is_valid); // Initially blank blocks have 0 stored sums
+
+        // Recalculate checksums in-place
+        let fixed_report = BoschChecksumSolver::recalculate_and_apply(&mut rom).unwrap();
+        assert!(fixed_report.is_valid);
+        assert_eq!(fixed_report.valid_blocks, 4);
+
+        // Re-verifying should now pass 100%
+        let verify_after = BoschChecksumSolver::verify(&rom);
+        assert!(verify_after.is_valid);
+        assert_eq!(verify_after.valid_blocks, 4);
     }
 }

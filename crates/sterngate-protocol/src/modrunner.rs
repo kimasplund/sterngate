@@ -149,6 +149,40 @@ impl ModRunner {
                             warn!("Could not read DID 0x{:04X} for precondition: {}", did, e);
                         }
                     }
+                } else if let ModAction::PatchFlashMap {
+                    map_name,
+                    address_offset,
+                    expected_original_data: Some(expected),
+                    ..
+                } = action
+                {
+                    if let Ok(current_data) = uds
+                        .read_memory_by_address(*address_offset, expected.len() as u16)
+                        .await
+                    {
+                        let check_len = expected.len().min(current_data.len());
+                        if current_data[..check_len] != expected[..check_len] {
+                            return Err(SterngateError::ProtocolError(format!(
+                                "Precondition check failed for map '{}' at 0x{:06X}: expected original bytes {:02X?}, but vehicle returned {:02X?}. Aborting flash patch.",
+                                map_name, address_offset, expected, current_data
+                            )));
+                        }
+                    }
+                } else if let ModAction::DtcMask {
+                    p_code,
+                    address_offset,
+                    original_mask,
+                    ..
+                } = action
+                {
+                    if let Ok(current_data) = uds.read_memory_by_address(*address_offset, 1).await {
+                        if !current_data.is_empty() && current_data[0] != *original_mask {
+                            warn!(
+                                "DTC {} mask at 0x{:06X} was 0x{:02X}, expected 0x{:02X}",
+                                p_code, address_offset, current_data[0], original_mask
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -227,6 +261,39 @@ impl ModRunner {
                     uds.routine_control(*subfunction, *routine_id, data).await?;
                     steps_completed += 1;
                     actions_executed.push(format!("Routine 0x{:04X}: {}", routine_id, description));
+                }
+                ModAction::PatchFlashMap {
+                    map_name,
+                    address_offset,
+                    data,
+                    description,
+                    ..
+                } => {
+                    info!(
+                        "Applying Flash Map Patch '{}' at 0x{:06X} ({} bytes)...",
+                        map_name,
+                        address_offset,
+                        data.len()
+                    );
+                    uds.write_memory_by_address(*address_offset, data).await?;
+                    steps_completed += 1;
+                    actions_executed.push(format!("Patch Map '{}': {}", map_name, description));
+                }
+                ModAction::DtcMask {
+                    p_code,
+                    address_offset,
+                    disable_mask,
+                    description,
+                    ..
+                } => {
+                    info!(
+                        "Applying DTC {} suppression mask (0x{:02X}) at 0x{:06X}...",
+                        p_code, disable_mask, address_offset
+                    );
+                    uds.write_memory_by_address(*address_offset, &[*disable_mask])
+                        .await?;
+                    steps_completed += 1;
+                    actions_executed.push(format!("DTC Mask {}: {}", p_code, description));
                 }
             }
         }

@@ -100,19 +100,55 @@ sterngate mod list --dir profiles/mods
 
 ---
 
-## 4. Web UI Dashboard
+## 4. Flash Calibration Tuning & WinOLS Map Studio
 
-On the embedded Sterngate Dashboard (`http://localhost:8080`), open **Tab 4 (Diagnostics & Coding)**:
-1. **Dropzone / Paste**: Drag and drop any `.sgmod` file, or paste ASCII armored text into the text box.
-2. **Live Inspection**: Click **Inspect Mod** to view author metadata, target vehicle filters, bitmasks, and Reed-Solomon auto-repair diagnostics.
-3. **1-Click Apply**: Click **Apply Mod to Vehicle** to execute over CAN bus with live progress bar and Git commit SHA display.
-4. **Mod Creator Wizard**: Click **Create New Community Mod** to open the authoring modal, specify parameters, and instantly download the `.sgmod` package or copy armored text.
+Sterngate extends community mods beyond diagnostic variant coding into **ECU flash calibration tuning**, eliminating risky 2MB full ROM flashing in favor of compact, verified, self-healing `.sgmod` diff patches.
+
+### Supported Mod Actions
+- `ModAction::ConfigureDid`: UDS Service 0x2E/0x2E with bitmask and precondition validation.
+- `ModAction::PatchFlashMap`: In-place calibration map write (Service 0x3D / `WriteMemoryByAddress`) to ECU calibration sector (`0x1C0000..0x1FFFFF` on EDC16) with address offset, expected stock data, and safety ceiling clamping.
+- `ModAction::DtcMask`: Zeroes DTC fault path enable switches in the calibration sector to suppress specific error codes (e.g. `P0401` EGR, `P2002` DPF).
+
+### CLI Tuning Suite (`sterngate tune`)
+```bash
+# Heuristic map scan, Bosch HW/SW detection, and MPC5xx checksum verification
+sterngate tune scan rom.bin
+
+# Generate a Stage 1 tuning .sgmod (+18% Torque, +120 mbar Boost, +50 bar Rail)
+sterngate tune stage1 rom.bin --chassis "W211" --ecu "EDC16CP31" --out stage1.sgmod
+
+# Generate a Stage 2 tuning .sgmod (+25% Torque, +200 mbar Boost, DPF/EGR Delete, DTC Kill)
+sterngate tune stage2 rom.bin --chassis "W211" --ecu "EDC16CP31" --out stage2.sgmod
+
+# Generate a standalone DTC suppression .sgmod
+sterngate tune dtc-kill rom.bin --codes "P0401,P2002" --out dtc_kill.sgmod
+
+# Verify or fix Bosch MPC5xx 32-bit block checksums and complement pairs
+sterngate tune checksum rom.bin --fix --out rom_fixed.bin
+```
 
 ---
 
-## 5. Model Context Protocol (MCP) Tools
+## 5. Web UI Map Studio & Tuning Tab
 
-AI assistants can interact with community mods using standard MCP tools:
+On the embedded Sterngate Dashboard (`http://localhost:8080`), open **Tab 9 (Map Studio & Tuning)**:
+1. **ROM Binary Loader**: Drag & drop any 2MB Bosch EDC16 binary dump or click **Load Sample EDC16 ROM** for instant testing.
+2. **Identification & Integrity**: Instant display of Bosch Hardware (`0281...`), Software (`1037...`), and 4 MPC5xx partitioned block checksums.
+3. **1-Click Stage Generator**: One-click creation of Stage 1, Stage 2, or custom DTC suppression packages with live download and direct vehicle dispatch.
+4. **Interactive 2D/3D Map Selector**: Inspect Driver's Wish, Torque Limiter, Boost Target, SVBL, Smoke Limiter, Rail Pressure, and EGR Hysteresis.
+5. **Dynamic Heatmapped Table**: Visual HSV color gradients (green $\to$ yellow $\to$ red) reflecting cell intensity with percentage modification inputs and safety clamping.
+6. **In-Place Checksum Recalculation**: Fix invalid block checksums with 1 click and download corrected ROM binaries.
+
+---
+
+## 6. Model Context Protocol (MCP) Tools
+
+AI assistants can interact with community mods and calibration tuning using standard JSON-RPC MCP tools:
 - `sterngate_inspect_community_mod`: Cryptographically validates payload, verifies chassis compatibility, and tests Reed-Solomon error correction.
 - `sterngate_apply_community_mod`: Safely executes the mod on the vehicle or simulated ECU with voltage interlock and Git garage logging.
 - `sterngate_create_community_mod`: Authors a compliant `.sgmod` package and outputs ASCII armor.
+- `sterngate_scan_rom_maps`: Scans a ROM binary for calibration maps, Bosch IDs, and checksum blocks via `rom_path` or `rom_base64`.
+- `sterngate_generate_stage_tune`: Creates Stage 1 or Stage 2 `.sgmod` tuning packages directly from ROM dumps.
+- `sterngate_kill_dtc`: Generates a standalone `.sgmod` suppressing specific DTC error codes.
+- `sterngate_solve_checksum`: Verifies and optionally recalculates Bosch MPC5xx partitioned checksums.
+

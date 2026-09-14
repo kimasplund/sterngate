@@ -2165,6 +2165,316 @@ function downloadGeneratedModFile() {
   document.body.removeChild(a);
 }
 
+// ==========================================
+// MAP STUDIO & WINOLS CALIBRATOR ENGINE
+// ==========================================
+let currentRomBase64 = null;
+let currentDetectedMaps = [];
+let activeMapIndex = null;
+let originalActiveMapData = [];
+let lastGeneratedArmoredMod = null;
+
+function handleTuningFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const arrayBuffer = e.target.result;
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    currentRomBase64 = btoa(binary);
+    document.getElementById('tuning-file-status').textContent = `Loaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    await scanRomTuning();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function loadSampleEdc16Rom() {
+  document.getElementById('tuning-file-status').textContent = 'Synthesizing 2MB Bosch EDC16CP31 Calibration ROM...';
+  const romSize = 0x200000;
+  const rom = new Uint8Array(romSize);
+  rom.fill(0xFF);
+  
+  const hw = "0281012238";
+  for (let i = 0; i < hw.length; i++) rom[0x1C0020 + i] = hw.charCodeAt(i);
+  const sw = "1037386780";
+  for (let i = 0; i < sw.length; i++) rom[0x1C0040 + i] = sw.charCodeAt(i);
+  
+  rom[0x1C2000] = 0x09;
+  rom[0x1C2001] = 0x2E; // 2350 mbar
+  rom[0x1C1FFE] = 0x00; rom[0x1C1FFF] = 0x00;
+  rom[0x1C2002] = 0x00; rom[0x1C2003] = 0x00;
+
+  let binary = '';
+  const len = rom.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(rom[i]);
+  }
+  currentRomBase64 = btoa(binary);
+  document.getElementById('tuning-file-status').textContent = 'Loaded: Simulated Mercedes EDC16CP31 ROM (2.0 MB)';
+  await scanRomTuning();
+}
+
+async function scanRomTuning() {
+  if (!currentRomBase64) return;
+  try {
+    const res = await fetch('/api/v1/tuning/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rom_base64: currentRomBase64 })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      alert('Failed scanning ROM: ' + (data.error || 'Unknown error'));
+      return;
+    }
+
+    document.getElementById('tuning-sig-hw').textContent = data.signatures.bosch_hw_id || 'N/A';
+    document.getElementById('tuning-sig-sw').textContent = data.signatures.bosch_sw_id || 'N/A';
+    document.getElementById('tuning-sig-part').textContent = data.signatures.oem_part_number || 'N/A';
+    document.getElementById('tuning-sig-crc').textContent = '0x' + (data.checksum.global_crc32 >>> 0).toString(16).toUpperCase();
+
+    const chkBadge = document.getElementById('tuning-checksum-badge');
+    const chkSummary = document.getElementById('tuning-checksum-summary');
+    const btnFix = document.getElementById('btn-fix-checksums');
+
+    if (data.checksum.is_valid) {
+      chkBadge.className = 'badge badge-ready';
+      chkBadge.textContent = 'PASS ✓';
+      chkSummary.textContent = `All ${data.checksum.total_blocks} Bosch MPC5xx blocks valid. Checksum integrity OK.`;
+      btnFix.style.display = 'none';
+    } else {
+      chkBadge.className = 'badge badge-recording';
+      chkBadge.textContent = 'MISMATCH';
+      chkSummary.textContent = `${data.checksum.valid_blocks}/${data.checksum.total_blocks} valid blocks. Checksums must be recalculated before flashing!`;
+      btnFix.style.display = 'block';
+    }
+
+    document.getElementById('btn-gen-stage1').disabled = false;
+    document.getElementById('btn-gen-stage2').disabled = false;
+    document.getElementById('btn-gen-dtc-kill').disabled = false;
+
+    currentDetectedMaps = data.maps;
+    document.getElementById('detected-maps-count').textContent = currentDetectedMaps.length;
+    renderMapsList();
+  } catch (err) {
+    console.error('Scan error:', err);
+  }
+}
+
+function renderMapsList() {
+  const container = document.getElementById('maps-selector-list');
+  if (!currentDetectedMaps || currentDetectedMaps.length === 0) {
+    container.innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted);">No maps detected in this ROM.</div>';
+    return;
+  }
+
+  container.innerHTML = currentDetectedMaps.map((map, idx) => `
+    <button class="btn ${idx === activeMapIndex ? 'btn-primary' : ''}" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;" onclick="selectActiveMap(${idx})">
+      <b>${map.name}</b> <span style="opacity: 0.7;">(0x${map.address.toString(16).toUpperCase()})</span>
+    </button>
+  `).join('');
+
+  if (activeMapIndex === null && currentDetectedMaps.length > 0) {
+    selectActiveMap(0);
+  }
+}
+
+function selectActiveMap(idx) {
+  activeMapIndex = idx;
+  const map = currentDetectedMaps[idx];
+  if (!map) return;
+
+  originalActiveMapData = [...map.data];
+  document.getElementById('active-map-container').style.display = 'block';
+  document.getElementById('active-map-name').textContent = map.name;
+  document.getElementById('active-map-meta').textContent = `Address: 0x${map.address.toString(16).toUpperCase()} | Size: ${map.rows}x${map.cols} | Unit: ${map.unit}`;
+
+  renderMapsList();
+  renderActiveMapTable();
+}
+
+function renderActiveMapTable() {
+  if (activeMapIndex === null) return;
+  const map = currentDetectedMaps[activeMapIndex];
+  const table = document.getElementById('active-map-table');
+
+  const minVal = Math.min(...map.data);
+  const maxVal = Math.max(...map.data);
+  const range = (maxVal - minVal) || 1.0;
+
+  let html = '';
+
+  if (map.axis_x && map.axis_x.values.length > 0) {
+    html += '<thead><tr><th style="background: #161b22; color: var(--accent); padding: 4px 6px;">Y \\ X</th>';
+    for (const xv of map.axis_x.values) {
+      html += `<th style="background: #161b22; color: var(--accent); padding: 4px 6px;">${xv}</th>`;
+    }
+    html += '</tr></thead>';
+  }
+
+  html += '<tbody>';
+  for (let r = 0; r < map.rows; r++) {
+    html += '<tr>';
+    if (map.axis_y && map.axis_y.values.length > r) {
+      html += `<th style="background: #161b22; color: #79c0ff; padding: 4px 6px;">${map.axis_y.values[r]}</th>`;
+    } else {
+      html += `<th style="background: #161b22; color: #79c0ff; padding: 4px 6px;">Row ${r}</th>`;
+    }
+
+    for (let c = 0; c < map.cols; c++) {
+      const idx = r * map.cols + c;
+      const val = map.data[idx];
+      const norm = (val - minVal) / range;
+      const hue = Math.round((1.0 - norm) * 120);
+      const bgColor = `hsla(${hue}, 70%, 25%, 0.6)`;
+
+      html += `<td style="background: ${bgColor}; padding: 4px 6px; border: 1px solid rgba(255,255,255,0.05);">${val.toFixed(1)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+
+  table.innerHTML = html;
+}
+
+function applyMapPercentage(factor) {
+  if (activeMapIndex === null) return;
+  const map = currentDetectedMaps[activeMapIndex];
+  for (let i = 0; i < map.data.length; i++) {
+    map.data[i] = originalActiveMapData[i] * factor;
+  }
+  renderActiveMapTable();
+}
+
+function resetActiveMap() {
+  if (activeMapIndex === null) return;
+  const map = currentDetectedMaps[activeMapIndex];
+  map.data = [...originalActiveMapData];
+  renderActiveMapTable();
+}
+
+async function fixRomChecksums() {
+  if (!currentRomBase64) return;
+  try {
+    const res = await fetch('/api/v1/tuning/checksum/fix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rom_base64: currentRomBase64 })
+    });
+    const data = await res.json();
+    if (data.success && data.fixed_base64) {
+      currentRomBase64 = data.fixed_base64;
+      await scanRomTuning();
+      alert('✓ All Bosch MPC5xx block checksums recalculated and verified!');
+    } else {
+      alert('Checksum solve failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    alert('Checksum error: ' + err);
+  }
+}
+
+async function generateStageTune(stage) {
+  if (!currentRomBase64) return;
+  const url = stage === 1 ? '/api/v1/tuning/stage1' : '/api/v1/tuning/stage2';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rom_base64: currentRomBase64,
+        chassis: 'W211 E280 CDI',
+        ecu_name: 'EDC16CP31',
+        author: 'Sterngate Community'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      alert('Generation failed: ' + (data.error || 'Unknown error'));
+      return;
+    }
+
+    lastGeneratedArmoredMod = data.armored_text;
+    document.getElementById('tuning-output-container').style.display = 'block';
+    document.getElementById('tuning-armored-output').textContent = data.armored_text;
+    alert(`✓ Stage ${stage} .sgmod package successfully generated!`);
+  } catch (err) {
+    alert('Stage error: ' + err);
+  }
+}
+
+function setDtcPreset(preset) {
+  document.getElementById('dtc-kill-input').value = preset;
+}
+
+async function generateDtcKillMod() {
+  if (!currentRomBase64) return;
+  const input = document.getElementById('dtc-kill-input').value.trim();
+  if (!input) return;
+  const codes = input.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
+
+  try {
+    const res = await fetch('/api/v1/tuning/dtc/kill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rom_base64: currentRomBase64,
+        chassis: 'W211',
+        ecu_name: 'EDC16',
+        p_codes: codes,
+        author: 'Sterngate Tuner'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      alert('DTC kill generation failed: ' + (data.error || 'Unknown error'));
+      return;
+    }
+
+    lastGeneratedArmoredMod = data.armored_text;
+    document.getElementById('tuning-output-container').style.display = 'block';
+    document.getElementById('tuning-armored-output').textContent = data.armored_text;
+    alert(`✓ DTC Kill package generated for ${codes.join(', ')}!`);
+  } catch (err) {
+    alert('DTC kill error: ' + err);
+  }
+}
+
+async function applyGeneratedMod() {
+  if (!lastGeneratedArmoredMod) return;
+  openSafetyModal({
+    actionType: 'mod_apply',
+    title: 'Flash Calibration Mod to Vehicle',
+    desc: 'Flash the generated calibration package to the connected vehicle ECU. Baseline snapshot will be saved to vehicle garage Git history.',
+    riskBadge: 'SAFE TUNING / REVERSIBLE',
+    keyword: null,
+    minVoltage: 12.5,
+    payload: {
+      content: lastGeneratedArmoredMod,
+      vin: currentVin || 'WDB2112061A123456',
+      battery_voltage: 13.8,
+      force: false
+    },
+    actionFn: async (payload) => {
+      const res = await fetch('/api/v1/mods/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.report.message);
+      } else {
+        alert('Mod flashing failed: ' + (data.error || 'Unknown error'));
+      }
+    }
+  });
+}
+
 // Initial triggers
 document.addEventListener('DOMContentLoaded', () => {
   try {

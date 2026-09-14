@@ -138,7 +138,8 @@
     "workshop": "Werkstatt-Prozeduren",
     "coding": "Schnell-Codierung & Mods",
     "flashing": "Sicheres ECU-Flashen",
-    "catalog": "ECU-Katalog"
+    "catalog": "ECU-Katalog",
+    "tuning": "Kennfeld-Studio & Tuning"
   },
   "modal": {
     "btn_cancel": "Abbrechen",

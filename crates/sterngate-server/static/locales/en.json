@@ -138,7 +138,8 @@
     "workshop": "Workshop Procedures",
     "coding": "Quick Mods & Coding",
     "flashing": "Safe ECU Flashing",
-    "catalog": "ECU Catalog"
+    "catalog": "ECU Catalog",
+    "tuning": "Map Studio & Tuning"
   },
   "modal": {
     "btn_cancel": "Cancel / Abort",

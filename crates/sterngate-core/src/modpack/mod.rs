@@ -17,6 +17,7 @@ pub enum ModCategory {
     Brakes,
     Emissions,
     Retrofit,
+    Diagnostics,
 }
 
 impl ModCategory {
@@ -29,6 +30,7 @@ impl ModCategory {
             Self::Brakes => "Brake Systems",
             Self::Emissions => "Emissions Optimization",
             Self::Retrofit => "Equipment Retrofit",
+            Self::Diagnostics => "Diagnostics & Fault Management",
         }
     }
 }
@@ -151,6 +153,23 @@ pub enum ModAction {
         routine_id: u16,
         subfunction: u8,
         data: Vec<u8>,
+        description: String,
+    },
+    /// Patch an ECU flash calibration map (e.g. Torque Limiter, Boost Target, SVBL)
+    PatchFlashMap {
+        map_name: String,
+        address_offset: u32,
+        data: Vec<u8>,
+        /// Optional expected original bytes at offset (precondition check)
+        expected_original_data: Option<Vec<u8>>,
+        description: String,
+    },
+    /// Suppress or disable a specific Diagnostic Trouble Code in ECU flash memory
+    DtcMask {
+        p_code: String,
+        address_offset: u32,
+        original_mask: u8,
+        disable_mask: u8,
         description: String,
     },
 }

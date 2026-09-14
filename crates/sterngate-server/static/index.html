@@ -57,6 +57,9 @@
     <button class="tab-btn" onclick="switchTab('catalog')" data-tab="catalog">
       <span>📚</span> <span data-i18n="tabs.catalog">ECU Catalog</span>
     </button>
+    <button class="tab-btn" onclick="switchTab('tuning')" data-tab="tuning">
+      <span>🚀</span> <span data-i18n="tabs.tuning">Map Studio & Tuning</span>
+    </button>
   </nav>
 
   <!-- TAB 1: LIVE TELEMETRY -->
@@ -802,6 +805,142 @@
             <button class="btn" style="padding: 0.2rem 0.5rem;" onclick="closeInspect()" data-i18n="cbf.btn_close">✕ Close</button>
           </div>
           <div id="cbf-inspect-content" style="font-size: 0.85rem; line-height: 1.6; color: var(--text);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 7: MAP STUDIO & PERFORMANCE CALIBRATION (WINOLS REPLACEMENT) -->
+  <div id="tab-pane-tuning" class="tab-pane">
+    <div class="grid">
+      <!-- Left Column: ROM Dropzone, Signatures & Checksums -->
+      <div class="card">
+        <div class="card-header">
+          <span>📦</span>
+          <span>ROM Binary & Signature Analysis</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">
+          Upload or inspect Bosch EDC16 / EDC17 flash memory dumps (.bin, .ori).
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem;">
+          <input type="file" id="tuning-file-input" style="display: none;" onchange="handleTuningFileUpload(event)">
+          <button class="btn btn-primary" onclick="document.getElementById('tuning-file-input').click()">
+            📂 Load ROM Binary (.bin/.ori)
+          </button>
+          <button class="btn" onclick="loadSampleEdc16Rom()">
+            ⚡ Load Simulated EDC16 ROM
+          </button>
+        </div>
+
+        <div id="tuning-file-status" style="font-size: 0.8rem; color: var(--accent); margin-bottom: 0.8rem;">
+          No ROM loaded. Select a file or load simulated EDC16 CP31 ROM.
+        </div>
+
+        <!-- Detected ECU Signatures -->
+        <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; margin-bottom: 0.8rem;">
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.3rem;">ECU Signatures</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.8rem;">
+            <div>Bosch HW: <b id="tuning-sig-hw" style="color: #58a6ff;">--</b></div>
+            <div>Bosch SW: <b id="tuning-sig-sw" style="color: #58a6ff;">--</b></div>
+            <div>Part Number: <b id="tuning-sig-part" style="color: #58a6ff;">--</b></div>
+            <div>CRC32: <b id="tuning-sig-crc" style="color: #58a6ff;">--</b></div>
+          </div>
+        </div>
+
+        <!-- Bosch Checksum Solver Block -->
+        <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; margin-bottom: 0.8rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);">Bosch MPC5xx Checksums</div>
+            <span id="tuning-checksum-badge" class="badge">UNKNOWN</span>
+          </div>
+          <div id="tuning-checksum-summary" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+            Awaiting ROM scan...
+          </div>
+          <button id="btn-fix-checksums" class="btn btn-warning" style="width: 100%; display: none;" onclick="fixRomChecksums()">
+            🛠️ Fix All Bosch Checksums In-Place
+          </button>
+        </div>
+
+        <!-- 1-Click Stage Tuning & DTC Suppression -->
+        <div class="card-header" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
+          <span>⚡</span>
+          <span>1-Click Safe Stage Tuning (.sgmod)</span>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.8rem;">
+          Generate compact (~2 KB), self-healing .sgmod packages with Reed-Solomon FEC.
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <button class="btn btn-primary" onclick="generateStageTune(1)" id="btn-gen-stage1" disabled>
+            🚀 Generate Stage 1 Tune (+18% Torque, +120mbar Boost, +50bar Rail)
+          </button>
+          <button class="btn btn-danger" onclick="generateStageTune(2)" id="btn-gen-stage2" disabled>
+            🏁 Generate Stage 2 Race Tune (+25% Torque, DPF/EGR Delete, DTC Off)
+          </button>
+        </div>
+
+        <!-- DTC Kill Matrix -->
+        <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.8rem;">
+          <div style="font-size: 0.85rem; font-weight: bold; margin-bottom: 0.4rem;">🎯 DTC Suppression (P-Code Kill)</div>
+          <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
+            <input type="text" id="dtc-kill-input" placeholder="e.g. P0401, P2002, P0100" style="flex: 1; font-family: monospace;">
+            <button class="btn btn-warning" onclick="generateDtcKillMod()" id="btn-gen-dtc-kill" disabled>Kill DTCs</button>
+          </div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">
+            Quick presets: <a href="#" onclick="setDtcPreset('P0401, P0402'); return false;" style="color: var(--accent);">EGR (P0401)</a> | <a href="#" onclick="setDtcPreset('P2002, P2452'); return false;" style="color: var(--accent);">DPF (P2002)</a> | <a href="#" onclick="setDtcPreset('P2047, P2048'); return false;" style="color: var(--accent);">AdBlue (P2047)</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Detected Maps List & WinOLS 2D/3D Map Viewer -->
+      <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>🗺️</span>
+            <span>Detected Calibration Maps (<span id="detected-maps-count">0</span>)</span>
+          </div>
+        </div>
+
+        <!-- Maps Selection Dropdown / Badges -->
+        <div id="maps-selector-list" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem;">
+          <div style="font-size: 0.85rem; color: var(--text-muted);">No maps detected yet. Load a ROM file to start automated pattern matching.</div>
+        </div>
+
+        <!-- Active Map Detail / Table Editor -->
+        <div id="active-map-container" style="display: none; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 0.8rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+            <div>
+              <h4 id="active-map-name" style="color: var(--accent); margin: 0;">Map Name</h4>
+              <span id="active-map-meta" style="font-size: 0.75rem; color: var(--text-muted);">Address: 0x1C1000 | 16x16 | Nm</span>
+            </div>
+            <!-- Percentage Modification Toolbar -->
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Modify:</span>
+              <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.05)">+5%</button>
+              <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.10)">+10%</button>
+              <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.15)">+15%</button>
+              <button class="btn" style="padding: 0.2rem 0.4rem;" onclick="applyMapPercentage(1.18)">+18%</button>
+              <button class="btn btn-danger" style="padding: 0.2rem 0.4rem;" onclick="resetActiveMap()">Reset</button>
+            </div>
+          </div>
+
+          <!-- Heatmapped 2D Table Container -->
+          <div id="active-map-table-wrapper" style="overflow-x: auto; max-height: 400px; border: 1px solid var(--border); border-radius: 4px;">
+            <table class="table" style="font-family: monospace; font-size: 0.75rem; margin: 0; text-align: right;" id="active-map-table">
+              <!-- Rendered via JS -->
+            </table>
+          </div>
+        </div>
+
+        <!-- Generated Modpack Output Container -->
+        <div id="tuning-output-container" style="display: none; margin-top: 1rem; background: #0b1520; border: 1px solid var(--accent); border-radius: 6px; padding: 0.8rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <div style="font-weight: bold; color: var(--accent);">✓ Generated Community Mod Package (.sgmod)</div>
+            <button class="btn btn-primary" style="padding: 0.2rem 0.6rem;" onclick="applyGeneratedMod()">
+              ⚡ 1-Click Flash Mod to Vehicle
+            </button>
+          </div>
+          <pre id="tuning-armored-output" style="max-height: 160px; overflow-y: auto; background: #000; color: #39d353; font-size: 0.75rem; padding: 0.5rem; border-radius: 4px;"></pre>
         </div>
       </div>
     </div>

@@ -1,11 +1,12 @@
 use serde_json::{json, Value};
 use sha2::Digest;
 use sterngate_core::{
-    decode_from_armor, encode_to_armor, lookup_routine_name, CascadeTelemetryInput,
-    CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc, EcoStartStopMode, EcuCatalog,
-    FirmwareVault, FlashPackageManifest, Language, ModAction, ModCategory, ModMetadata,
-    ModRiskLevel, ModTargetFilter, SterngateMod, SuspensionCorner, SuspensionCornerAction,
-    SuspensionLeakDetector, SuspensionSample, TelemetrySnapshot, VehicleGarage, VehicleProfile,
+    decode_from_armor, encode_to_armor, lookup_routine_name, BoschChecksumSolver, BoschMapDetector,
+    CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc, EcoStartStopMode,
+    EcuCatalog, FirmwareSignatures, FirmwareVault, FlashPackageManifest, Language, ModAction,
+    ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, StageGenerator, SterngateMod,
+    SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample,
+    TelemetrySnapshot, VehicleGarage, VehicleProfile,
 };
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 use sterngate_protocol::{
@@ -646,6 +647,132 @@ pub fn get_tools_list() -> Value {
                     "output_path": {
                         "type": "string",
                         "description": "Optional file path to save the .sgmod file"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_scan_rom_maps",
+            "description": "Scan an ECU binary ROM dump (e.g. Bosch EDC16 2MB) using heuristic pattern matching to detect calibration maps (Driver's Wish, Boost, Torque Limiter, Smoke Limiter, Rail Pressure, EGR Hysteresis, SVBL, DTC tables), extract Bosch HW/SW identifiers, and verify MPC5xx block checksums.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "rom_path": {
+                        "type": "string",
+                        "description": "File path to the ECU ROM binary dump"
+                    },
+                    "rom_base64": {
+                        "type": "string",
+                        "description": "Base64-encoded bytes of the ECU ROM binary dump"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_generate_stage_tune",
+            "description": "Generate a Stage 1 (+18% torque, +120 mbar boost, +50 bar rail) or Stage 2 (+25% torque, +200 mbar boost, DPF delete, EGR hysteresis zeroing, DTC kill) tuning package as a self-healing .sgmod file from an ECU ROM dump.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "rom_path": {
+                        "type": "string",
+                        "description": "File path to the ECU ROM binary dump"
+                    },
+                    "rom_base64": {
+                        "type": "string",
+                        "description": "Base64-encoded bytes of the ECU ROM binary dump"
+                    },
+                    "stage": {
+                        "type": "integer",
+                        "description": "Tuning stage: 1 (conservative street) or 2 (aggressive + deletes). Default: 1",
+                        "default": 1
+                    },
+                    "chassis": {
+                        "type": "string",
+                        "description": "Target chassis (e.g. 'W211 E280 CDI'). Default: 'W211'",
+                        "default": "W211"
+                    },
+                    "ecu_name": {
+                        "type": "string",
+                        "description": "Target ECU name (e.g. 'EDC16CP31'). Default: 'EDC16CP31'",
+                        "default": "EDC16CP31"
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Author or tuning workshop name. Default: 'Sterngate Tuner'",
+                        "default": "Sterngate Tuner"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional file path to save the generated .sgmod file"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_kill_dtc",
+            "description": "Generate a standalone DTC suppression .sgmod package for specific fault codes (e.g. ['P0401', 'P2002']) by locating DTC fault path tables in an ECU ROM dump and zeroing their enable masks.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["p_codes"],
+                "properties": {
+                    "rom_path": {
+                        "type": "string",
+                        "description": "File path to the ECU ROM binary dump"
+                    },
+                    "rom_base64": {
+                        "type": "string",
+                        "description": "Base64-encoded bytes of the ECU ROM binary dump"
+                    },
+                    "p_codes": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "List of standard alphanumeric OBD-II DTC codes to suppress (e.g. ['P0401', 'P2002', 'P0101'])"
+                    },
+                    "chassis": {
+                        "type": "string",
+                        "description": "Target chassis (e.g. 'W211'). Default: 'W211'",
+                        "default": "W211"
+                    },
+                    "ecu_name": {
+                        "type": "string",
+                        "description": "Target ECU name (e.g. 'EDC16'). Default: 'EDC16'",
+                        "default": "EDC16"
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Author name. Default: 'Sterngate Tuner'",
+                        "default": "Sterngate Tuner"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional file path to save the generated .sgmod file"
+                    }
+                }
+            }
+        },
+        {
+            "name": "sterngate_solve_checksum",
+            "description": "Verify and optionally recalculate Bosch MPC5xx partitioned 32-bit block checksums and inverted complement pairs on an ECU ROM binary dump.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "rom_path": {
+                        "type": "string",
+                        "description": "File path to the ECU ROM binary dump"
+                    },
+                    "rom_base64": {
+                        "type": "string",
+                        "description": "Base64-encoded bytes of the ECU ROM binary dump"
+                    },
+                    "fix": {
+                        "type": "boolean",
+                        "description": "If true, recalculates and updates all invalid block checksums in the ROM. Default: false",
+                        "default": false
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional file path to write the patched ROM binary (if fix is true)"
                     }
                 }
             }
@@ -2078,6 +2205,166 @@ pub async fn handle_tool_call(name: &str, arguments: &Value) -> Result<Value, St
                 "output_path": output_path,
             }))
         }
+        "sterngate_scan_rom_maps" => {
+            let rom = load_rom_bytes_mcp(arguments)?;
+            let sigs = FirmwareSignatures::extract(&rom);
+            let checksum = BoschChecksumSolver::verify(&rom);
+            let maps = BoschMapDetector::scan_rom(&rom);
+
+            Ok(json!({
+                "success": true,
+                "rom_size": rom.len(),
+                "signatures": sigs,
+                "checksum": checksum,
+                "map_count": maps.len(),
+                "maps": maps,
+            }))
+        }
+        "sterngate_generate_stage_tune" => {
+            let rom = load_rom_bytes_mcp(arguments)?;
+            let stage = arguments.get("stage").and_then(|v| v.as_u64()).unwrap_or(1);
+            let chassis = arguments
+                .get("chassis")
+                .and_then(|v| v.as_str())
+                .unwrap_or("W211");
+            let ecu_name = arguments
+                .get("ecu_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("EDC16CP31");
+            let author = arguments
+                .get("author")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Sterngate Tuner");
+            let output_path = arguments.get("output_path").and_then(|v| v.as_str());
+
+            let modpack = if stage == 2 {
+                StageGenerator::generate_stage2(&rom, chassis, ecu_name, author)
+            } else {
+                StageGenerator::generate_stage1(&rom, chassis, ecu_name, author)
+            }
+            .map_err(|e| format!("Failed to generate Stage {} tune: {}", stage, e))?;
+
+            let armored = encode_to_armor(&modpack).unwrap_or_default();
+
+            if let Some(path_str) = output_path {
+                let p = std::path::Path::new(path_str);
+                if let Some(parent) = p.parent() {
+                    std::fs::create_dir_all(parent).ok();
+                }
+                std::fs::write(p, modpack.to_json().map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("Failed writing mod file: {}", e))?;
+            }
+
+            Ok(json!({
+                "success": true,
+                "stage": stage,
+                "mod_id": modpack.metadata.mod_id,
+                "name": modpack.metadata.name,
+                "actions_count": modpack.actions.len(),
+                "parity_bytes": modpack.integrity.fec_parity_bytes.len(),
+                "crc32": format!("0x{:08X}", modpack.integrity.payload_crc32),
+                "armored_text": armored,
+                "output_path": output_path,
+                "mod": modpack,
+            }))
+        }
+        "sterngate_kill_dtc" => {
+            let rom = load_rom_bytes_mcp(arguments)?;
+            let p_codes: Vec<String> = arguments
+                .get("p_codes")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            if p_codes.is_empty() {
+                return Err(
+                    "Parameter 'p_codes' must contain at least one DTC code (e.g. ['P0401'])"
+                        .to_string(),
+                );
+            }
+
+            let chassis = arguments
+                .get("chassis")
+                .and_then(|v| v.as_str())
+                .unwrap_or("W211");
+            let ecu_name = arguments
+                .get("ecu_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("EDC16");
+            let author = arguments
+                .get("author")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Sterngate Tuner");
+            let output_path = arguments.get("output_path").and_then(|v| v.as_str());
+
+            let modpack =
+                StageGenerator::generate_dtc_kill(&rom, chassis, ecu_name, &p_codes, author)
+                    .map_err(|e| format!("Failed to generate DTC kill mod: {}", e))?;
+
+            let armored = encode_to_armor(&modpack).unwrap_or_default();
+
+            if let Some(path_str) = output_path {
+                let p = std::path::Path::new(path_str);
+                if let Some(parent) = p.parent() {
+                    std::fs::create_dir_all(parent).ok();
+                }
+                std::fs::write(p, modpack.to_json().map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("Failed writing mod file: {}", e))?;
+            }
+
+            Ok(json!({
+                "success": true,
+                "mod_id": modpack.metadata.mod_id,
+                "name": modpack.metadata.name,
+                "killed_codes": p_codes,
+                "actions_count": modpack.actions.len(),
+                "parity_bytes": modpack.integrity.fec_parity_bytes.len(),
+                "crc32": format!("0x{:08X}", modpack.integrity.payload_crc32),
+                "armored_text": armored,
+                "output_path": output_path,
+                "mod": modpack,
+            }))
+        }
+        "sterngate_solve_checksum" => {
+            let mut rom = load_rom_bytes_mcp(arguments)?;
+            let fix = arguments
+                .get("fix")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let output_path = arguments.get("output_path").and_then(|v| v.as_str());
+
+            if fix {
+                let report = BoschChecksumSolver::recalculate_and_apply(&mut rom)
+                    .map_err(|e| format!("Failed to recalculate checksums: {}", e))?;
+
+                if let Some(path_str) = output_path {
+                    let p = std::path::Path::new(path_str);
+                    if let Some(parent) = p.parent() {
+                        std::fs::create_dir_all(parent).ok();
+                    }
+                    std::fs::write(p, &rom)
+                        .map_err(|e| format!("Failed writing patched ROM: {}", e))?;
+                }
+
+                Ok(json!({
+                    "success": true,
+                    "fixed": true,
+                    "report": report,
+                    "output_path": output_path,
+                }))
+            } else {
+                let report = BoschChecksumSolver::verify(&rom);
+                Ok(json!({
+                    "success": true,
+                    "fixed": false,
+                    "report": report,
+                }))
+            }
+        }
         _ => Err(format!("Unknown tool name: {}", name)),
     }
 }
@@ -2108,4 +2395,18 @@ fn parse_hex_slice(s: &str) -> Result<Vec<u8>, String> {
             u8::from_str_radix(&clean[i..i + 2], 16).map_err(|e| format!("Invalid hex byte: {}", e))
         })
         .collect()
+}
+
+fn load_rom_bytes_mcp(arguments: &Value) -> Result<Vec<u8>, String> {
+    if let Some(path_str) = arguments.get("rom_path").and_then(|v| v.as_str()) {
+        std::fs::read(path_str)
+            .map_err(|e| format!("Failed reading ROM file '{}': {}", path_str, e))
+    } else if let Some(b64_str) = arguments.get("rom_base64").and_then(|v| v.as_str()) {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD
+            .decode(b64_str)
+            .map_err(|e| format!("Invalid base64 ROM payload: {}", e))
+    } else {
+        Err("Either 'rom_path' or 'rom_base64' must be provided in arguments".to_string())
+    }
 }

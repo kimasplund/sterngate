@@ -1,6 +1,6 @@
 use crate::interface::VehicleInterface;
 use async_trait::async_trait;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use sterngate_core::{CanFrame, Result};
@@ -15,6 +15,7 @@ pub struct VirtualCanInterface {
     is_open: bool,
     start_time: Instant,
     dtc_cleared: Arc<AtomicBool>,
+    last_multi_frame_sid: Arc<AtomicU8>,
 }
 
 impl VirtualCanInterface {
@@ -27,6 +28,7 @@ impl VirtualCanInterface {
             is_open: false,
             start_time: Instant::now(),
             dtc_cleared: Arc::new(AtomicBool::new(false)),
+            last_multi_frame_sid: Arc::new(AtomicU8::new(0x2E)),
         }
     }
 
@@ -46,6 +48,10 @@ impl VirtualCanInterface {
 
         if pci_type == 1 {
             // ISO-TP First Frame: Send Flow Control (0x30: ContinueToSend)
+            if payload.len() >= 3 {
+                self.last_multi_frame_sid
+                    .store(payload[2], Ordering::Relaxed);
+            }
             return Some(CanFrame::new_standard(
                 resp_id as u16,
                 &[0x30, 0x00, 0x00, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA],
@@ -53,11 +59,14 @@ impl VirtualCanInterface {
         }
 
         if pci_type == 2 {
-            // ISO-TP Consecutive Frame: Acknowledge write completion (0x6E)
-            return Some(CanFrame::new_standard(
-                resp_id as u16,
-                &[0x03, 0x6E, 0x20, 0x31, 0xAA, 0xAA, 0xAA, 0xAA],
-            ));
+            // ISO-TP Consecutive Frame: Acknowledge completion based on active SID
+            let sid = self.last_multi_frame_sid.load(Ordering::Relaxed);
+            let resp_bytes = if sid == 0x3D {
+                vec![0x02, 0x7D, 0x24, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA]
+            } else {
+                vec![0x03, 0x6E, 0x20, 0x31, 0xAA, 0xAA, 0xAA, 0xAA]
+            };
+            return Some(CanFrame::new_standard(resp_id as u16, &resp_bytes));
         }
 
         let service = if pci_type == 0 {
@@ -362,6 +371,13 @@ impl VirtualCanInterface {
                     ))
                 }
             }
+            // WriteMemoryByAddress (0x3D)
+            0x3D => Some(CanFrame::new_standard(resp_id as u16, &[0x02, 0x7D, 0x24])),
+            // ReadMemoryByAddress (0x23)
+            0x23 => Some(CanFrame::new_standard(
+                resp_id as u16,
+                &[0x04, 0x63, 0x00, 0x00, 0x00],
+            )),
             _ => {
                 Some(CanFrame::new_standard(
                     resp_id as u16,

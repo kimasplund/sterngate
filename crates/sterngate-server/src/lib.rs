@@ -1038,4 +1038,132 @@ mod tests {
         let resp = create_router(state).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
+
+    #[tokio::test]
+    async fn test_server_tuning_endpoints() {
+        use base64::Engine;
+
+        let mut iface = Box::new(VirtualCanInterface::new());
+        let _ = iface.open().await;
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher));
+
+        // Create synthetic 2MB EDC16 ROM
+        let mut rom = vec![0xFF; 0x200000];
+        let hw_str = b"0281012238";
+        rom[0x1C0020..0x1C0020 + hw_str.len()].copy_from_slice(hw_str);
+        let sw_str = b"1037386780";
+        rom[0x1C0040..0x1C0040 + sw_str.len()].copy_from_slice(sw_str);
+        let svbl_bytes = 2350u16.to_be_bytes();
+        rom[0x1C2000] = svbl_bytes[0];
+        rom[0x1C2001] = svbl_bytes[1];
+        rom[0x1C1FFE] = 0x00;
+        rom[0x1C1FFF] = 0x00;
+        rom[0x1C2002] = 0x00;
+        rom[0x1C2003] = 0x00;
+
+        let rom_b64 = base64::engine::general_purpose::STANDARD.encode(&rom);
+
+        // 1. POST /api/v1/tuning/scan
+        let scan_payload = json!({
+            "rom_base64": rom_b64
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/tuning/scan")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&scan_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let scan_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(scan_res["success"].as_bool().unwrap());
+        assert!(scan_res["map_count"].as_u64().unwrap() > 0);
+
+        // 2. POST /api/v1/tuning/stage1
+        let stage1_payload = json!({
+            "rom_base64": rom_b64,
+            "chassis": "W211 E280 CDI",
+            "ecu_name": "EDC16CP31",
+            "author": "TunerKim"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/tuning/stage1")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&stage1_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let stage1_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(stage1_res["success"].as_bool().unwrap());
+        assert_eq!(stage1_res["stage"].as_u64().unwrap(), 1);
+        assert!(stage1_res["armored_text"]
+            .as_str()
+            .unwrap()
+            .contains("BEGIN STERNGATE COMMUNITY MOD"));
+
+        // 3. POST /api/v1/tuning/stage2
+        let stage2_payload = json!({
+            "rom_base64": rom_b64,
+            "chassis": "W211 E280 CDI",
+            "ecu_name": "EDC16CP31"
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/tuning/stage2")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&stage2_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let stage2_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(stage2_res["success"].as_bool().unwrap());
+        assert_eq!(stage2_res["stage"].as_u64().unwrap(), 2);
+
+        // 4. POST /api/v1/tuning/checksum/verify
+        let chk_payload = json!({
+            "rom_base64": rom_b64
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/tuning/checksum/verify")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&chk_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // 5. POST /api/v1/tuning/checksum/fix
+        let fix_payload = json!({
+            "rom_base64": rom_b64
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/tuning/checksum/fix")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&fix_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let fix_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(fix_res["success"].as_bool().unwrap());
+        assert!(fix_res["report"]["is_valid"].as_bool().unwrap());
+        assert!(fix_res["fixed_base64"].is_string());
+    }
 }

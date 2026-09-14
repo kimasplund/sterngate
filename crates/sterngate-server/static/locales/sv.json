@@ -138,7 +138,8 @@
     "workshop": "Verkstadsprocedurer",
     "coding": "Snabbkodning & Anpassningar",
     "flashing": "Säker ECU-programmering",
-    "catalog": "ECU-katalog"
+    "catalog": "ECU-katalog",
+    "tuning": "Map Studio & Optimering"
   },
   "modal": {
     "btn_cancel": "Avbryt",

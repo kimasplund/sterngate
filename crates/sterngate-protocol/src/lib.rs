@@ -516,4 +516,67 @@ mod tests {
         assert_eq!(exec.steps_completed, 1);
         assert!(exec.git_commit_sha.is_some());
     }
+
+    #[tokio::test]
+    async fn test_mod_runner_flash_map_and_dtc_mask() {
+        use sterngate_core::{
+            ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, SterngateMod,
+        };
+
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+
+        let metadata = ModMetadata {
+            mod_id: "w211-stage1-test".into(),
+            name: "W211 Stage 1 Test".into(),
+            version: "1.0.0".into(),
+            author: "TunerKim".into(),
+            description: "Stage 1 map patches and DTC mask".into(),
+            category: ModCategory::Performance,
+            risk_level: ModRiskLevel::Moderate,
+            instructions: None,
+            created_at: "2026-09-14T12:00:00Z".into(),
+        };
+
+        let target = ModTargetFilter {
+            chassis: vec!["W211".into()],
+            ecu_name: "EDC16".into(),
+            tx_id: 0x7E0,
+            rx_id: 0x7E8,
+            compatible_hw_ids: vec![],
+            compatible_sw_ids: vec![],
+            min_battery_voltage: 12.5,
+            requires_engine_off: true,
+        };
+
+        let actions = vec![
+            ModAction::PatchFlashMap {
+                map_name: "Torque Limiter".into(),
+                address_offset: 0x1C1000,
+                data: vec![0x0B, 0xB8, 0x10, 0x68],
+                expected_original_data: None,
+                description: "+18% Torque Limiter".into(),
+            },
+            ModAction::DtcMask {
+                p_code: "P0401".into(),
+                address_offset: 0x1CE000,
+                original_mask: 0xFF,
+                disable_mask: 0x00,
+                description: "DTC Off: P0401 EGR Flow".into(),
+            },
+        ];
+
+        let mut modpack = SterngateMod::create(metadata, target, actions, vec![]).unwrap();
+
+        let exec = ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2112061A777777", 12.8, false)
+            .await
+            .unwrap();
+
+        assert!(exec.success);
+        assert_eq!(exec.steps_completed, 2);
+        assert_eq!(exec.total_steps, 2);
+        assert!(exec.actions_executed[0].contains("Torque Limiter"));
+        assert!(exec.actions_executed[1].contains("P0401"));
+        assert!(exec.git_commit_sha.is_some());
+    }
 }

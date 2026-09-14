@@ -105,7 +105,7 @@ impl FirmwareSignatures {
         let mut project_name = None;
 
         let len = data.len();
-        let scan_limit = len.min(1024 * 1024);
+        let scan_limit = len.min(4 * 1024 * 1024);
 
         // 1. Scan for Bosch HW (10 digits starting with 0281 or 0261)
         // 2. Scan for Bosch SW (10 digits starting with 1037 or 1039)

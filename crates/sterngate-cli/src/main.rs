@@ -6,12 +6,12 @@ use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use sterngate_core::{
-    decode_from_armor, encode_to_armor, lookup_routine_name, CascadeSeverity,
-    CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc, EcoStartStopMode,
-    EcuCatalog, FecStatus, FirmwareVault, FlashPackageManifest, FlashState, Language, ModAction,
-    ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, SterngateError, SterngateMod,
-    SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector, SuspensionSample,
-    VehicleGarage, VehicleProfile,
+    decode_from_armor, encode_to_armor, lookup_routine_name, BoschChecksumSolver, BoschMapDetector,
+    CascadeSeverity, CascadeTelemetryInput, CascadeWatchdog, DriveBenchmark, DriveSummary, Dtc,
+    EcoStartStopMode, EcuCatalog, FecStatus, FirmwareVault, FlashPackageManifest, FlashState,
+    Language, ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, StageGenerator,
+    SterngateError, SterngateMod, SuspensionCorner, SuspensionCornerAction, SuspensionLeakDetector,
+    SuspensionSample, VehicleGarage, VehicleProfile,
 };
 use sterngate_hal::{OpenPortInterface, SocketCanInterface, VehicleInterface, VirtualCanInterface};
 use sterngate_mcp::McpServer;
@@ -136,6 +136,11 @@ enum Commands {
     Mod {
         #[command(subcommand)]
         action: ModCommands,
+    },
+    /// Performance tuning, map analysis, WinOLS features, and stage generation
+    Tune {
+        #[command(subcommand)]
+        action: TuneCommands,
     },
 }
 
@@ -596,6 +601,100 @@ enum ModCommands {
         /// Directory containing .sgmod files
         #[arg(long, default_value = "profiles/mods")]
         dir: PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TuneCommands {
+    /// Scan an ECU ROM binary dump to detect 1D, 2D, and 3D calibration maps
+    Scan {
+        /// Path to ROM binary file (.bin / .ori)
+        #[arg(short, long)]
+        rom: PathBuf,
+        /// Optional map name filter (e.g. "Torque", "Boost", "SVBL")
+        #[arg(long)]
+        filter: Option<String>,
+        /// Display ASCII grid visualization of calibration tables
+        #[arg(long, default_value_t = true)]
+        table: bool,
+    },
+    /// Generate a safe, verified Stage 1 calibration package (.sgmod) from a ROM dump
+    Stage1 {
+        /// Path to stock ROM binary file (.bin / .ori)
+        #[arg(short, long)]
+        rom: PathBuf,
+        /// Target vehicle chassis (e.g. "W211 E280 CDI")
+        #[arg(long, default_value = "W211 E280 CDI")]
+        chassis: String,
+        /// Target ECU name (e.g. "EDC16CP31")
+        #[arg(long, default_value = "EDC16CP31")]
+        ecu: String,
+        /// Author name
+        #[arg(long, default_value = "Sterngate Community Tuner")]
+        author: String,
+        /// Optional path to save generated .sgmod file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Output copy-pasteable ASCII armored text block
+        #[arg(long, default_value_t = true)]
+        armor: bool,
+    },
+    /// Generate a Stage 2 race package (.sgmod) with DPF/EGR delete and DTC suppression
+    Stage2 {
+        /// Path to stock ROM binary file (.bin / .ori)
+        #[arg(short, long)]
+        rom: PathBuf,
+        /// Target vehicle chassis (e.g. "W211 E280 CDI")
+        #[arg(long, default_value = "W211 E280 CDI")]
+        chassis: String,
+        /// Target ECU name (e.g. "EDC16CP31")
+        #[arg(long, default_value = "EDC16CP31")]
+        ecu: String,
+        /// Author name
+        #[arg(long, default_value = "Sterngate Community Tuner")]
+        author: String,
+        /// Optional path to save generated .sgmod file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Output copy-pasteable ASCII armored text block
+        #[arg(long, default_value_t = true)]
+        armor: bool,
+    },
+    /// Generate a standalone DTC suppression (P-code kill) .sgmod package
+    DtcKill {
+        /// Path to stock ROM binary file (.bin / .ori)
+        #[arg(short, long)]
+        rom: PathBuf,
+        /// P-codes to kill, separated by comma (e.g. "P0401,P2002")
+        #[arg(short, long)]
+        codes: String,
+        /// Target vehicle chassis
+        #[arg(long, default_value = "W211")]
+        chassis: String,
+        /// Target ECU name
+        #[arg(long, default_value = "EDC16")]
+        ecu: String,
+        /// Author name
+        #[arg(long, default_value = "Sterngate Tuner")]
+        author: String,
+        /// Optional path to save generated .sgmod file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Output copy-pasteable ASCII armored text block
+        #[arg(long, default_value_t = true)]
+        armor: bool,
+    },
+    /// Verify and solve Bosch MPC5xx flash block checksums
+    Checksum {
+        /// Path to ROM binary file (.bin / .ori)
+        #[arg(short, long)]
+        rom: PathBuf,
+        /// Recalculate and update all block checksums in-place or write to output
+        #[arg(long)]
+        fix: bool,
+        /// Output path for fixed ROM (if not specified with --fix, updates in-place)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
 }
 
@@ -2428,6 +2527,45 @@ async fn main() -> Result<()> {
                                         description
                                     );
                                 }
+                                ModAction::PatchFlashMap {
+                                    map_name,
+                                    address_offset,
+                                    data,
+                                    expected_original_data,
+                                    description,
+                                } => {
+                                    println!(
+                                        "    {}. Flash Map Patch '{}' @ 0x{:06X}: {} ({} bytes)",
+                                        idx + 1,
+                                        map_name,
+                                        address_offset,
+                                        description,
+                                        data.len()
+                                    );
+                                    if let Some(exp) = expected_original_data {
+                                        println!(
+                                            "       - Original validation required ({} bytes)",
+                                            exp.len()
+                                        );
+                                    }
+                                }
+                                ModAction::DtcMask {
+                                    p_code,
+                                    address_offset,
+                                    original_mask,
+                                    disable_mask,
+                                    description,
+                                } => {
+                                    println!(
+                                        "    {}. DTC Mask '{}' @ 0x{:06X}: {} (0x{:02X} -> 0x{:02X})",
+                                        idx + 1,
+                                        p_code,
+                                        address_offset,
+                                        description,
+                                        original_mask,
+                                        disable_mask
+                                    );
+                                }
                             }
                         }
 
@@ -2719,6 +2857,259 @@ async fn main() -> Result<()> {
                             println!("  Use 'sterngate mod create' or drag-and-drop in the Web UI to add mods.");
                         } else {
                             println!("\nTotal: {} community mod(s) found.", entries_count);
+                        }
+                    }
+                }
+                return Ok(());
+            }
+            Commands::Tune { action } => {
+                match action {
+                    TuneCommands::Scan { rom, filter, table } => {
+                        let rom_bytes = std::fs::read(&rom).with_context(|| {
+                            format!("Failed to read ROM file from '{}'", rom.display())
+                        })?;
+                        let sigs = sterngate_core::FirmwareSignatures::extract(&rom_bytes);
+                        let checksum = BoschChecksumSolver::verify(&rom_bytes);
+                        let maps = BoschMapDetector::scan_rom(&rom_bytes);
+
+                        println!("============================================================");
+                        println!("  ECU ROM CALIBRATION SCAN & MAP DETECTION (WinOLS Engine)");
+                        println!("============================================================");
+                        println!(
+                            "  • File:        {} ({} bytes / {:.2} MB)",
+                            rom.display(),
+                            rom_bytes.len(),
+                            rom_bytes.len() as f64 / (1024.0 * 1024.0)
+                        );
+                        println!(
+                            "  • Bosch HW:    {}",
+                            sigs.bosch_hw_id.as_deref().unwrap_or("Unknown")
+                        );
+                        println!(
+                            "  • Bosch SW:    {}",
+                            sigs.bosch_sw_id.as_deref().unwrap_or("Unknown")
+                        );
+                        println!(
+                            "  • Part Number: {}",
+                            sigs.oem_part_number.as_deref().unwrap_or("Unknown")
+                        );
+                        println!("  • Global CRC:  0x{:08X}", checksum.global_crc32);
+                        println!(
+                            "  • Checksums:   {} ({} / {} blocks valid)",
+                            if checksum.is_valid {
+                                "PASS ✓"
+                            } else {
+                                "MISMATCH ⚠"
+                            },
+                            checksum.valid_blocks,
+                            checksum.total_blocks
+                        );
+
+                        let filtered_maps: Vec<_> = if let Some(ref f) = filter {
+                            let f_lower = f.to_lowercase();
+                            maps.into_iter()
+                                .filter(|m| m.name.to_lowercase().contains(&f_lower))
+                                .collect()
+                        } else {
+                            maps
+                        };
+
+                        println!(
+                            "\n  [Detected Calibration Maps: {} total]",
+                            filtered_maps.len()
+                        );
+                        for (idx, map) in filtered_maps.iter().enumerate() {
+                            println!(
+                                "  {:2}. [0x{:06X}] {:<36} | {:2}x{:<2} | {}",
+                                idx + 1,
+                                map.address,
+                                map.name,
+                                map.rows,
+                                map.cols,
+                                map.category.as_str()
+                            );
+                            if table {
+                                println!("\n{}", map.format_ascii_table());
+                            }
+                        }
+                    }
+                    TuneCommands::Stage1 {
+                        rom,
+                        chassis,
+                        ecu,
+                        author,
+                        output,
+                        armor,
+                    } => {
+                        let rom_bytes = std::fs::read(&rom).with_context(|| {
+                            format!("Failed to read stock ROM file from '{}'", rom.display())
+                        })?;
+                        let modpack =
+                            StageGenerator::generate_stage1(&rom_bytes, &chassis, &ecu, &author)?;
+
+                        println!("============================================================");
+                        println!("  GENERATED STAGE 1 PERFORMANCE PACKAGE (.sgmod)");
+                        println!("============================================================");
+                        println!("  • Name:        {}", modpack.metadata.name);
+                        println!("  • Mod ID:      {}", modpack.metadata.mod_id);
+                        println!(
+                            "  • Target:      {} ({})",
+                            modpack.target.chassis.join("/"),
+                            modpack.target.ecu_name
+                        );
+                        println!("  • Scope:       +18% Peak Torque (430 Nm max), +120 mbar Boost, +50 bar Rail");
+                        println!(
+                            "  • Actions:     {} memory patch routines with rollback protection",
+                            modpack.actions.len()
+                        );
+
+                        if let Some(ref out_path) = output {
+                            if let Some(parent) = out_path.parent() {
+                                std::fs::create_dir_all(parent).ok();
+                            }
+                            std::fs::write(out_path, modpack.to_json()?)?;
+                            println!("  ✓ Saved .sgmod to: {}", out_path.display());
+                        }
+
+                        if armor {
+                            let armored = encode_to_armor(&modpack)?;
+                            println!("\n--- COPY-PASTEABLE ASCII ARMORED STAGE 1 MOD ---");
+                            println!("{}", armored);
+                        }
+                    }
+                    TuneCommands::Stage2 {
+                        rom,
+                        chassis,
+                        ecu,
+                        author,
+                        output,
+                        armor,
+                    } => {
+                        let rom_bytes = std::fs::read(&rom).with_context(|| {
+                            format!("Failed to read stock ROM file from '{}'", rom.display())
+                        })?;
+                        let modpack =
+                            StageGenerator::generate_stage2(&rom_bytes, &chassis, &ecu, &author)?;
+
+                        println!("============================================================");
+                        println!("  GENERATED STAGE 2 RACE PERFORMANCE PACKAGE (.sgmod)");
+                        println!("============================================================");
+                        println!("  • Name:        {}", modpack.metadata.name);
+                        println!("  • Mod ID:      {}", modpack.metadata.mod_id);
+                        println!(
+                            "  • Target:      {} ({})",
+                            modpack.target.chassis.join("/"),
+                            modpack.target.ecu_name
+                        );
+                        println!("  • Scope:       +25% Peak Torque, +200 mbar Boost, +80 bar Rail, DPF Off, EGR Hysteresis Off, P0401/P2002 DTC Suppressed");
+                        println!("  • Warning:     Requires physical DPF downpipe & EGR blanking plate (Off-road only)");
+
+                        if let Some(ref out_path) = output {
+                            if let Some(parent) = out_path.parent() {
+                                std::fs::create_dir_all(parent).ok();
+                            }
+                            std::fs::write(out_path, modpack.to_json()?)?;
+                            println!("  ✓ Saved .sgmod to: {}", out_path.display());
+                        }
+
+                        if armor {
+                            let armored = encode_to_armor(&modpack)?;
+                            println!("\n--- COPY-PASTEABLE ASCII ARMORED STAGE 2 MOD ---");
+                            println!("{}", armored);
+                        }
+                    }
+                    TuneCommands::DtcKill {
+                        rom,
+                        codes,
+                        chassis,
+                        ecu,
+                        author,
+                        output,
+                        armor,
+                    } => {
+                        let rom_bytes = std::fs::read(&rom).with_context(|| {
+                            format!("Failed to read stock ROM file from '{}'", rom.display())
+                        })?;
+                        let p_codes: Vec<String> = codes
+                            .split(',')
+                            .map(|s| s.trim().to_uppercase())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+
+                        let modpack = StageGenerator::generate_dtc_kill(
+                            &rom_bytes, &chassis, &ecu, &p_codes, &author,
+                        )?;
+
+                        println!("============================================================");
+                        println!("  GENERATED STANDALONE DTC SUPPRESSION PACKAGE (.sgmod)");
+                        println!("============================================================");
+                        println!("  • Suppressed:  {}", p_codes.join(", "));
+                        println!("  • Target ECU:  {} ({})", chassis, ecu);
+
+                        if let Some(ref out_path) = output {
+                            if let Some(parent) = out_path.parent() {
+                                std::fs::create_dir_all(parent).ok();
+                            }
+                            std::fs::write(out_path, modpack.to_json()?)?;
+                            println!("  ✓ Saved .sgmod to: {}", out_path.display());
+                        }
+
+                        if armor {
+                            let armored = encode_to_armor(&modpack)?;
+                            println!("\n--- COPY-PASTEABLE ASCII ARMORED DTC KILL MOD ---");
+                            println!("{}", armored);
+                        }
+                    }
+                    TuneCommands::Checksum { rom, fix, output } => {
+                        let mut rom_bytes = std::fs::read(&rom).with_context(|| {
+                            format!("Failed to read ROM file from '{}'", rom.display())
+                        })?;
+                        let report = BoschChecksumSolver::verify(&rom_bytes);
+
+                        println!("============================================================");
+                        println!("  BOSCH MPC5xx / FLASH CHECKSUM VERIFICATION");
+                        println!("============================================================");
+                        println!("  • File:        {}", rom.display());
+                        println!("  • Global CRC:  0x{:08X}", report.global_crc32);
+                        println!(
+                            "  • Blocks:      {} total ({} valid)",
+                            report.total_blocks, report.valid_blocks
+                        );
+                        println!(
+                            "  • Status:      {}",
+                            if report.is_valid {
+                                "PASS ✓ ALL CHECKSUMS VALID"
+                            } else {
+                                "MISMATCH ⚠ CHECKSUMS INVALID"
+                            }
+                        );
+
+                        println!("\n  [Block Map]");
+                        for b in &report.blocks {
+                            println!(
+                                "  Block #{}: 0x{:06X}..0x{:06X} | Sum: 0x{:08X} (stored: 0x{:08X}) | Inv: 0x{:08X} | {}",
+                                b.block_index,
+                                b.start_address,
+                                b.end_address,
+                                b.calculated_sum,
+                                b.stored_sum,
+                                b.calculated_inv,
+                                if b.is_valid { "VALID ✓" } else { "INVALID ✗" }
+                            );
+                        }
+
+                        if fix {
+                            let fixed_report =
+                                BoschChecksumSolver::recalculate_and_apply(&mut rom_bytes)?;
+                            let out_path = output.unwrap_or(rom);
+                            std::fs::write(&out_path, &rom_bytes).with_context(|| {
+                                format!("Failed writing fixed ROM to '{}'", out_path.display())
+                            })?;
+                            println!(
+                                "\n  ✓ Successfully recalculated and fixed all {} checksum blocks!",
+                                fixed_report.valid_blocks
+                            );
+                            println!("  ✓ Output written to: {}", out_path.display());
                         }
                     }
                 }

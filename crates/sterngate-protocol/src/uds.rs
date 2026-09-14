@@ -168,6 +168,44 @@ impl<'a> UdsClient<'a> {
         self.send_request(0x31, &payload).await
     }
 
+    /// ReadMemoryByAddress (0x23)
+    pub async fn read_memory_by_address(&mut self, address: u32, length: u16) -> Result<Vec<u8>> {
+        let addr_bytes = address.to_be_bytes();
+        let len_bytes = length.to_be_bytes();
+        let payload = vec![
+            0x24,
+            addr_bytes[0],
+            addr_bytes[1],
+            addr_bytes[2],
+            addr_bytes[3],
+            len_bytes[0],
+            len_bytes[1],
+        ];
+        let resp = self.send_request(0x23, &payload).await?;
+        if resp.len() > 1 {
+            Ok(resp[1..].to_vec())
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// WriteMemoryByAddress (0x3D)
+    pub async fn write_memory_by_address(&mut self, address: u32, data: &[u8]) -> Result<Vec<u8>> {
+        let addr_bytes = address.to_be_bytes();
+        let len_bytes = (data.len() as u16).to_be_bytes();
+        let mut payload = vec![
+            0x24,
+            addr_bytes[0],
+            addr_bytes[1],
+            addr_bytes[2],
+            addr_bytes[3],
+            len_bytes[0],
+            len_bytes[1],
+        ];
+        payload.extend_from_slice(data);
+        self.send_request(0x3D, &payload).await
+    }
+
     fn lookup_nrc_description(nrc: u8) -> String {
         match nrc {
             0x10 => "General Reject".into(),
