@@ -966,7 +966,8 @@ mod tests {
         let mut iface = VirtualCanInterface::new();
         iface.open().await.unwrap();
         // create() refuses < 12.5 V for flash writes, so forge the target after
-        // creation; integrity does not cover the target yet (Task 8 changes that).
+        // creation; integrity v2 covers the target, so the forged package must
+        // be re-signed the way an attacker would to pass the integrity check.
         let mut m = runner_mod(
             vec![patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3]))],
             vec![],

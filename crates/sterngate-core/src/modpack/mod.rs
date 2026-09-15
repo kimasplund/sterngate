@@ -13,7 +13,9 @@ pub const FLASH_WRITE_MIN_VOLTAGE: f64 = 12.5;
 
 /// Integrity format version. Version 2 covers `target`, `actions` and
 /// `rollback_actions`. Any other value is refused: the target filter of
-/// older packages was never integrity-protected.
+/// older packages was never integrity-protected. `metadata` is deliberately
+/// outside the canonical payload: no runtime gate reads it, so it is not
+/// signed.
 pub const MOD_INTEGRITY_VERSION: u8 = 2;
 
 /// Category classification for community mods
@@ -327,12 +329,41 @@ impl SterngateMod {
     }
 
     /// Verify package integrity and repair any corrupted bytes using Reed-Solomon FEC.
-    /// If corrupted bytes are repaired, `actions` and `rollback_actions` are updated in-place.
+    /// Unsupported integrity versions and unsupported/malformed FEC geometry
+    /// (`block_size`/`parity_size`) are refused before any FEC work is attempted,
+    /// so a crafted package cannot trigger a panic in the codec. If corrupted
+    /// bytes are repaired, `target`, `actions` and `rollback_actions` are all
+    /// updated in-place.
     pub fn verify_and_repair(&mut self) -> Result<ModValidationReport> {
         if self.integrity.version != MOD_INTEGRITY_VERSION {
             let reason = format!(
                 "unsupported .sgmod integrity version {} (expected {}); the target filter is not integrity-protected, regenerate the package",
                 self.integrity.version, MOD_INTEGRITY_VERSION
+            );
+            return Ok(ModValidationReport {
+                is_valid: false,
+                fec_status: FecStatus::Unrecoverable {
+                    reason: reason.clone(),
+                },
+                crc32_verified: false,
+                sha256_verified: false,
+                matched_vehicle: false,
+                compatibility_notes: vec![],
+                warning_messages: vec![reason],
+            });
+        }
+
+        let geometry_valid = self.integrity.block_size != 0
+            && self.integrity.parity_size != 0
+            && self
+                .integrity
+                .block_size
+                .checked_add(self.integrity.parity_size)
+                .is_some_and(|sum| sum <= 255);
+        if !geometry_valid {
+            let reason = format!(
+                "unsupported FEC geometry: block_size={}, parity_size={} (block_size and parity_size must be non-zero and sum to <= 255)",
+                self.integrity.block_size, self.integrity.parity_size
             );
             return Ok(ModValidationReport {
                 is_valid: false,
@@ -644,10 +675,36 @@ mod tests {
             |m| m.target.compatible_hw_ids.push("0281099999".into()),
         ] {
             let mut m = created_flash_mod();
+            let original_target = m.target.clone();
+            let payload_before =
+                SterngateMod::canonical_payload_bytes(&m.target, &m.actions, &m.rollback_actions)
+                    .unwrap();
+
             mutate(&mut m);
-            // Corrupt enough bytes that FEC cannot silently repair the lie.
-            m.integrity.fec_parity_bytes.clear();
-            assert!(!m.verify_and_repair().unwrap().is_valid);
+
+            let payload_after =
+                SterngateMod::canonical_payload_bytes(&m.target, &m.actions, &m.rollback_actions)
+                    .unwrap();
+            // The mutation must actually change the signed bytes -- otherwise
+            // `target` isn't part of the canonical payload at all.
+            assert_ne!(
+                payload_before, payload_after,
+                "target mutation did not change the canonical payload bytes"
+            );
+
+            // The parity block is left intact (not cleared): a lying `target`
+            // must either be refused outright, or FEC must repair it back to
+            // exactly the value that was signed. It must never be silently
+            // accepted as-mutated.
+            let report = m.verify_and_repair().unwrap();
+            let refused_or_repaired_to_original = !report.is_valid
+                || (report.is_valid
+                    && matches!(report.fec_status, FecStatus::Repaired { .. })
+                    && m.target == original_target);
+            assert!(
+                refused_or_repaired_to_original,
+                "lying target was accepted without repair: {report:?}"
+            );
         }
     }
 
@@ -687,5 +744,38 @@ mod tests {
     fn created_packages_carry_version_2() {
         assert_eq!(created_flash_mod().integrity.version, MOD_INTEGRITY_VERSION);
         assert_eq!(MOD_INTEGRITY_VERSION, 2);
+    }
+
+    #[test]
+    fn fec_geometry_out_of_range_is_refused_without_panic() {
+        let mut too_large = created_flash_mod();
+        too_large.integrity.block_size = 300;
+        let report = too_large.verify_and_repair().unwrap();
+        assert!(!report.is_valid);
+        assert!(
+            report.warning_messages[0].contains("FEC geometry"),
+            "{:?}",
+            report.warning_messages
+        );
+
+        let mut zero_block = created_flash_mod();
+        zero_block.integrity.block_size = 0;
+        let report = zero_block.verify_and_repair().unwrap();
+        assert!(!report.is_valid);
+        assert!(
+            report.warning_messages[0].contains("FEC geometry"),
+            "{:?}",
+            report.warning_messages
+        );
+
+        let mut zero_parity = created_flash_mod();
+        zero_parity.integrity.parity_size = 0;
+        let report = zero_parity.verify_and_repair().unwrap();
+        assert!(!report.is_valid);
+        assert!(
+            report.warning_messages[0].contains("FEC geometry"),
+            "{:?}",
+            report.warning_messages
+        );
     }
 }
