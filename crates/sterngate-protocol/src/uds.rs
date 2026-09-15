@@ -1,21 +1,46 @@
 use crate::isotp::IsoTpChannel;
 use crate::seedkey::SeedKeySolver;
+use std::time::Duration;
 use sterngate_core::{Dtc, Result, SterngateError};
 use sterngate_hal::VehicleInterface;
 
+/// Extra wait beyond the ECU-announced P2* before giving up on a pending reply.
+const P2_STAR_MARGIN: Duration = Duration::from_millis(500);
+/// P2* used until a DiagnosticSessionControl reply announces the real value.
+const DEFAULT_P2_STAR: Duration = Duration::from_millis(5000);
+
+/// P2* (enhanced response timing) from a positive DiagnosticSessionControl
+/// reply: bytes 4..6 hold the value in 10 ms units. Widened before multiplying
+/// so 0xFFFF cannot overflow a u16.
+pub(crate) fn p2_star_from(resp: &[u8]) -> Option<Duration> {
+    let raw = u16::from_be_bytes([*resp.get(4)?, *resp.get(5)?]);
+    Some(Duration::from_millis(u64::from(raw) * 10))
+}
+
 pub struct UdsClient<'a> {
     channel: IsoTpChannel<'a>,
+    p2_star: Duration,
 }
 
 impl<'a> UdsClient<'a> {
     pub fn new(interface: &'a mut dyn VehicleInterface, tx_id: u32, rx_id: u32) -> Self {
         Self {
             channel: IsoTpChannel::new(interface, tx_id, rx_id),
+            p2_star: DEFAULT_P2_STAR,
         }
     }
 
-    /// Send a raw UDS request and handle NRCs (including NRC 0x78 ResponsePending)
+    /// Send a raw UDS request and handle NRCs (including NRC 0x78 ResponsePending).
+    /// Restores the channel timeout on every exit path, even when NRC 0x78
+    /// changed it mid-flight.
     pub async fn send_request(&mut self, service: u8, payload: &[u8]) -> Result<Vec<u8>> {
+        let saved = self.channel.timeout();
+        let result = self.send_request_inner(service, payload).await;
+        self.channel.set_timeout(saved);
+        result
+    }
+
+    async fn send_request_inner(&mut self, service: u8, payload: &[u8]) -> Result<Vec<u8>> {
         let mut req = vec![service];
         req.extend_from_slice(payload);
 
@@ -23,25 +48,23 @@ impl<'a> UdsClient<'a> {
 
         loop {
             let resp = self.channel.recv_payload().await?;
-            if resp.is_empty() {
+            let Some(&sid) = resp.first() else {
                 return Err(SterngateError::IsoTpError(
                     "Empty UDS response received".into(),
                 ));
-            }
+            };
 
             // Check for Negative Response (0x7F)
-            if resp[0] == 0x7F {
-                if resp.len() < 3 {
+            if sid == 0x7F {
+                let (Some(&rejected_service), Some(&nrc)) = (resp.get(1), resp.get(2)) else {
                     return Err(SterngateError::IsoTpError(
                         "Malformed Negative Response".into(),
                     ));
-                }
-                let rejected_service = resp[1];
-                let nrc = resp[2];
+                };
 
                 // NRC 0x78: RequestCorrectlyReceived-ResponsePending -> ECU asks for more time
                 if nrc == 0x78 {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    self.channel.set_timeout(self.p2_star + P2_STAR_MARGIN);
                     continue;
                 }
 
@@ -54,11 +77,11 @@ impl<'a> UdsClient<'a> {
             }
 
             // Positive response SID is (service + 0x40)
-            if resp[0] != service + 0x40 {
+            if sid != service.wrapping_add(0x40) {
                 return Err(SterngateError::IsoTpError(format!(
                     "Unexpected response SID: expected 0x{:02X}, got 0x{:02X}",
-                    service + 0x40,
-                    resp[0]
+                    service.wrapping_add(0x40),
+                    sid
                 )));
             }
 
@@ -68,7 +91,11 @@ impl<'a> UdsClient<'a> {
 
     /// DiagnosticSessionControl (0x10)
     pub async fn diagnostic_session_control(&mut self, session_type: u8) -> Result<Vec<u8>> {
-        self.send_request(0x10, &[session_type]).await
+        let resp = self.send_request(0x10, &[session_type]).await?;
+        if let Some(p2_star) = p2_star_from(&resp) {
+            self.p2_star = p2_star;
+        }
+        Ok(resp)
     }
 
     /// SecurityAccess (0x27) with pluggable SeedKeySolver
@@ -236,5 +263,80 @@ impl<'a> UdsClient<'a> {
             0x7F => "Service Not Supported In Active Session".into(),
             _ => format!("Unknown NRC 0x{:02X}", nrc),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::ScriptedInterface;
+    use std::time::Duration;
+
+    const SESSION_OK: &[u8] = &[0x06, 0x50, 0x03, 0x00, 0x32, 0x01, 0xF4]; // P2 50 ms, P2* 5000 ms
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_response_waits_p2_star() {
+        let mut iface = ScriptedInterface::new()
+            .rule(0x10, &[SESSION_OK])
+            .rule_delayed(
+                0x31,
+                Duration::from_millis(4000),
+                &[&[0x05, 0x71, 0x01, 0xFF, 0x00, 0x00]],
+            );
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        uds.diagnostic_session_control(0x03).await.unwrap();
+        // The double answers 0x78 at once; the real reply arrives 4 s later, inside P2* (5 s).
+        let resp = uds.routine_control(0x01, 0xFF00, &[]).await.unwrap();
+        assert_eq!(resp, vec![0x71, 0x01, 0xFF, 0x00, 0x00]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_response_times_out_after_p2_star() {
+        let mut iface = ScriptedInterface::new()
+            .rule(0x10, &[SESSION_OK])
+            .rule(0x31, &[&[0x03, 0x7F, 0x31, 0x78]]);
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        uds.diagnostic_session_control(0x03).await.unwrap();
+        let started = tokio::time::Instant::now();
+        let err = uds.routine_control(0x01, 0xFF00, &[]).await.unwrap_err();
+        assert!(matches!(err, SterngateError::IsoTpTimeout));
+        let waited = started.elapsed();
+        assert!(
+            waited >= Duration::from_millis(5400),
+            "waited only {waited:?}"
+        );
+        assert!(waited < Duration::from_millis(7000), "waited {waited:?}");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn timeout_restored_after_pending() {
+        let mut iface = ScriptedInterface::new()
+            .rule(0x10, &[SESSION_OK])
+            .rule_once(
+                0x31,
+                &[
+                    &[0x03, 0x7F, 0x31, 0x78],
+                    &[0x05, 0x71, 0x01, 0xFF, 0x00, 0x00],
+                ],
+            );
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        uds.diagnostic_session_control(0x03).await.unwrap();
+        uds.routine_control(0x01, 0xFF00, &[]).await.unwrap();
+        // A later request that never gets an answer times out at the normal 1500 ms.
+        let started = tokio::time::Instant::now();
+        assert!(matches!(
+            uds.read_data_by_identifier(0x0100).await,
+            Err(SterngateError::IsoTpTimeout)
+        ));
+        assert!(started.elapsed() < Duration::from_millis(2000));
+    }
+
+    #[test]
+    fn p2_star_widening_does_not_overflow() {
+        assert_eq!(
+            p2_star_from(&[0x50, 0x03, 0x00, 0x32, 0xFF, 0xFF]),
+            Some(Duration::from_millis(655_350))
+        );
+        assert_eq!(p2_star_from(&[0x50, 0x03]), None);
     }
 }
