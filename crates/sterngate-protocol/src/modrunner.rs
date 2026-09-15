@@ -187,6 +187,37 @@ impl ModRunner {
             );
         }
 
+        // Mirror the gates `apply_mod` enforces. `check_compatibility` only knows
+        // about chassis, hardware ID and `min_battery_voltage`, so without this a
+        // package that apply refuses outright would inspect as compatible.
+        if let Err(e) = Self::check_provenance(modpack) {
+            final_report.matched_vehicle = false;
+            final_report.warning_messages.push(e.to_string());
+        }
+
+        if let Err(e) = Self::check_no_erase_routine(modpack) {
+            final_report.matched_vehicle = false;
+            final_report.warning_messages.push(e.to_string());
+        }
+
+        // A package that writes flash is held to the 12.5 V floor even when it
+        // declares a lower `min_battery_voltage` (a deserialized package never
+        // passed through `SterngateMod::create`, which is where that is checked).
+        if Self::writes_flash(modpack) {
+            if let Some(volts) = battery_voltage {
+                let required = modpack
+                    .target
+                    .min_battery_voltage
+                    .max(FLASH_WRITE_MIN_VOLTAGE);
+                if volts.is_nan() || volts < required {
+                    final_report.matched_vehicle = false;
+                    final_report.warning_messages.push(format!(
+                        "Battery voltage ({volts:.1}V) is below the {required:.1}V required to apply this package, which writes flash (floor {FLASH_WRITE_MIN_VOLTAGE:.1}V)"
+                    ));
+                }
+            }
+        }
+
         Ok(final_report)
     }
 

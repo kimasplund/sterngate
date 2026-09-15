@@ -854,6 +854,88 @@ mod tests {
         assert!(!report.matched_vehicle);
     }
 
+    /// `inspect_compatibility` must not report a package as compatible that
+    /// `apply_mod` refuses outright: the three gates below live in `ModRunner`,
+    /// not in `SterngateMod::check_compatibility`.
+    #[tokio::test]
+    async fn test_inspect_mirrors_provenance_refusal() {
+        let mut iface = VirtualCanInterface::new();
+        let m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Synthetic, Some(vec![0; 3]))],
+            vec![],
+            12.5,
+        );
+        let report = ModRunner::inspect_compatibility(&mut iface, &m, Some(&vin(20)), Some(12.8))
+            .await
+            .unwrap();
+        assert!(report.is_valid, "the package itself is intact");
+        assert!(!report.matched_vehicle);
+        assert!(
+            report
+                .warning_messages
+                .iter()
+                .any(|w| w.contains("provenance")),
+            "{:?}",
+            report.warning_messages
+        );
+    }
+
+    #[tokio::test]
+    async fn test_inspect_mirrors_erase_routine_refusal() {
+        let mut iface = VirtualCanInterface::new();
+        let m = runner_mod(
+            vec![ModAction::Routine {
+                routine_id: 0xFF00,
+                subfunction: 0x01,
+                data: vec![],
+                description: "erase".into(),
+            }],
+            vec![],
+            12.0,
+        );
+        let report = ModRunner::inspect_compatibility(&mut iface, &m, Some(&vin(21)), Some(12.8))
+            .await
+            .unwrap();
+        assert!(!report.matched_vehicle);
+        assert!(
+            report
+                .warning_messages
+                .iter()
+                .any(|w| w.contains("EraseMemory")),
+            "{:?}",
+            report.warning_messages
+        );
+    }
+
+    #[tokio::test]
+    async fn test_inspect_mirrors_flash_voltage_floor() {
+        // `SterngateMod::create` refuses a flash package declaring less than
+        // 12.5 V, so build a compliant package and swap the action in the way a
+        // deserialized (never-`create`d) package could arrive: the declared
+        // 12.0 V floor now lets `check_compatibility` alone wave 12.2 V through.
+        let mut m = runner_mod(vec![write_did(None)], vec![], 12.0);
+        m.actions = vec![patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3]))];
+        resign(&mut m);
+
+        let mut iface = VirtualCanInterface::new();
+        let report = ModRunner::inspect_compatibility(&mut iface, &m, Some(&vin(22)), Some(12.2))
+            .await
+            .unwrap();
+        assert!(report.is_valid, "{:?}", report.warning_messages);
+        assert!(!report.matched_vehicle);
+        assert!(
+            report.warning_messages.iter().any(|w| w.contains("12.5")),
+            "{:?}",
+            report.warning_messages
+        );
+
+        // Above the floor the same package inspects clean.
+        let report = ModRunner::inspect_compatibility(&mut iface, &m, Some(&vin(22)), Some(12.8))
+            .await
+            .unwrap();
+        assert!(report.matched_vehicle, "{:?}", report.warning_messages);
+    }
+
     #[tokio::test]
     async fn test_bitmask_write_read_failure_refuses() {
         let mut iface = VirtualCanInterface::with_failing_services(&[0x22]);
