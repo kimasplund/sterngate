@@ -23,7 +23,9 @@ pub use modrunner::{ModExecutionReport, ModRunner, TargetFingerprintPolicy};
 pub use scanner::{ModuleScanResult, VehicleDiagnosticReport, VehicleScanner};
 pub use seedkey::{DaimlerSeedKey, DaimlerSolver, SeedKeySolver};
 pub use service::{ServiceRoutineManager, VinAdaptationManager};
-pub use uds::UdsClient;
+pub use uds::{
+    parse_request_download, parse_routine_status, S3KeepAlive, UdsClient, S3_KEEPALIVE_INTERVAL,
+};
 
 #[cfg(test)]
 mod tests {

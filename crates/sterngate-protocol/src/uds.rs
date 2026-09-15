@@ -55,6 +55,84 @@ impl Drop for TimeoutRestore<'_, '_> {
     }
 }
 
+/// TesterPresent must go out at least every 2 s in an extended or programming
+/// session; sending at 1.5 s leaves margin for one slow exchange.
+pub const S3_KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1500);
+
+/// Tracks the last exchange with the ECU and sends a suppressed TesterPresent
+/// when the S3 timer is about to expire. Only ever called between complete
+/// request/response exchanges, so it cannot interleave with an ISO-TP transfer.
+pub struct S3KeepAlive {
+    last_activity: tokio::time::Instant,
+}
+
+impl Default for S3KeepAlive {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl S3KeepAlive {
+    pub fn new() -> Self {
+        Self {
+            last_activity: tokio::time::Instant::now(),
+        }
+    }
+
+    /// Record that a request/response exchange just completed.
+    pub fn touch(&mut self) {
+        self.last_activity = tokio::time::Instant::now();
+    }
+
+    /// Send `3E 80` if the session has been idle for the keep-alive interval.
+    pub async fn tick(&mut self, uds: &mut UdsClient<'_>) -> Result<()> {
+        if self.last_activity.elapsed() >= S3_KEEPALIVE_INTERVAL {
+            uds.tester_present_suppressed().await?;
+            self.touch();
+        }
+        Ok(())
+    }
+}
+
+/// Positive RoutineControl reply `71 <sub> <id> <status>`: returns the first
+/// routineStatusRecord byte. A reply without a status byte is an error, never
+/// an implicit success.
+pub fn parse_routine_status(resp: &[u8], sub: u8, routine_id: u16) -> Result<u8> {
+    let id = routine_id.to_be_bytes();
+    match resp {
+        [0x71, s, hi, lo, status, ..] if *s == sub && *hi == id[0] && *lo == id[1] => Ok(*status),
+        _ => Err(SterngateError::ProtocolError(format!(
+            "RoutineControl 0x{routine_id:04X}: unexpected reply {resp:02X?} (need 71 {sub:02X} {:02X} {:02X} <status>)",
+            id[0], id[1]
+        ))),
+    }
+}
+
+/// Positive RequestDownload reply: `74 <lengthFormat> <maxNumberOfBlockLength>`.
+/// Returns the ECU's maximum block length (including the SID and counter bytes).
+pub fn parse_request_download(resp: &[u8]) -> Result<usize> {
+    let err = |what: &str| {
+        SterngateError::ProtocolError(format!("RequestDownload: {what} in reply {resp:02X?}"))
+    };
+    if resp.first() != Some(&0x74) {
+        return Err(err("missing positive SID"));
+    }
+    let n = usize::from(resp.get(1).ok_or_else(|| err("missing length format"))? >> 4);
+    if !(1..=4).contains(&n) {
+        return Err(err("lengthFormatIdentifier out of range"));
+    }
+    let bytes = resp
+        .get(2..2 + n)
+        .ok_or_else(|| err("truncated maxNumberOfBlockLength"))?;
+    let max = bytes
+        .iter()
+        .fold(0usize, |acc, b| (acc << 8) | usize::from(*b));
+    if max < 3 {
+        return Err(err("maxNumberOfBlockLength leaves no room for data"));
+    }
+    Ok(max)
+}
+
 pub struct UdsClient<'a> {
     channel: IsoTpChannel<'a>,
     p2_star: Duration,
@@ -116,6 +194,12 @@ impl<'a> UdsClient<'a> {
                     nrc,
                     description: desc,
                 });
+            }
+
+            if sid == 0x7E && service != 0x3E {
+                // A non-conformant ECU answered a suppressed TesterPresent; it is
+                // not the reply we are waiting for.
+                continue;
             }
 
             // Positive response SID is (service + 0x40)
@@ -210,10 +294,19 @@ impl<'a> UdsClient<'a> {
         Ok(())
     }
 
-    /// TesterPresent (0x3E)
+    /// TesterPresent with positive-response suppression: fire and forget. A
+    /// conformant ECU sends nothing back, so waiting would only time out.
+    pub async fn tester_present_suppressed(&mut self) -> Result<()> {
+        self.channel.send_payload(&[0x3E, 0x80]).await
+    }
+
+    /// TesterPresent (0x3E). With `suppress_pos_rsp` the call returns as soon as
+    /// the frame is sent; otherwise it waits for `7E 00`.
     pub async fn tester_present(&mut self, suppress_pos_rsp: bool) -> Result<()> {
-        let sub = if suppress_pos_rsp { 0x80 } else { 0x00 };
-        self.send_request(0x3E, &[sub]).await?;
+        if suppress_pos_rsp {
+            return self.tester_present_suppressed().await;
+        }
+        self.send_request(0x3E, &[0x00]).await?;
         Ok(())
     }
 
@@ -405,5 +498,68 @@ mod tests {
             Some(Duration::from_millis(655_350))
         );
         assert_eq!(p2_star_from(&[0x50, 0x03]), None);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn tester_present_suppressed_does_not_wait() {
+        let mut iface = ScriptedInterface::new(); // never answers
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        let started = tokio::time::Instant::now();
+        uds.tester_present_suppressed().await.unwrap();
+        assert!(started.elapsed() < Duration::from_millis(10));
+        assert_eq!(iface.sent_frames()[0].data[..3], [0x02, 0x3E, 0x80]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stray_7e_response_is_ignored() {
+        let mut iface =
+            ScriptedInterface::new().rule(0x36, &[&[0x02, 0x7E, 0x80], &[0x02, 0x76, 0x01]]);
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        let resp = uds.send_request(0x36, &[0x01, 0xAA]).await.unwrap();
+        assert_eq!(resp, vec![0x76, 0x01]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn keepalive_sends_only_when_idle() {
+        let mut iface = ScriptedInterface::new();
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        let mut ka = S3KeepAlive::new();
+        ka.tick(&mut uds).await.unwrap(); // fresh: nothing sent
+        tokio::time::sleep(Duration::from_millis(1600)).await;
+        ka.tick(&mut uds).await.unwrap(); // idle > 1500 ms: one 3E 80
+        ka.tick(&mut uds).await.unwrap(); // just touched: nothing
+        let sent = iface.sent_frames();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].data[..3], [0x02, 0x3E, 0x80]);
+    }
+
+    #[test]
+    fn routine_status_parser_is_strict() {
+        assert_eq!(
+            parse_routine_status(&[0x71, 0x01, 0xFF, 0x00, 0x00], 0x01, 0xFF00).unwrap(),
+            0x00
+        );
+        assert_eq!(
+            parse_routine_status(&[0x71, 0x01, 0x02, 0x02, 0x07], 0x01, 0x0202).unwrap(),
+            0x07
+        );
+        assert!(parse_routine_status(&[0x71, 0x01, 0xFF, 0x00], 0x01, 0xFF00).is_err()); // no status byte
+        assert!(parse_routine_status(&[0x71, 0x01, 0xFF, 0x01, 0x00], 0x01, 0xFF00).is_err()); // wrong id
+        assert!(parse_routine_status(&[0x71, 0x03, 0xFF, 0x00, 0x00], 0x01, 0xFF00).is_err()); // wrong sub
+        assert!(parse_routine_status(&[], 0x01, 0xFF00).is_err());
+    }
+
+    #[test]
+    fn request_download_parser_is_strict() {
+        assert_eq!(
+            parse_request_download(&[0x74, 0x20, 0x0F, 0xFF]).unwrap(),
+            4095
+        );
+        assert_eq!(parse_request_download(&[0x74, 0x10, 0xFF]).unwrap(), 255);
+        assert!(parse_request_download(&[0x74, 0x10, 0x02]).is_err()); // < 3
+        assert!(parse_request_download(&[0x74, 0x50, 0, 0, 0, 0, 0]).is_err()); // n > 4
+        assert!(parse_request_download(&[0x74, 0x20, 0x0F]).is_err()); // short
+        assert!(parse_request_download(&[0x74]).is_err());
+        assert!(parse_request_download(&[]).is_err());
     }
 }
