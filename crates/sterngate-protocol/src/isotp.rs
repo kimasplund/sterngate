@@ -3,6 +3,14 @@ use sterngate_core::{CanFrame, Result, SterngateError};
 use sterngate_hal::VehicleInterface;
 use tokio::time::timeout;
 
+fn pci_byte(frame: &CanFrame) -> Result<u8> {
+    frame
+        .data
+        .first()
+        .copied()
+        .ok_or_else(|| SterngateError::IsoTpError("Empty CAN frame on ISO-TP channel".into()))
+}
+
 pub struct IsoTpChannel<'a> {
     interface: &'a mut dyn VehicleInterface,
     tx_id: u32,
@@ -23,6 +31,15 @@ impl<'a> IsoTpChannel<'a> {
     pub fn with_timeout(mut self, duration: Duration) -> Self {
         self.timeout_duration = duration;
         self
+    }
+
+    /// Change the receive timeout (used while the ECU reports NRC 0x78 ResponsePending).
+    pub fn set_timeout(&mut self, duration: Duration) {
+        self.timeout_duration = duration;
+    }
+
+    pub fn timeout(&self) -> Duration {
+        self.timeout_duration
     }
 
     /// Send an ISO-TP payload (handles Single Frame and First Frame/Consecutive Frames)
@@ -104,11 +121,12 @@ impl<'a> IsoTpChannel<'a> {
             .await
             .map_err(|_| SterngateError::IsoTpTimeout)??;
 
-        let pci_type = (frame.data[0] >> 4) & 0x0F;
+        let pci = pci_byte(&frame)?;
+        let pci_type = (pci >> 4) & 0x0F;
         match pci_type {
             // Single Frame (SF)
             0x00 => {
-                let sf_len = (frame.data[0] & 0x0F) as usize;
+                let sf_len = usize::from(pci & 0x0F);
                 if sf_len > 7 || sf_len == 0 {
                     return Err(SterngateError::IsoTpError(format!(
                         "Invalid SF DL: {}",
@@ -122,7 +140,18 @@ impl<'a> IsoTpChannel<'a> {
             }
             // First Frame (FF)
             0x01 => {
-                let total_len = (((frame.data[0] & 0x0F) as usize) << 8) | (frame.data[1] as usize);
+                if frame.data.len() < 8 {
+                    return Err(SterngateError::IsoTpError(format!(
+                        "First Frame too short: {} bytes",
+                        frame.data.len()
+                    )));
+                }
+                let total_len = (usize::from(pci & 0x0F) << 8) | usize::from(frame.data[1]);
+                if total_len < 8 {
+                    return Err(SterngateError::IsoTpError(format!(
+                        "First Frame announces {total_len} bytes; a multi-frame message carries at least 8"
+                    )));
+                }
                 let mut buffer = Vec::with_capacity(total_len);
                 buffer.extend_from_slice(&frame.data[2..8]);
 
@@ -139,18 +168,23 @@ impl<'a> IsoTpChannel<'a> {
                         .await
                         .map_err(|_| SterngateError::IsoTpTimeout)??;
 
-                    let cf_pci = (cf_frame.data[0] >> 4) & 0x0F;
-                    let sn = cf_frame.data[0] & 0x0F;
-
+                    let cf_pci_byte = pci_byte(&cf_frame)?;
+                    let cf_pci = (cf_pci_byte >> 4) & 0x0F;
+                    let sn = cf_pci_byte & 0x0F;
                     if cf_pci != 0x02 || sn != expected_sn {
                         return Err(SterngateError::IsoTpError(format!(
                             "Out-of-order CF: expected {}, got {}",
                             expected_sn, sn
                         )));
                     }
-
                     let remaining = total_len - buffer.len();
-                    let take_len = remaining.min(7);
+                    let available = cf_frame.data.len().saturating_sub(1);
+                    let take_len = remaining.min(7).min(available);
+                    if take_len == 0 {
+                        return Err(SterngateError::IsoTpError(
+                            "Truncated Consecutive Frame".into(),
+                        ));
+                    }
                     buffer.extend_from_slice(&cf_frame.data[1..1 + take_len]);
                     expected_sn = (expected_sn + 1) % 16;
                 }
@@ -177,13 +211,20 @@ impl<'a> IsoTpChannel<'a> {
         let frame = timeout(self.timeout_duration, async {
             loop {
                 let f = self.interface.recv().await?;
-                if f.id == self.rx_id && (f.data[0] >> 4) == 0x03 {
+                if f.id == self.rx_id && f.data.first().is_some_and(|b| (b >> 4) == 0x03) {
                     return Ok(f);
                 }
             }
         })
         .await
         .map_err(|_| SterngateError::IsoTpTimeout)??;
+
+        if frame.data.len() < 3 {
+            return Err(SterngateError::IsoTpError(format!(
+                "Flow Control frame too short: {} bytes",
+                frame.data.len()
+            )));
+        }
 
         let flow_status = frame.data[0] & 0x0F;
         if flow_status != 0 {
@@ -194,5 +235,100 @@ impl<'a> IsoTpChannel<'a> {
         }
 
         Ok(frame.data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::ScriptedInterface;
+    use std::time::Duration;
+
+    #[tokio::test(start_paused = true)]
+    async fn recv_payload_empty_frame_is_error_not_panic() {
+        let mut iface = ScriptedInterface::new().raw_frames(&[&[]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        assert!(matches!(
+            ch.recv_payload().await,
+            Err(SterngateError::IsoTpError(_))
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn first_frame_shorter_than_8_is_error() {
+        let mut iface = ScriptedInterface::new().raw_frames(&[&[0x10, 0x0A, 0x62]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        assert!(matches!(
+            ch.recv_payload().await,
+            Err(SterngateError::IsoTpError(_))
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn first_frame_announcing_less_than_8_is_error() {
+        let mut iface = ScriptedInterface::new()
+            .raw_frames(&[&[0x10, 0x05, 0x62, 0xF1, 0x92, 0x30, 0x31, 0x32]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        assert!(matches!(
+            ch.recv_payload().await,
+            Err(SterngateError::IsoTpError(_))
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn consecutive_frame_short_is_error() {
+        let mut iface = ScriptedInterface::new()
+            .raw_frames(&[&[0x10, 0x0D, 0x62, 0xF1, 0x92, 0x30, 0x32, 0x38], &[0x21]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        assert!(matches!(
+            ch.recv_payload().await,
+            Err(SterngateError::IsoTpError(_))
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn flow_control_short_is_error() {
+        // 20-byte payload -> FF; the ECU answers with a 1-byte FC.
+        let mut iface = ScriptedInterface::new().rule(0x2E, &[&[0x30]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        let payload = vec![0x2E; 20];
+        assert!(matches!(
+            ch.send_payload(&payload).await,
+            Err(SterngateError::IsoTpError(_))
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn multi_frame_reply_reassembles() {
+        // 62 F1 92 + "0281012224" = 13 bytes
+        let mut iface = ScriptedInterface::new().rule(
+            0x22,
+            &[
+                &[0x10, 0x0D, 0x62, 0xF1, 0x92, b'0', b'2', b'8'],
+                &[0x21, b'1', b'0', b'1', b'2', b'2', b'2', b'4'],
+            ],
+        );
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        ch.send_payload(&[0x22, 0xF1, 0x92]).await.unwrap();
+        let resp = ch.recv_payload().await.unwrap();
+        assert_eq!(&resp[3..], b"0281012224");
+        // The receiver answered the FF with a Flow Control frame.
+        assert!(iface
+            .sent_frames()
+            .iter()
+            .any(|f| f.data.first() == Some(&0x30)));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn timeout_is_settable() {
+        let mut iface = ScriptedInterface::new();
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        assert_eq!(ch.timeout(), Duration::from_millis(1500));
+        ch.set_timeout(Duration::from_millis(50));
+        assert_eq!(ch.timeout(), Duration::from_millis(50));
+        assert!(matches!(
+            ch.recv_payload().await,
+            Err(SterngateError::IsoTpTimeout)
+        ));
     }
 }

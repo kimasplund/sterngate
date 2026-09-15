@@ -10,6 +10,9 @@ pub mod seedkey;
 pub mod service;
 pub mod uds;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 pub use discoverer::BusDiscoverer;
 pub use flasher::FlashingWorker;
 pub use gate::TransactionGate;
