@@ -583,11 +583,11 @@ Sterngate allows packaging variant coding calibrations, DID patches, and flash m
 ### CLI Commands
 ```bash
 # 1. Inspect mod package compatibility, target vehicle rules, and test FEC self-healing
-sterngate mod inspect --input mods/w211_top_speed_300.sgmod
+sterngate mod inspect mods/w211_top_speed_300.sgmod
 
 # 2. Safely apply mod to vehicle with automatic pre-mod Git garage snapshotting
 # --vin is required; voltage is read from the OpenPort ADC (refused on can0/mock)
-sterngate mod apply --input mods/w211_top_speed_300.sgmod --vin WDB2112061A000001
+sterngate mod apply mods/w211_top_speed_300.sgmod --vin WDB2112061A000001
 
 # 3. Create a new community mod package
 sterngate mod create --name "EGR Airmass Offset" --author "TunerKim" \

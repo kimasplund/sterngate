@@ -103,10 +103,10 @@ sterngate tune stage1 --rom stock_om646.bin \
   --chassis "W211 E220 CDI" --ecu EDC16C31 --output stage1_om646.sgmod --armor
 
 # Step 3: Inspect compatibility
-sterngate mod inspect --input stage1_om646.sgmod
+sterngate mod inspect stage1_om646.sgmod
 
 # Step 4: Apply to vehicle
-sterngate mod apply --input stage1_om646.sgmod --vin WDB2112061A000001
+sterngate mod apply stage1_om646.sgmod --vin WDB2112061A000001
 ```
 
 ### Model Context Protocol (MCP) Workflow

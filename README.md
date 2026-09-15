@@ -352,10 +352,10 @@ Sterngate packages vehicle calibrations, DID configurations, and flash patches i
 
 ```bash
 # 1. Inspect mod package compatibility, target vehicle rules, and test FEC self-healing
-sterngate mod inspect --input mods/w211_top_speed_300.sgmod
+sterngate mod inspect mods/w211_top_speed_300.sgmod
 
 # 2. Safely apply mod to vehicle with automatic pre-mod Git garage snapshotting
-sterngate mod apply --input mods/w211_top_speed_300.sgmod --vin WDB2112061A000001
+sterngate mod apply mods/w211_top_speed_300.sgmod --vin WDB2112061A000001
 
 # 3. Author a new shareable community mod package
 sterngate mod create --name "EGR Airmass Offset" --author "TunerKim" \
