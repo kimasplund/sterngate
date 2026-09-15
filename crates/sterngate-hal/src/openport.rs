@@ -88,6 +88,17 @@ pub struct OpenPortInterface {
     device_info: Option<String>,
     last_voltage_v: Option<f32>,
     voltage_cache: VoltageCache,
+    /// Liveness flag for the currently running background reader generation,
+    /// if any. Distinct from `is_open` (a single shared flag) so that
+    /// `close()` can positively kill *this* reader without racing a
+    /// same-tick reopen: a straggler still inside its 20 ms `read_bulk` would
+    /// otherwise see `is_open` flip back to `true` after a fast reopen and
+    /// keep running on a stale USB handle, writing to the voltage cache and
+    /// RX channel of a new generation.
+    reader_alive: Option<Arc<AtomicBool>>,
+    /// Handle to the background reader task, if one is running, so `close()`
+    /// can abort it outright rather than merely asking it to stop.
+    reader_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl OpenPortInterface {
@@ -109,6 +120,8 @@ impl OpenPortInterface {
             device_info: None,
             last_voltage_v: None,
             voltage_cache: VoltageCache::default(),
+            reader_alive: None,
+            reader_task: None,
         }
     }
 
@@ -137,6 +150,8 @@ impl OpenPortInterface {
             device_info: Some("Tactrix OpenPort 2.0 (Sterngate Emulated v1.0)".to_string()),
             last_voltage_v: Some(initial_voltage_v),
             voltage_cache: VoltageCache::default(),
+            reader_alive: None,
+            reader_task: None,
         };
 
         (iface, sim_feed_tx)
@@ -322,6 +337,22 @@ impl OpenPortInterface {
             self.rx_channel = Some(rx);
         }
     }
+
+    /// Positively kill the current reader generation, if one is running.
+    ///
+    /// Clearing `reader_alive` tells a straggler still inside its 20 ms
+    /// `read_bulk` to stop as soon as it next checks the flag, and `abort()`
+    /// on the join handle guarantees it stops even if it never gets that far
+    /// — so no old-generation reader can survive into a reopened interface
+    /// and write a stale voltage or RX frame after `close()`.
+    fn stop_reader(&mut self) {
+        if let Some(alive) = self.reader_alive.take() {
+            alive.store(false, Ordering::SeqCst);
+        }
+        if let Some(handle) = self.reader_task.take() {
+            handle.abort();
+        }
+    }
 }
 
 impl Default for OpenPortInterface {
@@ -431,15 +462,26 @@ impl VehicleInterface for OpenPortInterface {
 
         self.is_open.store(true, Ordering::SeqCst);
 
-        // Spawn background reader thread to receive bulk frames continuously
+        // Spawn background reader thread to receive bulk frames continuously.
+        //
+        // Each generation gets its own `alive` flag (distinct from the
+        // shared `is_open`): `is_open` alone would let a straggler reader
+        // from a previous generation, still asleep inside its 20 ms
+        // `read_bulk`, see `is_open` flip back to `true` after a fast
+        // reopen and keep running against a now-stale USB handle — writing
+        // to the new generation's voltage cache and RX channel. `close()`
+        // clears this generation's flag and aborts the task before any
+        // reopen can happen, so a dead generation can never do that.
         if let Some(tx) = self.rx_sender.take() {
             let is_open_flag = self.is_open.clone();
             let voltage_cache = self.voltage_cache.clone();
-            tokio::spawn(async move {
+            let alive = Arc::new(AtomicBool::new(true));
+            self.reader_alive = Some(alive.clone());
+            let handle = tokio::spawn(async move {
                 let mut decoder = OpenPortDecoder::new();
                 let mut buf = vec![0u8; 1024];
 
-                while is_open_flag.load(Ordering::SeqCst) {
+                while alive.load(Ordering::SeqCst) && is_open_flag.load(Ordering::SeqCst) {
                     let res = {
                         let guard = handle_arc.lock().await;
                         guard.read_bulk(endpoint_in, &mut buf, Duration::from_millis(20))
@@ -483,6 +525,7 @@ impl VehicleInterface for OpenPortInterface {
                     }
                 }
             });
+            self.reader_task = Some(handle);
         }
 
         // Measure initial pin 16 battery voltage
@@ -558,6 +601,7 @@ impl VehicleInterface for OpenPortInterface {
 
         self.is_open.store(false, Ordering::SeqCst);
         clear_voltage_cache(&self.voltage_cache);
+        self.stop_reader();
 
         // Only take the backend for the Hardware variant: `.take()` runs
         // unconditionally as part of evaluating the match scrutinee, so
@@ -691,5 +735,18 @@ mod tests {
         iface.ensure_rx_channel();
         assert!(iface.rx_sender.is_some());
         assert!(iface.rx_channel.is_some());
+    }
+
+    #[tokio::test]
+    async fn reader_generation_flag_is_cleared_on_close() {
+        let mut iface = OpenPortInterface::new();
+        let flag = Arc::new(AtomicBool::new(true));
+        iface.reader_alive = Some(flag.clone());
+        iface.reader_task = Some(tokio::spawn(async {}));
+
+        iface.stop_reader();
+
+        assert!(!flag.load(Ordering::SeqCst));
+        assert!(iface.reader_task.is_none());
     }
 }
