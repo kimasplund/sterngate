@@ -606,7 +606,13 @@ mod tests {
         }
     }
 
-    const VIN_W211: &str = "WDB2112061A777777";
+    /// Distinct per-test VIN, one per test function that might reach the Git
+    /// garage snapshot: sharing one VIN across concurrently-running tests races
+    /// on the same non-temp `data/vehicles/<vin>/.git/index.lock`. Keeps the
+    /// `211` substring so the W211 chassis check still matches.
+    fn vin(n: u8) -> String {
+        format!("WDB2112061A7777{n:02}")
+    }
 
     fn err_text(r: Result<ModExecutionReport, SterngateError>) -> String {
         match r {
@@ -629,7 +635,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(1),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -646,7 +652,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(1),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -668,7 +674,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(2),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -690,7 +696,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(3),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -717,7 +723,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(4),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -739,7 +745,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(5),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -757,7 +763,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(6),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -772,7 +778,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(6),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -797,7 +803,7 @@ mod tests {
         let exec = ModRunner::apply_mod(
             &mut iface,
             &mut m,
-            VIN_W211,
+            &vin(7),
             12.8,
             TargetFingerprintPolicy::Enforce,
         )
@@ -820,7 +826,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(8),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -828,7 +834,7 @@ mod tests {
         );
         assert!(msg.contains("hardware ID could not be read"), "{msg}");
 
-        let report = ModRunner::inspect_compatibility(&mut iface, &m, Some(VIN_W211), Some(12.8))
+        let report = ModRunner::inspect_compatibility(&mut iface, &m, Some(&vin(8)), Some(12.8))
             .await
             .unwrap();
         assert!(!report.matched_vehicle);
@@ -843,7 +849,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(9),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -858,7 +864,7 @@ mod tests {
         assert!(ModRunner::apply_mod(
             &mut iface,
             &mut m,
-            VIN_W211,
+            &vin(9),
             12.8,
             TargetFingerprintPolicy::Enforce
         )
@@ -882,7 +888,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(10),
                 12.8,
                 TargetFingerprintPolicy::Enforce,
             )
@@ -902,7 +908,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(11),
                 11.0,
                 TargetFingerprintPolicy::BypassUnsafe,
             )
@@ -920,7 +926,7 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(11),
                 12.8,
                 TargetFingerprintPolicy::BypassUnsafe,
             )
@@ -955,13 +961,120 @@ mod tests {
             ModRunner::apply_mod(
                 &mut iface,
                 &mut m,
-                VIN_W211,
+                &vin(12),
                 12.2,
                 TargetFingerprintPolicy::Enforce,
             )
             .await,
         );
         assert!(msg.contains("12.5"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_erase_memory_routine_refused() {
+        // Interface deliberately NOT opened: the gate must fire before any bus traffic.
+        let mut iface = VirtualCanInterface::new();
+        let mut m = runner_mod(
+            vec![ModAction::Routine {
+                routine_id: 0xFF00,
+                subfunction: 0x01,
+                data: vec![],
+                description: "erase".into(),
+            }],
+            vec![],
+            12.0,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                &vin(13),
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("EraseMemory"), "{msg}");
+
+        // Positive control: other routine IDs stay allowed.
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![ModAction::Routine {
+                routine_id: 0x0201,
+                subfunction: 0x01,
+                data: vec![],
+                description: "reset injector adaptation".into(),
+            }],
+            vec![],
+            12.0,
+        );
+        let exec = ModRunner::apply_mod(
+            &mut iface,
+            &mut m,
+            &vin(13),
+            12.8,
+            TargetFingerprintPolicy::Enforce,
+        )
+        .await
+        .unwrap();
+        assert_eq!(exec.steps_completed, 1);
+    }
+
+    #[tokio::test]
+    async fn test_bitmask_length_mismatch_refused() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![ModAction::WriteDid {
+                did: 0x0201,
+                data: vec![0x00, 0x00],
+                bitmask: Some(vec![0x01]),
+                expected_original_data: None,
+                description: "seatbelt chime".into(),
+            }],
+            vec![],
+            12.0,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                &vin(14),
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("bitmask length"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_write_did_empty_precondition_refused() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![ModAction::WriteDid {
+                did: 0x0201,
+                data: vec![0x00],
+                bitmask: None,
+                expected_original_data: Some(vec![]),
+                description: "seatbelt chime".into(),
+            }],
+            vec![],
+            12.0,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                &vin(15),
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("empty precondition"), "{msg}");
     }
 
     #[tokio::test]

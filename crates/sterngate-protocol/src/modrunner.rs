@@ -40,6 +40,11 @@ pub enum TargetFingerprintPolicy {
     BypassUnsafe,
 }
 
+/// UDS `RoutineControl` routine identifier for `EraseMemory` (ISO 14229-1). This is
+/// the operation the flashing worker's voltage interlock and staged, checksum-verified
+/// state machine exist to guard; `ModRunner` must never invoke it directly.
+const ERASE_MEMORY_ROUTINE: u16 = 0xFF00;
+
 pub struct ModRunner;
 
 impl ModRunner {
@@ -78,6 +83,25 @@ impl ModRunner {
                 return Err(SterngateError::PreFlightCheckFailed(format!(
                     "action '{name}' has map provenance {provenance:?}; only maps scanned from the target ECU's own ROM may be flashed"
                 )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Refuse any package (actions or rollback) that invokes UDS `EraseMemory`
+    /// (routine 0xFF00). Runs before any bus traffic, alongside the provenance gate.
+    fn check_no_erase_routine(modpack: &SterngateMod) -> Result<()> {
+        for action in modpack
+            .actions
+            .iter()
+            .chain(modpack.rollback_actions.iter())
+        {
+            if let ModAction::Routine { routine_id, .. } = action {
+                if *routine_id == ERASE_MEMORY_ROUTINE {
+                    return Err(SterngateError::PreFlightCheckFailed(
+                        "action invokes UDS EraseMemory (routine 0xFF00); flash erase is only permitted through the flashing worker's voltage-interlocked, staged state machine".into(),
+                    ));
+                }
             }
         }
         Ok(())
@@ -168,10 +192,10 @@ impl ModRunner {
 
     /// Safely apply a community mod package to the connected vehicle.
     ///
-    /// Gate order: integrity, map provenance, policy admissibility, voltage
-    /// floor, range overlap, chassis, hardware whitelist, per-action byte
-    /// preconditions, then writes. Only the chassis and hardware-whitelist
-    /// checks consult `policy`.
+    /// Gate order: integrity, map provenance, EraseMemory routine refusal,
+    /// policy admissibility, voltage floor, range overlap, chassis, hardware
+    /// whitelist, per-action byte preconditions, then writes. Only the
+    /// chassis and hardware-whitelist checks consult `policy`.
     pub async fn apply_mod(
         interface: &mut dyn VehicleInterface,
         modpack: &mut SterngateMod,
@@ -190,6 +214,9 @@ impl ModRunner {
 
         // 1b. Map provenance gate (before any bus traffic)
         Self::check_provenance(modpack)?;
+
+        // 1b2. Refuse UDS EraseMemory routines outright (before any bus traffic)
+        Self::check_no_erase_routine(modpack)?;
 
         // 1c. A fingerprint bypass is never admissible for flash writes
         let writes_flash = Self::writes_flash(modpack);
@@ -262,6 +289,11 @@ impl ModRunner {
                     expected_original_data: Some(expected),
                     ..
                 } => {
+                    if expected.is_empty() {
+                        return Err(SterngateError::PreFlightCheckFailed(format!(
+                            "DID 0x{did:04X}: expected_original_data is an empty precondition; refusing vacuous precondition"
+                        )));
+                    }
                     let resp = uds.read_data_by_identifier(*did).await.map_err(|e| {
                         SterngateError::PreFlightCheckFailed(format!(
                             "DID 0x{did:04X}: could not read current value for precondition ({e}); refusing"
@@ -376,6 +408,13 @@ impl ModRunner {
                     ..
                 } => {
                     let write_payload = if let Some(mask) = bitmask {
+                        if mask.len() != data.len() {
+                            return Err(SterngateError::PreFlightCheckFailed(format!(
+                                "DID 0x{did:04X}: bitmask length ({}) does not match data length ({}); refusing to clobber unmasked bits",
+                                mask.len(),
+                                data.len()
+                            )));
+                        }
                         let resp = uds.read_data_by_identifier(*did).await.map_err(|e| {
                             SterngateError::PreFlightCheckFailed(format!(
                                 "DID 0x{did:04X}: bitmask write requires the current value but the read failed ({e}); refusing to clobber unmasked bits"
