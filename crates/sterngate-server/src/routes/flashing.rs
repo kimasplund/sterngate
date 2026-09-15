@@ -32,8 +32,10 @@ struct StageFlashPayload {
     manifest: FlashPackageManifest,
     #[serde(default)]
     rom_base64: Option<String>,
-    /// Battery voltage from an actual hardware measurement. Required: the
-    /// flashing interlock is meaningless if the server invents this value.
+    /// Battery voltage from an actual hardware measurement. The server reads
+    /// the interface's own measurement when the adapter can measure, and
+    /// this value is only cross-checked against it; it is required only when
+    /// the adapter cannot measure (e.g. SocketCAN, the virtual ECU).
     #[serde(default)]
     measured_voltage: Option<f64>,
 }
@@ -145,18 +147,23 @@ async fn stage_flash(
     }
 
     // execute_flash() enforces >= 12.5 V, but only against the number handed
-    // to it. Passing a constant here made that interlock impossible to fail,
-    // so refuse instead of substituting one.
-    let Some(measured_voltage) = payload.measured_voltage else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                success: false,
-                message: "Refusing to flash: no measured battery voltage supplied. \
-                          Send 'measured_voltage' from a real hardware reading."
-                    .into(),
-            }),
-        );
+    // to it. Read the interface's own measurement rather than trusting a
+    // client-supplied value outright; the client value is only a cross-check
+    // (or the sole source when the adapter cannot measure).
+    let measured_voltage = {
+        let mut iface = state.interface.lock().await;
+        match super::common::resolve_flash_voltage(iface.as_mut(), payload.measured_voltage).await {
+            Ok(v) => v,
+            Err(message) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(GenericResponse {
+                        success: false,
+                        message,
+                    }),
+                );
+            }
+        }
     };
 
     use base64::Engine as _;
@@ -271,8 +278,10 @@ struct VaultStagePayload {
     #[serde(default)]
     #[allow(dead_code)]
     target_rx: Option<u32>,
-    /// Battery voltage from an actual hardware measurement. Required for the
-    /// same reason as on /api/v1/flash/stage: this path also flashes.
+    /// Battery voltage from an actual hardware measurement. Same rule as
+    /// /api/v1/flash/stage: the interface's own measurement wins and this
+    /// value is only a cross-check, required only when the adapter cannot
+    /// measure.
     #[serde(default)]
     measured_voltage: Option<f64>,
 }
@@ -294,16 +303,21 @@ async fn vault_stage(
 
     // This endpoint flashes too, so it needs the same measured reading as
     // /api/v1/flash/stage rather than a constant that always clears 12.5 V.
-    let Some(measured_voltage) = payload.measured_voltage else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "success": false,
-                "error": "Refusing to flash: no measured battery voltage supplied. \
-                          Send 'measured_voltage' from a real hardware reading.",
-            })),
-        )
-            .into_response();
+    let measured_voltage = {
+        let mut iface = state.interface.lock().await;
+        match super::common::resolve_flash_voltage(iface.as_mut(), payload.measured_voltage).await {
+            Ok(v) => v,
+            Err(message) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": message,
+                    })),
+                )
+                    .into_response();
+            }
+        }
     };
 
     // Staging reads from disk, so the path must stay inside the vault root.

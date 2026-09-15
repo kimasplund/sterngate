@@ -99,6 +99,10 @@ struct ModApplyPayload {
     content: String,
     #[serde(default)]
     vin: Option<String>,
+    /// Battery voltage from an actual hardware measurement. The interface's
+    /// own measurement wins when the adapter can measure, and this value is
+    /// only cross-checked against it; it is required only when the adapter
+    /// cannot measure.
     #[serde(default)]
     battery_voltage: Option<f64>,
 }
@@ -149,17 +153,25 @@ async fn mods_apply(
     };
 
     // Every mod declares its own min_battery_voltage. Defaulting here made
-    // that interlock unfailable on a vehicle nothing had measured.
-    let Some(voltage) = payload.battery_voltage else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "success": false,
-                "error": "Refusing to apply: no measured battery voltage supplied. \
-                          Send 'battery_voltage' from a real hardware reading.",
-            })),
-        )
-            .into_response();
+    // that interlock unfailable on a vehicle nothing had measured. Read the
+    // interface's own measurement; the client value is only a cross-check
+    // (or the sole source when the adapter cannot measure), and the lock is
+    // released before apply_mod takes it again.
+    let voltage = {
+        let mut iface = state.interface.lock().await;
+        match super::common::resolve_flash_voltage(iface.as_mut(), payload.battery_voltage).await {
+            Ok(v) => v,
+            Err(message) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": message,
+                    })),
+                )
+                    .into_response();
+            }
+        }
     };
 
     let mut iface = state.interface.lock().await;

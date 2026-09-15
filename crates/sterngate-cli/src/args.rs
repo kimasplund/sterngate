@@ -219,7 +219,8 @@ pub enum FlashCommands {
         /// Path to raw ROM/bin firmware file
         #[arg(long)]
         rom: PathBuf,
-        /// Optional override for battery voltage (V)
+        /// Override the battery voltage for a dry-run preflight only (a
+        /// multimeter reading); ignored when the adapter can measure
         #[arg(long)]
         voltage: Option<f64>,
     },

@@ -5,7 +5,6 @@ use tracing::info;
 use crate::args::{Cli, FlashCommands};
 use crate::commands::common::open_interface;
 use sterngate_core::{FirmwareVault, FlashPackageManifest, FlashState};
-use sterngate_hal::{OpenPortInterface, VehicleInterface};
 use sterngate_protocol::FlashingWorker;
 
 pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
@@ -57,28 +56,14 @@ pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
             let manifest_data = std::fs::read_to_string(&manifest)?;
             let pkg_manifest: FlashPackageManifest = serde_json::from_str(&manifest_data)?;
             let rom_data = std::fs::read(&rom)?;
-            let batt_voltage = if let Some(v) = voltage {
-                v
-            } else if cli.can_interface == "openport" || cli.can_interface == "tactrix" {
-                let mut op = OpenPortInterface::new();
-                if op.open().await.is_ok() {
-                    if let Ok(measured) = op.read_battery_voltage().await {
-                        info!(
-                            "Read live battery voltage from Tactrix OpenPort Pin 16 ADC: {:.2} V",
-                            measured
-                        );
-                        measured as f64
-                    } else {
-                        12.6
-                    }
-                } else {
-                    12.6
-                }
-            } else {
-                12.6
-            };
 
             let mut iface = open_interface(&cli.can_interface).await;
+            let batt_voltage = voltage_for_flash(
+                iface.measure_battery_voltage().await,
+                voltage,
+                &cli.can_interface,
+            )?;
+
             let flasher = FlashingWorker::new();
             let report = flasher
                 .run_preflight_checks(&pkg_manifest, &rom_data, batt_voltage, iface.as_mut())
@@ -134,25 +119,13 @@ pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
             let manifest_data = std::fs::read_to_string(&manifest)?;
             let pkg_manifest: FlashPackageManifest = serde_json::from_str(&manifest_data)?;
             let rom_data = std::fs::read(&rom)?;
-            let batt_voltage = if cli.can_interface == "openport" || cli.can_interface == "tactrix"
-            {
-                let mut op = OpenPortInterface::new();
-                if op.open().await.is_ok() {
-                    if let Ok(measured) = op.read_battery_voltage().await {
-                        info!(
-                            "Read live battery voltage from Tactrix OpenPort Pin 16 ADC: {:.2} V",
-                            measured
-                        );
-                        measured as f64
-                    } else {
-                        12.6
-                    }
-                } else {
-                    12.6
-                }
-            } else {
-                12.6
-            };
+
+            let mut iface = open_interface(&cli.can_interface).await;
+            let batt_voltage = voltage_for_flash(
+                iface.measure_battery_voltage().await,
+                None,
+                &cli.can_interface,
+            )?;
 
             println!("============================================================");
             println!("  🚨 CAUTION: ECU FLASHING SEQUENCE INITIATION");
@@ -164,6 +137,7 @@ pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
                 rom.display(),
                 rom_data.len()
             );
+            println!("  Measured Voltage: {:.2} V", batt_voltage);
             println!("\n  ⚠️  DISCLAIMER & LIABILITY NOTICE:");
             println!("  Modifying ECU firmware is performed strictly at your own risk.");
             println!("  The authors and contributors accept ZERO liability for bricked");
@@ -188,7 +162,6 @@ pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
                 }
             }
 
-            let iface = open_interface(&cli.can_interface).await;
             let iface_arc = Arc::new(tokio::sync::Mutex::new(iface));
             let flasher = Arc::new(FlashingWorker::new());
             let mut rx = flasher.subscribe();
@@ -298,5 +271,39 @@ pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+/// Voltage that gates a flash: the opened interface's own measurement, or an
+/// explicit reading only when the adapter cannot measure.
+pub(crate) fn voltage_for_flash(
+    measured: sterngate_core::Result<Option<f32>>,
+    explicit: Option<f64>,
+    iface_name: &str,
+) -> Result<f64> {
+    match (measured, explicit) {
+        (Ok(Some(v)), _) => Ok(f64::from(v)),
+        (Ok(None), Some(v)) => Ok(v),
+        (Ok(None), None) => anyhow::bail!("Refusing: interface `{iface_name}` cannot measure battery voltage (Tactrix OpenPort Pin 16 ADC required, or --voltage for a dry-run preflight)"),
+        (Err(e), _) => anyhow::bail!("Refusing: battery voltage read failed: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::voltage_for_flash;
+
+    #[test]
+    fn flash_voltage_refuses_when_unmeasurable() {
+        assert!(voltage_for_flash(Ok(None), None, "can0")
+            .unwrap_err()
+            .to_string()
+            .contains("cannot measure"));
+        assert!((voltage_for_flash(Ok(None), Some(12.9), "can0").unwrap() - 12.9).abs() < 1e-9);
+        assert!(
+            (voltage_for_flash(Ok(Some(12.7)), None, "openport").unwrap() - f64::from(12.7f32))
+                .abs()
+                < 1e-9
+        );
     }
 }

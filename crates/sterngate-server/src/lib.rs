@@ -1062,8 +1062,23 @@ mod tests {
             .header("Content-Type", "application/json")
             .body(Body::from(serde_json::to_vec(&payload).unwrap()))
             .unwrap();
-        let resp = create_router(state).oneshot(req).await.unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        // The virtual ECU cannot measure battery voltage, so a client-supplied
+        // measured_voltage is accepted as the sole source, same as before.
+        let mut payload_with_voltage = payload;
+        payload_with_voltage["measured_voltage"] = json!(13.0);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/flash/stage")
+            .header("Content-Type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&payload_with_voltage).unwrap(),
+            ))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 
     #[tokio::test]
