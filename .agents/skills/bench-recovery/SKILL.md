@@ -167,6 +167,9 @@ To power the ECU on the test bench, connect a clean regulated $+12.0\text{ V}-13
 ### Scenario A: Soft-Bricked ECU (CAN Bootloader Accessible)
 The ECU was interrupted during OBD flashing. The application firmware is corrupt, but the bootloader still responds on CAN (`0x7E0`):
 
+> [!NOTE]
+> A recovery image sourced from an SDflash `.cff`/`.smr-f` container is never stageable directly — the vault and `/api/v1/flash/stage` refuse it as a Caesar flash container. Run it through `sterngate corpus extract` (Phase 1) first to pull the raw ROM segment into the vault as a stageable image. A BDM bench read of an EDC16CP31's *internal* MCU flash captures block D only (the bootloader/MCU code at `0x400000`); it carries no calibration data, so it cannot substitute for the external flash dump when you need the tune.
+
 1. Connect the bench harness to the ECU (Power, Ground, CAN-H, CAN-L).
 2. Connect Tactrix OpenPort 2.0 to your laptop running Sterngate.
 3. Verify connection with Sterngate CLI:

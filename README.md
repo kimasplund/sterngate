@@ -259,13 +259,19 @@ sterngate profile generate --name "w211_custom_om646" --out profiles/custom.json
 ```
 
 ### B. Direct Terminal ECU Flashing Suite
-Safely stage and flash ECU calibration binaries from the terminal with strict hardware and voltage interlocks:
+Safely stage and flash ECU calibration binaries from the terminal with strict hardware and voltage interlocks. Battery voltage is measured through the connected adapter (`VehicleInterface::measure_battery_voltage`), not typed in by hand; `flash start` refuses outright on adapters that cannot measure it (SocketCAN, mock), and `flash preflight --voltage` only overrides a dry run.
 ```bash
-# 1. Stage and cryptographically verify ROM binary
+# 1. Stage and cryptographically verify ROM binary. This must be a raw image —
+#    a Caesar flash container (.cff/.smr-f) passes checksum staging but is
+#    refused at the pre-flight step below (and by the firmware vault, which
+#    marks containers `stageable: false`). Extract a raw segment first with
+#    `sterngate corpus extract` (Phase 1).
 sterngate flash stage --module EDC16 --file calibration.bin \
   --hw-id 0281012234 --sw-id 1037372120 --start-address 0x00040000
 
-# 2. Pre-flight verification (battery voltage >= 12.5V, SHA-256, Bosch CRC32)
+# 2. Pre-flight verification (battery voltage >= 12.5V, SHA-256, Bosch CRC32,
+#    exact F192 hardware identity, flash_length, non-empty ROM, block_size > 0,
+#    not a Caesar container)
 sterngate flash preflight --manifest /var/run/sterngate/flash_manifest.json
 
 # 3. Start detached flash sequence (with interactive safety confirmation or --yes)

@@ -453,9 +453,10 @@ curl -s "http://localhost:8080/api/v1/vault/scan?path=&hw_id=0281012224&sw_id=10
 curl -s "http://localhost:8080/api/v1/vault/scan?path=w211/edc16" | jq .
 
 # Stage firmware binary for detached flashing sequence.
-# measured_voltage is mandatory and must come from a real hardware reading
-# (e.g. OpenPort Pin 16). Omitting it returns 400 rather than assuming a value
-# that would always satisfy the >= 12.5 V interlock.
+# The server measures voltage itself via VehicleInterface::measure_battery_voltage.
+# measured_voltage is optional when the adapter can measure (e.g. OpenPort Pin 16)
+# — supplying one that disagrees with the adapter reading by more than 1.0 V is
+# refused. It is required only when the adapter cannot measure (SocketCAN, mock).
 curl -s -X POST http://localhost:8080/api/v1/vault/stage \
   -H "Content-Type: application/json" \
   -d '{"file_path": "W211_OM646_Stage1.bin", "measured_voltage": 13.4}' | jq .
@@ -513,9 +514,11 @@ sterngate --local --openport
 # Run live diagnostic telemetry
 sterngate --openport diag live
 
-# Run flash preflight with hardware voltage interlock
+# voltage is measured through the adapter; --voltage only overrides a dry-run preflight
 sterngate --openport flash preflight --manifest flash_pkg/edc16_stage1.json --rom flash_pkg/edc16_stage1.bin
 ```
+
+`sterngate flash start` always reads the adapter's own measurement and refuses outright on interfaces that cannot measure (SocketCAN, mock) — there is no `--voltage` override for a real flash, only for `flash preflight`'s dry run. Once the Flashing State Machine leaves `Idle`, every interface-touching route (diagnostics, coding, service, vault, mods) answers `HTTP 423 Locked` until the flash finishes.
 
 ---
 

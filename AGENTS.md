@@ -54,7 +54,8 @@ crates/
    - Houses domain models with zero external heavy dependencies.
    - `CanFrame`: 11-bit standard and 29-bit extended frames with microsecond timestamps.
    - `VehicleProfile`: JSON-deserializable profile describing ECU addresses, DIDs, scaling formulas, and units.
-   - `FlashPackage`: Manifest structure for staging firmware with target hardware and checksums.
+   - `FlashPackage`: Manifest structure for staging firmware with target hardware and checksums. Vault entries carry `stageable`: `.cff`/`.smr-f` files and anything that sniffs as a Caesar container are listed but never stageable.
+   - `cff::sniff`: Detects Caesar flash container bytes so raw-image checks (pre-flight, vault stage, flash stage) can refuse them before any bus traffic.
    - `CascadeWatchdog`: Autonomous detection engine for 13 notorious Mercedes-Benz cascades of death.
    - `CompressorProtectionGuard` & `SuspensionLeakDetector`: Thermal watchdog (40s auto-cutoff) and pneumatic leak diagnostics.
    - `VehicleGarage` & `DecodedVin`: Local Git-backed per-vehicle configuration tracking and VIN decoder.
@@ -71,10 +72,10 @@ crates/
    - `J2534Interface`: PassThru API bridge.
 
 3. **`sterngate-protocol`**:
-   - `IsoTpChannel`: Asynchronous ISO 15765-2 layer handling Single Frame, First Frame, Consecutive Frame, and Flow Control (`0x30`).
-   - `UdsClient`: Standard ISO 14229 diagnostics client.
+   - `IsoTpChannel`: Asynchronous ISO 15765-2 layer handling Single Frame, First Frame, Consecutive Frame, and Flow Control (`0x30`). Length-checked receive path, Flow Control BlockSize/WAIT/OVFLW.
+   - `UdsClient`: Standard ISO 14229 diagnostics client. P2\* handling, suppressed TesterPresent, `S3KeepAlive`.
    - `SeedKeyRegistry`: Algorithmic solvers (Daimler standard Level 01, Level 03, Level 0B) without proprietary Windows DLLs.
-   - `FlashingWorker`: Decoupled Tokio state machine managing erase, download, transfer, exit, and CRC routines.
+   - `FlashingWorker`: Decoupled Tokio state machine managing erase, download, transfer, exit, and CRC routines. Fail-closed since Phase 0b: exact F192 identity, one locked sequence with keep-alive and P2\*, every step aborts on error, checksum before reset, honest FAILED messages.
    - `VehicleScanner`: Multi-ECU gateway scanner, ENR compressor control, and ABC hydraulic surge limiter.
    - `BusDiscoverer`: CAN ID range probing (`0x700..0x7EF`), identification DID interrogation, and auto profile generation.
    - `ServiceRoutineManager`: Safety-critical workshop service routines (SBC pad mode 0 bar deactivation/reactivation, Common Rail IMA coding, suspension corner actuation).

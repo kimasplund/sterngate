@@ -166,4 +166,6 @@ AI assistants can interact with community mods and calibration tuning using stan
 - Applying requires the connected vehicle's VIN (`--vin`, `vin`) and a measured battery voltage. The CLI reads the Tactrix OpenPort Pin-16 ADC and refuses on SocketCAN or mock adapters, which cannot measure.
 - `sterngate tune stage1|stage2|dtc-kill` refuse on every ROM until the detector rebuild locates real maps; this is intended.
 - `Routine` actions with routine id `0xFF00` (UDS EraseMemory) are refused; flash erase only happens through the flashing worker's interlocks.
+- Inspect (CLI, REST, MCP) reports the same refusals as apply: provenance, EraseMemory, the 12.5 V floor. Both paths share `SterngateMod::flash_write_refusals` (apply's gate) and `SterngateMod::check_compatibility` (inspect's report), so nothing that would be refused at apply time is silently passed by inspect.
+- `mod apply` keeps the extended session alive with a suppressed TesterPresent (`S3KeepAlive`) before every read and write, so a slow ECU or a long garage commit between the precondition reads and the flash writes never lets the S3 timer expire.
 
