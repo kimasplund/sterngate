@@ -168,6 +168,16 @@ async fn stage_flash(
             .unwrap_or_else(|_| vec![0xAA; 4096]),
     };
 
+    if sterngate_core::cff::sniff(&rom_data) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(GenericResponse {
+                success: false,
+                message: "Refusing to stage: payload is a Caesar flash container (.cff); extract a verified segment with `sterngate corpus extract` first (Phase 1).".into(),
+            }),
+        );
+    }
+
     let mut manifest = payload.manifest;
     manifest.crc32_checksum = crc32fast::hash(&rom_data);
     let mut hasher = sha2::Sha256::new();

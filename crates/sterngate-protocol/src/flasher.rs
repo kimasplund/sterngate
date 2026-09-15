@@ -228,13 +228,20 @@ impl FlashingWorker {
             details.push("manifest block_size is 0; refusing to flash".into());
         }
 
+        // 8. A Caesar flash container is not a raw image; its bytes must never be written verbatim.
+        let is_container = sterngate_core::cff::sniff(rom_data);
+        if is_container {
+            details.push("ROM is a Caesar flash container (.cff), not a raw image; refusing to flash. Extract a verified segment first (Phase 1).".into());
+        }
+
         let passed = voltage_ok
             && sha256_ok
             && crc32_ok
             && hw_match
             && length_ok
             && non_empty
-            && block_size_ok;
+            && block_size_ok
+            && !is_container;
         Ok(PreFlightReport {
             passed,
             battery_voltage,
@@ -1210,6 +1217,58 @@ mod tests {
         assert!(
             !sids.contains(&0x31),
             "a zero block size must never erase the ECU"
+        );
+    }
+
+    /// Minimal synthetic Caesar container: prologue, NUL padding, stub magic. No firmware bytes.
+    fn synthetic_cff() -> Vec<u8> {
+        let mut v = b"CFF-TRANSLATOR-VERSION:02.01.03\nCFF:TEST\n".to_vec();
+        v.resize(0x400, 0);
+        v.extend_from_slice(&[0xED, 0x05, 0xEA, 0x07, 0x09, 0x0F]);
+        v.resize(0x1000, 0xFF);
+        v
+    }
+
+    #[tokio::test]
+    async fn preflight_rejects_a_cff_container() {
+        let rom = synthetic_cff();
+        let mut iface = happy_ecu();
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&manifest(&rom), &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.passed);
+        assert!(
+            report.details.iter().any(|d| d.contains("flash container")),
+            "{:?}",
+            report.details
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cff_container_never_reaches_the_erase() {
+        let rom = synthetic_cff();
+        let iface = happy_ecu();
+        let log = iface.sent_handle();
+        let (flasher, res, _) = run(iface, rom).await;
+        assert!(matches!(res, Err(SterngateError::PreFlightCheckFailed(_))));
+        assert_eq!(flasher.current_state().await, FlashState::Failed);
+        assert!(!flasher.is_locked().await);
+        let prog = flasher.subscribe().borrow().clone();
+        assert!(prog
+            .error_message
+            .as_deref()
+            .unwrap()
+            .starts_with("Flash aborted before erase; ECU untouched."));
+        let sids: Vec<u8> = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|f| crate::test_support::request_sid(&f.data))
+            .collect();
+        assert!(
+            !sids.contains(&0x31),
+            "erase must not be sent for a container"
         );
     }
 

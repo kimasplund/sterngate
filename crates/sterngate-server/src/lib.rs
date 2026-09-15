@@ -1067,6 +1067,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_flash_stage_refuses_containers() {
+        use base64::Engine as _;
+
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(sim, profile, flasher));
+
+        let mut cff = b"CFF-TRANSLATOR-VERSION:02.01.03\nCFF:TEST\n".to_vec();
+        cff.resize(0x400, 0);
+        cff.extend_from_slice(&[0xED, 0x05, 0, 0, 0, 0]);
+        cff.resize(0x1000, 0xFF);
+        let rom_b64 = base64::engine::general_purpose::STANDARD.encode(&cff);
+
+        let payload = json!({
+            "manifest": {
+                "target_module": "EDC16",
+                "expected_hw_id": "0281012224",
+                "expected_sw_id": "1037372332",
+                "sha256_checksum": "",
+                "crc32_checksum": 0,
+                "flash_start_address": 262144,
+                "flash_length": 4096,
+                "block_size": 4096
+            },
+            "rom_base64": rom_b64,
+            "measured_voltage": 13.4
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/flash/stage")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert!(body["message"].as_str().unwrap().contains("container"));
+        assert!(
+            !state.flasher.is_locked().await,
+            "no flash may have started"
+        );
+    }
+
+    #[tokio::test]
     async fn test_rom_inspection_and_profile_selection_endpoints() {
         use base64::Engine as _;
 
