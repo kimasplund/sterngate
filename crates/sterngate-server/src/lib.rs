@@ -987,6 +987,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_vault_stage_refuses_containers() {
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let temp_dir =
+            std::env::temp_dir().join(format!("sterngate_vault_cff_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let mut cff = b"CFF-TRANSLATOR-VERSION:02.01.03\nCFF:TEST\n".to_vec();
+        cff.resize(0x400, 0);
+        cff.extend_from_slice(&[0xED, 0x05, 0, 0, 0, 0]);
+        cff.resize(0x1000, 0xFF);
+        std::fs::write(temp_dir.join("payload.CFF"), &cff).unwrap();
+        std::fs::write(temp_dir.join("disguised.bin"), &cff).unwrap();
+        let state =
+            Arc::new(AppState::new(sim, profile, flasher).with_vault_root(Some(temp_dir.clone())));
+
+        for file in ["payload.CFF", "disguised.bin"] {
+            let payload = json!({ "file_path": file, "measured_voltage": 13.4 });
+            let req = Request::builder()
+                .method("POST")
+                .uri("/api/v1/vault/stage")
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+                .unwrap();
+            let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{file}");
+            let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert!(v["error"].as_str().unwrap().contains("container"));
+        }
+        assert!(
+            !state.flasher.is_locked().await,
+            "no flash may have started"
+        );
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
     async fn test_flash_stage_refuses_without_measured_voltage() {
         let mut sim = Box::new(VirtualCanInterface::new());
         let _ = sim.open().await;

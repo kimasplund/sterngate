@@ -326,6 +326,22 @@ async fn vault_stage(
         }
     };
 
+    let ext = rom_file
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    if matches!(ext.as_str(), "cff" | "smr-f") || sterngate_core::cff::sniff(&rom_data) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Refusing to stage: file is a Caesar flash container (.cff); extract a verified segment with `sterngate corpus extract` first (Phase 1).",
+            })),
+        )
+            .into_response();
+    }
+
     let sigs = FirmwareSignatures::extract(&rom_data);
     let filename = rom_file
         .file_name()

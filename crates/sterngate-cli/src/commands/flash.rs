@@ -277,6 +277,7 @@ pub async fn execute(action: FlashCommands, cli: &Cli) -> Result<()> {
                     f.file_size_bytes as f64 / 1024.0
                 );
                 println!("  Format:          {}", f.format);
+                println!("  Stageable:       {}", f.stageable);
                 println!("  SHA-256:         {}", f.signatures.sha256_checksum);
                 println!("  CRC32:           0x{:08X}", f.signatures.crc32_checksum);
                 if let Some(ref hw) = f.signatures.bosch_hw_id {

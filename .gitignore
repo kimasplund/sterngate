@@ -19,6 +19,10 @@ can_dump_*.log
 *.bin
 *.hex
 *.cff
+*.CFF
+*.smr-f
+*.SMR-F
+/firmware_corpus/
 *.ori
 *.mod
 *.cbf

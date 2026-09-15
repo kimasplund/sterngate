@@ -239,6 +239,9 @@ pub struct FirmwareVaultEntry {
     pub filename: String,
     pub file_size_bytes: usize,
     pub format: String,
+    /// False for flash containers (.cff/.smr-f, or anything that sniffs as one); only raw images may be staged.
+    #[serde(default)]
+    pub stageable: bool,
     pub signatures: FirmwareSignatures,
 }
 
@@ -288,7 +291,22 @@ impl FirmwareVault {
                         .to_lowercase();
                     if matches!(ext.as_str(), "bin" | "rom" | "cff" | "smr-f" | "fls") {
                         if let Ok(data) = std::fs::read(&p) {
-                            let sigs = FirmwareSignatures::extract(&data);
+                            let is_container =
+                                matches!(ext.as_str(), "cff" | "smr-f") || crate::cff::sniff(&data);
+                            let sigs = if is_container {
+                                // A container's identity lives in its own header, not in
+                                // scattered ASCII; and its bytes must never be flashed raw.
+                                let raw = FirmwareSignatures::extract(&data);
+                                FirmwareSignatures {
+                                    bosch_hw_id: None,
+                                    bosch_sw_id: None,
+                                    oem_part_number: None,
+                                    project_name: None,
+                                    ..raw
+                                }
+                            } else {
+                                FirmwareSignatures::extract(&data)
+                            };
                             let filename = p
                                 .file_name()
                                 .and_then(|s| s.to_str())
@@ -307,6 +325,7 @@ impl FirmwareVault {
                                 filename,
                                 file_size_bytes: data.len(),
                                 format,
+                                stageable: !is_container,
                                 signatures: sigs,
                             });
                         }
@@ -323,6 +342,9 @@ impl FirmwareVault {
         live_sw_id: &str,
     ) -> Option<FirmwareUpgradeRecommendation> {
         for entry in entries {
+            if !entry.stageable {
+                continue;
+            }
             if let Some(entry_hw) = &entry.signatures.bosch_hw_id {
                 let check_len = entry_hw.len().min(live_hw_id.len());
                 if check_len >= 8

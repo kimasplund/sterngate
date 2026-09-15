@@ -2,6 +2,7 @@ pub mod analytics;
 pub mod calibrator;
 pub mod cascades;
 pub mod catalog;
+pub mod cff;
 pub mod command;
 pub mod dtc;
 pub mod error;
@@ -32,6 +33,7 @@ pub use catalog::{
     CatalogMetadata, CbfCatalog, CbfEcuEntry, CbfVersionInfo, EcuCatalog, EcuCatalogEntry,
     EcuSearchResult, EcuVersionInfo,
 };
+pub use cff::sniff;
 pub use command::{CommandEnvelope, CommandValidationReport};
 pub use dtc::Dtc;
 pub use error::{Result, SterngateError};
@@ -686,6 +688,48 @@ mod tests {
         assert_eq!(r.recommended_file.filename, "OM646_EDC16_Update.bin");
         assert!(r.can_stage);
 
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_firmware_vault_marks_containers_not_stageable() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("sterngate_vault_cff_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // A container carrying the same ids as a raw image inside its payload.
+        let mut cff = crate::cff::tests::synthetic_cff_header();
+        cff[0x800..0x80A].copy_from_slice(b"0281012224");
+        cff[0x900..0x90A].copy_from_slice(b"1037389123");
+        std::fs::write(temp_dir.join("update.CFF"), &cff).unwrap();
+        // A raw image with the same ids, but named .bin so it sniffs as a container too.
+        std::fs::write(temp_dir.join("disguised.bin"), &cff).unwrap();
+        // A real raw image.
+        let mut rom = vec![0xFF; 2048];
+        rom[100..110].copy_from_slice(b"0281012224");
+        rom[200..210].copy_from_slice(b"1037389123");
+        std::fs::write(temp_dir.join("real.bin"), &rom).unwrap();
+
+        let mut entries = FirmwareVault::scan_directory(&temp_dir);
+        entries.sort_by(|a, b| a.filename.cmp(&b.filename));
+        assert_eq!(entries.len(), 3);
+        let by_name = |n: &str| entries.iter().find(|e| e.filename == n).unwrap();
+        assert!(!by_name("update.CFF").stageable);
+        assert!(by_name("update.CFF").signatures.bosch_hw_id.is_none());
+        assert!(!by_name("disguised.bin").stageable);
+        assert!(by_name("real.bin").stageable);
+
+        let rec = FirmwareVault::find_upgrade_recommendation(&entries, "0281012224", "1037372332")
+            .unwrap();
+        assert_eq!(rec.recommended_file.filename, "real.bin");
+        let only_containers: Vec<_> = entries.iter().filter(|e| !e.stageable).cloned().collect();
+        assert!(FirmwareVault::find_upgrade_recommendation(
+            &only_containers,
+            "0281012224",
+            "1037372332"
+        )
+        .is_none());
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
