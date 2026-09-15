@@ -1259,7 +1259,7 @@ mod tests {
         assert!(scan_res["success"].as_bool().unwrap());
         assert!(scan_res["map_count"].as_u64().unwrap() > 0);
 
-        // 2. POST /api/v1/tuning/stage1
+        // 2. POST /api/v1/tuning/stage1 — refuses: no map in this synthetic ROM is rom-backed
         let stage1_payload = json!({
             "rom_base64": rom_b64,
             "chassis": "W211 E280 CDI",
@@ -1273,19 +1273,18 @@ mod tests {
             .body(Body::from(serde_json::to_vec(&stage1_payload).unwrap()))
             .unwrap();
         let resp = create_router(state.clone()).oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
             .await
             .unwrap();
         let stage1_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-        assert!(stage1_res["success"].as_bool().unwrap());
-        assert_eq!(stage1_res["stage"].as_u64().unwrap(), 1);
-        assert!(stage1_res["armored_text"]
+        assert!(!stage1_res["success"].as_bool().unwrap());
+        assert!(stage1_res["error"]
             .as_str()
             .unwrap()
-            .contains("BEGIN STERNGATE COMMUNITY MOD"));
+            .contains("Torque Limiter"));
 
-        // 3. POST /api/v1/tuning/stage2
+        // 3. POST /api/v1/tuning/stage2 — refuses for the same reason
         let stage2_payload = json!({
             "rom_base64": rom_b64,
             "chassis": "W211 E280 CDI",
@@ -1298,13 +1297,23 @@ mod tests {
             .body(Body::from(serde_json::to_vec(&stage2_payload).unwrap()))
             .unwrap();
         let resp = create_router(state.clone()).oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
             .await
             .unwrap();
         let stage2_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-        assert!(stage2_res["success"].as_bool().unwrap());
-        assert_eq!(stage2_res["stage"].as_u64().unwrap(), 2);
+        assert!(!stage2_res["success"].as_bool().unwrap());
+
+        // 3b. POST /api/v1/tuning/dtc/kill — unsupported until the detector rebuild
+        let dtc_payload = json!({ "rom_base64": rom_b64, "p_codes": ["P0401"] });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/tuning/dtc/kill")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&dtc_payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
         // 4. POST /api/v1/tuning/checksum/verify
         let chk_payload = json!({

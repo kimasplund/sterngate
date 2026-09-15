@@ -768,52 +768,32 @@ mod tests {
             "0281012238"
         );
 
-        // 2. sterngate_generate_stage_tune (Stage 1)
-        let stage1_res = tools::handle_tool_call(
+        // 2. sterngate_generate_stage_tune (Stage 1) — refuses: no rom-backed map
+        let stage1_err = tools::handle_tool_call(
             "sterngate_generate_stage_tune",
-            &json!({
-                "rom_base64": rom_b64,
-                "stage": 1,
-                "chassis": "W211 E280 CDI",
-                "ecu_name": "EDC16CP31"
-            }),
+            &json!({ "rom_base64": rom_b64, "stage": 1, "chassis": "W211 E280 CDI", "ecu_name": "EDC16CP31" }),
         )
         .await
-        .unwrap();
-        assert!(stage1_res["success"].as_bool().unwrap());
-        assert_eq!(stage1_res["stage"].as_u64().unwrap(), 1);
-        assert!(stage1_res["armored_text"]
-            .as_str()
-            .unwrap()
-            .contains("BEGIN STERNGATE COMMUNITY MOD"));
+        .unwrap_err();
+        assert!(stage1_err.contains("Torque Limiter"), "{stage1_err}");
 
-        // 3. sterngate_generate_stage_tune (Stage 2)
-        let stage2_res = tools::handle_tool_call(
+        // 3. sterngate_generate_stage_tune (Stage 2) — refuses for the same reason
+        let stage2_err = tools::handle_tool_call(
             "sterngate_generate_stage_tune",
-            &json!({
-                "rom_base64": rom_b64,
-                "stage": 2,
-                "chassis": "W211 E280 CDI",
-                "ecu_name": "EDC16CP31"
-            }),
+            &json!({ "rom_base64": rom_b64, "stage": 2, "chassis": "W211 E280 CDI", "ecu_name": "EDC16CP31" }),
         )
         .await
-        .unwrap();
-        assert!(stage2_res["success"].as_bool().unwrap());
-        assert_eq!(stage2_res["stage"].as_u64().unwrap(), 2);
+        .unwrap_err();
+        assert!(stage2_err.contains("provenance"), "{stage2_err}");
 
-        // 4. sterngate_kill_dtc
-        let dtc_res = tools::handle_tool_call(
+        // 4. sterngate_kill_dtc — unsupported until the detector rebuild
+        let dtc_err = tools::handle_tool_call(
             "sterngate_kill_dtc",
-            &json!({
-                "rom_base64": rom_b64,
-                "p_codes": ["P0401", "P2002"]
-            }),
+            &json!({ "rom_base64": rom_b64, "p_codes": ["P0401", "P2002"] }),
         )
         .await
-        .unwrap();
-        assert!(dtc_res["success"].as_bool().unwrap());
-        assert_eq!(dtc_res["killed_codes"].as_array().unwrap().len(), 2);
+        .unwrap_err();
+        assert!(dtc_err.contains("unsupported"), "{dtc_err}");
 
         // 5. sterngate_solve_checksum (verify)
         let chk_res = tools::handle_tool_call(

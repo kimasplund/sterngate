@@ -800,31 +800,18 @@ mod tests {
         assert!(svbl.is_some());
         assert_eq!(svbl.unwrap().data[0], 2350.0);
 
-        // Test Stage 1 generation
-        let stage1 =
+        // Stage generation refuses until every targeted map is located in this ROM
+        let stage1_err =
             StageGenerator::generate_stage1(&rom, "W211 E280 CDI", "EDC16CP31", "Sterngate Team")
-                .unwrap();
-        assert_eq!(stage1.metadata.category, ModCategory::Performance);
-        assert_eq!(stage1.target.ecu_name, "EDC16CP31");
-        assert!(stage1
-            .target
-            .compatible_hw_ids
-            .contains(&"0281012238".to_string()));
-        assert!(stage1
-            .target
-            .compatible_sw_ids
-            .contains(&"1037386780".to_string()));
-        assert!(!stage1.actions.is_empty());
-        assert!(!stage1.rollback_actions.is_empty());
-
-        // Test Stage 2 generation
-        let stage2 =
-            StageGenerator::generate_stage2(&rom, "W211 E280 CDI", "EDC16CP31", "Sterngate Team")
-                .unwrap();
-        assert_eq!(stage2.metadata.risk_level, ModRiskLevel::High);
-        assert!(stage2.actions.iter().any(
-            |a| matches!(a, ModAction::PatchFlashMap { map_name, .. } if map_name.contains("EGR"))
-        ));
+                .unwrap_err();
+        assert!(stage1_err.to_string().contains("Torque Limiter"));
+        assert!(StageGenerator::generate_stage2(
+            &rom,
+            "W211 E280 CDI",
+            "EDC16CP31",
+            "Sterngate Team"
+        )
+        .is_err());
 
         // Test Checksum solver
         let report = BoschChecksumSolver::verify(&rom);

@@ -1,12 +1,32 @@
 use axum::{http::StatusCode, response::IntoResponse, routing::post, Json, Router};
 use serde::Deserialize;
 use std::sync::Arc;
+use sterngate_core::SterngateError;
 use sterngate_core::{
     encode_to_armor, BoschChecksumSolver, BoschMapDetector, FirmwareSignatures, StageGenerator,
 };
 
 use super::common::hex_to_bytes;
 use crate::state::AppState;
+
+/// Maps a generation failure to its HTTP status: a `PreFlightCheckFailed`
+/// refusal (unsupported feature, unlocated map, sub-floor voltage) is a
+/// client-facing 422; anything else is an unexpected server error.
+fn generation_error(prefix: &str, e: &SterngateError) -> axum::response::Response {
+    let status = if matches!(e, SterngateError::PreFlightCheckFailed(_)) {
+        StatusCode::UNPROCESSABLE_ENTITY
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+    (
+        status,
+        Json(serde_json::json!({
+            "success": false,
+            "error": format!("{prefix}: {e}"),
+        })),
+    )
+        .into_response()
+}
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
@@ -139,14 +159,7 @@ async fn tuning_stage1(Json(payload): Json<TuningStagePayload>) -> impl IntoResp
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "success": false,
-                "error": format!("Failed to generate Stage 1 package: {}", e),
-            })),
-        )
-            .into_response(),
+        Err(e) => generation_error("Failed to generate Stage 1 package", &e),
     }
 }
 
@@ -175,19 +188,12 @@ async fn tuning_stage2(Json(payload): Json<TuningStagePayload>) -> impl IntoResp
                     "stage": 2,
                     "mod": modpack,
                     "armored_text": armored_text,
-                    "summary": "+25% Peak Torque, +200 mbar Boost, +80 bar Rail, DPF Off, EGR Hysteresis Off, P0401/P2002 DTC Suppressed",
+                    "summary": "+25% Peak Torque, +200 mbar Boost, +80 bar Rail, DPF Off, EGR Hysteresis Off",
                 })),
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "success": false,
-                "error": format!("Failed to generate Stage 2 package: {}", e),
-            })),
-        )
-            .into_response(),
+        Err(e) => generation_error("Failed to generate Stage 2 package", &e),
     }
 }
 
@@ -228,14 +234,7 @@ async fn tuning_dtc_kill(Json(payload): Json<TuningDtcKillPayload>) -> impl Into
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "success": false,
-                "error": format!("Failed to generate DTC kill package: {}", e),
-            })),
-        )
-            .into_response(),
+        Err(e) => generation_error("Failed to generate DTC kill package", &e),
     }
 }
 

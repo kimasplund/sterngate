@@ -241,6 +241,22 @@ impl SterngateMod {
         actions: Vec<ModAction>,
         rollback_actions: Vec<ModAction>,
     ) -> Result<Self> {
+        let writes_flash = actions.iter().chain(rollback_actions.iter()).any(|a| {
+            matches!(
+                a,
+                ModAction::PatchFlashMap { .. } | ModAction::DtcMask { .. }
+            )
+        });
+        if writes_flash
+            && (target.min_battery_voltage.is_nan()
+                || target.min_battery_voltage < FLASH_WRITE_MIN_VOLTAGE)
+        {
+            return Err(SterngateError::PreFlightCheckFailed(format!(
+                "packages containing flash writes must declare min_battery_voltage >= {FLASH_WRITE_MIN_VOLTAGE:.1} V (got {:.1})",
+                target.min_battery_voltage
+            )));
+        }
+
         let canonical_payload = Self::canonical_payload_bytes(&actions, &rollback_actions)?;
 
         let payload_crc32 = crc32fast::hash(&canonical_payload);
@@ -513,6 +529,51 @@ mod tests {
                 .verify_and_repair()
                 .unwrap()
                 .is_valid
+        );
+    }
+
+    #[test]
+    fn create_rejects_flash_writes_below_12v5() {
+        let err = SterngateMod::create(
+            sample_metadata(),
+            sample_target(12.0),
+            vec![flash_patch(MapProvenance::Scanned)],
+            vec![],
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("12.5"), "{err}");
+
+        // Rollback actions count too.
+        assert!(SterngateMod::create(
+            sample_metadata(),
+            sample_target(12.0),
+            vec![],
+            vec![flash_patch(MapProvenance::Scanned)],
+        )
+        .is_err());
+
+        // NaN is not a voltage.
+        assert!(SterngateMod::create(
+            sample_metadata(),
+            sample_target(f64::NAN),
+            vec![flash_patch(MapProvenance::Scanned)],
+            vec![],
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn create_allows_did_writes_at_12v0() {
+        let action = ModAction::WriteDid {
+            did: 0x0110,
+            data: vec![0x01, 0x2C],
+            bitmask: None,
+            expected_original_data: None,
+            description: "vmax".into(),
+        };
+        assert!(
+            SterngateMod::create(sample_metadata(), sample_target(12.0), vec![action], vec![])
+                .is_ok()
         );
     }
 }

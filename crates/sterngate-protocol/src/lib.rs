@@ -951,12 +951,14 @@ mod tests {
     async fn test_flash_write_floor_overrides_author_declared_minimum() {
         let mut iface = VirtualCanInterface::new();
         iface.open().await.unwrap();
-        // Author declares 12.0 V for a flash-writing package; the runner still requires 12.5 V.
+        // create() refuses < 12.5 V for flash writes, so forge the target after
+        // creation; integrity does not cover the target yet (Task 8 changes that).
         let mut m = runner_mod(
             vec![patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3]))],
             vec![],
-            12.0,
+            12.5,
         );
+        m.target.min_battery_voltage = 12.0;
         let msg = err_text(
             ModRunner::apply_mod(
                 &mut iface,

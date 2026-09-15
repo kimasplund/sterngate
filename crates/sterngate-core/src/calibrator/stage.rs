@@ -1,5 +1,5 @@
 use super::detector::BoschMapDetector;
-use super::map::MapProvenance;
+use super::map::EcuMap;
 use crate::error::{Result, SterngateError};
 use crate::flash::FirmwareSignatures;
 use crate::modpack::{
@@ -9,6 +9,21 @@ use crate::modpack::{
 pub struct StageGenerator;
 
 impl StageGenerator {
+    /// A map may only become a flash patch when the detector located it in
+    /// this ROM and the bytes it carries are the bytes at that address.
+    pub(crate) fn require_rom_backed(map: &EcuMap, rom: &[u8]) -> Result<()> {
+        if !map.provenance.is_scanned() || !map.is_rom_backed(rom) {
+            return Err(SterngateError::PreFlightCheckFailed(format!(
+                "refusing to emit flash patch for '{}' at 0x{:06X}: provenance {:?}, rom_backed={} (map was not located in this ROM)",
+                map.name,
+                map.address,
+                map.provenance,
+                map.is_rom_backed(rom)
+            )));
+        }
+        Ok(())
+    }
+
     /// Generate a safe, verified Stage 1 calibration package (.sgmod) from an ECU flash dump
     pub fn generate_stage1(
         rom: &[u8],
@@ -33,6 +48,7 @@ impl StageGenerator {
 
             match map.name.as_str() {
                 "Torque Limiter" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // +18% peak torque, capped at 430 Nm
                     map.modify_percentage(1.18, Some(430.0));
                     actions.push(ModAction::PatchFlashMap {
@@ -53,6 +69,7 @@ impl StageGenerator {
                     });
                 }
                 "Driver's Wish (Fahrpedal)" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // +12% throttle response
                     map.modify_percentage(1.12, Some(430.0));
                     actions.push(ModAction::PatchFlashMap {
@@ -73,6 +90,7 @@ impl StageGenerator {
                     });
                 }
                 "Turbo Boost Target (Ladedruck-Soll)" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // +120 mbar boost
                     map.modify_percentage(1.06, Some(2400.0));
                     actions.push(ModAction::PatchFlashMap {
@@ -94,6 +112,7 @@ impl StageGenerator {
                     });
                 }
                 "Single Value Boost Limiter (SVBL)" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // +150 mbar limit
                     map.modify_percentage(1.07, Some(2500.0));
                     actions.push(ModAction::PatchFlashMap {
@@ -114,6 +133,7 @@ impl StageGenerator {
                     });
                 }
                 "Rail Pressure Target (Raildruck)" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // +50 bar rail pressure
                     map.modify_percentage(1.035, Some(1650.0));
                     actions.push(ModAction::PatchFlashMap {
@@ -184,6 +204,12 @@ impl StageGenerator {
         let sigs = FirmwareSignatures::extract(rom);
         let maps = BoschMapDetector::scan_rom(rom);
 
+        if maps.is_empty() {
+            return Err(SterngateError::ProfileError(
+                "No calibration maps could be detected in the provided ROM".into(),
+            ));
+        }
+
         let mut actions = Vec::new();
         let mut rollback_actions = Vec::new();
 
@@ -192,6 +218,7 @@ impl StageGenerator {
 
             match map.name.as_str() {
                 "Torque Limiter" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // +25% peak torque (460 Nm)
                     map.modify_percentage(1.25, Some(460.0));
                     actions.push(ModAction::PatchFlashMap {
@@ -212,6 +239,7 @@ impl StageGenerator {
                     });
                 }
                 "Turbo Boost Target (Ladedruck-Soll)" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // +200 mbar boost (2480 mbar peak)
                     map.modify_percentage(1.10, Some(2480.0));
                     actions.push(ModAction::PatchFlashMap {
@@ -232,6 +260,7 @@ impl StageGenerator {
                     });
                 }
                 "Single Value Boost Limiter (SVBL)" => {
+                    Self::require_rom_backed(&map, rom)?;
                     map.modify_percentage(1.10, Some(2550.0));
                     actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -251,6 +280,7 @@ impl StageGenerator {
                     });
                 }
                 "EGR Hysteresis (Abgasrückführung)" => {
+                    Self::require_rom_backed(&map, rom)?;
                     // Zero out hysteresis -> EGR valve remains permanently closed
                     let zeroed = vec![0u8; original_bytes.len()];
                     actions.push(ModAction::PatchFlashMap {
@@ -274,45 +304,6 @@ impl StageGenerator {
             }
         }
 
-        // Add DTC suppression for EGR (P0401) and DPF (P2002)
-        if let Some((offset, mask)) = BoschMapDetector::find_dtc_offset(rom, "P0401") {
-            actions.push(ModAction::DtcMask {
-                p_code: "P0401".into(),
-                address_offset: offset,
-                original_mask: mask,
-                disable_mask: 0x00,
-                description: "DTC Off: P0401 EGR Flow Insufficient".into(),
-                provenance: MapProvenance::Synthetic,
-            });
-            rollback_actions.push(ModAction::DtcMask {
-                p_code: "P0401".into(),
-                address_offset: offset,
-                original_mask: 0x00,
-                disable_mask: mask,
-                description: "Restore P0401 DTC enable mask".into(),
-                provenance: MapProvenance::Synthetic,
-            });
-        }
-
-        if let Some((offset, mask)) = BoschMapDetector::find_dtc_offset(rom, "P2002") {
-            actions.push(ModAction::DtcMask {
-                p_code: "P2002".into(),
-                address_offset: offset,
-                original_mask: mask,
-                disable_mask: 0x00,
-                description: "DTC Off: P2002 DPF Efficiency Below Threshold".into(),
-                provenance: MapProvenance::Synthetic,
-            });
-            rollback_actions.push(ModAction::DtcMask {
-                p_code: "P2002".into(),
-                address_offset: offset,
-                original_mask: 0x00,
-                disable_mask: mask,
-                description: "Restore P2002 DTC enable mask".into(),
-                provenance: MapProvenance::Synthetic,
-            });
-        }
-
         let mod_id = format!(
             "{}_stage2_{}",
             chassis.to_lowercase().replace(' ', "_"),
@@ -325,7 +316,7 @@ impl StageGenerator {
             version: "1.0.0".into(),
             author: author.to_string(),
             description: format!(
-                "Stage 2 performance tune for {} {}. Requires physical DPF delete downpipe and EGR blanking plate. Bypasses DPF regeneration and suppresses P0401/P2002 DTCs.",
+                "Stage 2 performance tune for {} {}. Requires physical DPF delete downpipe and EGR blanking plate. Bypasses DPF regeneration.",
                 chassis, ecu_name
             ),
             category: ModCategory::Performance,
@@ -348,82 +339,91 @@ impl StageGenerator {
         SterngateMod::create(metadata, target, actions, rollback_actions)
     }
 
-    /// Generate a standalone DTC suppression .sgmod package for specified P-codes
+    /// DTC suppression is unsupported until the detector understands the
+    /// Bosch fault-path table. A raw 2-byte pattern hit is not evidence of a
+    /// DTC entry, so no flash write may be minted from it.
     pub fn generate_dtc_kill(
-        rom: &[u8],
-        chassis: &str,
-        ecu_name: &str,
+        _rom: &[u8],
+        _chassis: &str,
+        _ecu_name: &str,
         p_codes: &[String],
-        author: &str,
+        _author: &str,
     ) -> Result<SterngateMod> {
-        let sigs = FirmwareSignatures::extract(rom);
-        let mut actions = Vec::new();
-        let mut rollback_actions = Vec::new();
+        Err(SterngateError::PreFlightCheckFailed(format!(
+            "DTC fault-path table location is unsupported until the detector rebuild; refusing to emit flash writes for {p_codes:?} at assumed addresses"
+        )))
+    }
+}
 
-        for code in p_codes {
-            let clean = code.trim().to_uppercase();
-            if let Some((offset, mask)) = BoschMapDetector::find_dtc_offset(rom, &clean) {
-                actions.push(ModAction::DtcMask {
-                    p_code: clean.clone(),
-                    address_offset: offset,
-                    original_mask: mask,
-                    disable_mask: 0x00,
-                    description: format!("DTC Off: Disable fault path {}", clean),
-                    provenance: MapProvenance::Synthetic,
-                });
-                rollback_actions.push(ModAction::DtcMask {
-                    p_code: clean.clone(),
-                    address_offset: offset,
-                    original_mask: 0x00,
-                    disable_mask: mask,
-                    description: format!("Restore OEM fault mask for {}", clean),
-                    provenance: MapProvenance::Synthetic,
-                });
-            } else {
-                // If not directly found in raw binary, generate standard symbolic offset
-                actions.push(ModAction::DtcMask {
-                    p_code: clean.clone(),
-                    address_offset: 0x184200,
-                    original_mask: 0x01,
-                    disable_mask: 0x00,
-                    description: format!("DTC Off: Suppress {}", clean),
-                    provenance: MapProvenance::Synthetic,
-                });
-            }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::calibrator::map::{EcuMap, MapCategory, MapProvenance};
+
+    fn test_rom_with_svbl() -> Vec<u8> {
+        let mut rom = vec![0xFF; 0x20_0000];
+        let svbl = 2350u16.to_be_bytes();
+        rom[0x1C2000] = svbl[0];
+        rom[0x1C2001] = svbl[1];
+        for i in [0x1C1FFE, 0x1C1FFF, 0x1C2002, 0x1C2003] {
+            rom[i] = 0x00;
         }
+        rom
+    }
 
-        let mod_id = format!(
-            "{}_dtc_kill_{}",
-            chassis.to_lowercase().replace(' ', "_"),
-            chrono::Utc::now().format("%Y%m%d")
-        );
+    #[test]
+    fn stage1_refuses_when_any_targeted_map_is_not_scanned() {
+        let rom = test_rom_with_svbl();
+        let err = StageGenerator::generate_stage1(&rom, "W211", "EDC16CP31", "t").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Torque Limiter"), "{msg}");
+        assert!(msg.contains("Fallback"), "{msg}");
+    }
 
-        let metadata = ModMetadata {
-            mod_id: mod_id.clone(),
-            name: format!("{} DTC Suppression ({})", chassis, p_codes.join(", ")),
-            version: "1.0.0".into(),
-            author: author.to_string(),
-            description: format!(
-                "Disables fault codes [{}] in ECU flash memory.",
-                p_codes.join(", ")
-            ),
-            category: ModCategory::Diagnostics,
-            risk_level: ModRiskLevel::Low,
-            instructions: Some("Clears fault memory after programming.".into()),
-            created_at: chrono::Utc::now().to_rfc3339(),
+    #[test]
+    fn stage2_refuses_synthetic_maps_and_emits_no_dtc_mask() {
+        let rom = test_rom_with_svbl();
+        let err = StageGenerator::generate_stage2(&rom, "W211", "EDC16CP31", "t").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("provenance"), "{msg}");
+    }
+
+    #[test]
+    fn dtc_kill_refuses_until_detector_rebuild() {
+        let rom = test_rom_with_svbl();
+        let err = StageGenerator::generate_dtc_kill(&rom, "W211", "EDC16", &["P0401".into()], "t")
+            .unwrap_err();
+        assert!(err.to_string().contains("unsupported"), "{err}");
+    }
+
+    #[test]
+    fn require_rom_backed_rejects_mislabelled_scanned_map() {
+        let rom = test_rom_with_svbl();
+        let map = EcuMap {
+            name: "Forged".into(),
+            category: MapCategory::Boost,
+            provenance: MapProvenance::Scanned,
+            address: 0x1C2000,
+            rows: 1,
+            cols: 1,
+            axis_x: None,
+            axis_y: None,
+            data: vec![0.0],
+            raw_bytes: vec![0x12, 0x34],
+            factor: 1.0,
+            offset: 0.0,
+            unit: "mbar".into(),
+            is_16bit: true,
+            is_signed: false,
         };
+        assert!(StageGenerator::require_rom_backed(&map, &rom).is_err());
+    }
 
-        let target = ModTargetFilter {
-            chassis: vec![chassis.to_string()],
-            ecu_name: ecu_name.to_string(),
-            tx_id: 0x7E0,
-            rx_id: 0x7E8,
-            compatible_hw_ids: sigs.bosch_hw_id.into_iter().collect(),
-            compatible_sw_ids: sigs.bosch_sw_id.into_iter().collect(),
-            min_battery_voltage: 12.0,
-            requires_engine_off: true,
-        };
-
-        SterngateMod::create(metadata, target, actions, rollback_actions)
+    #[test]
+    fn require_rom_backed_accepts_true_scan_hit() {
+        let rom = test_rom_with_svbl();
+        let maps = BoschMapDetector::scan_rom(&rom);
+        let svbl = maps.iter().find(|m| m.name.contains("SVBL")).unwrap();
+        assert!(StageGenerator::require_rom_backed(svbl, &rom).is_ok());
     }
 }
