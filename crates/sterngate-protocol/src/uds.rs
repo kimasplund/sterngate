@@ -192,7 +192,15 @@ impl<'a> UdsClient<'a> {
     /// WriteMemoryByAddress (0x3D)
     pub async fn write_memory_by_address(&mut self, address: u32, data: &[u8]) -> Result<Vec<u8>> {
         let addr_bytes = address.to_be_bytes();
-        let len_bytes = (data.len() as u16).to_be_bytes();
+        // The ALFID below declares a 2-byte length field: a longer payload would
+        // be truncated modulo 65536 and the ECU would write the wrong byte count.
+        let len_bytes = u16::try_from(data.len())
+            .map_err(|_| {
+                SterngateError::ProtocolError(
+                    "WriteMemoryByAddress payload exceeds 65535 bytes".into(),
+                )
+            })?
+            .to_be_bytes();
         let mut payload = vec![
             0x24,
             addr_bytes[0],

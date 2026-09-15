@@ -854,6 +854,37 @@ mod tests {
         assert!(!report.matched_vehicle);
     }
 
+    /// The `0x3D` ALFID declares a 2-byte length, so a payload of 65536 bytes
+    /// would have been sent as length 0. The refusal happens before any frame
+    /// reaches the interface: the mock below is deliberately left unopened, so
+    /// a `DeviceNotFound` here would mean the guard ran too late.
+    #[tokio::test]
+    async fn test_write_memory_by_address_refuses_oversize_payload() {
+        let mut iface = VirtualCanInterface::new();
+        assert!(!iface.is_connected());
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+
+        let err = uds
+            .write_memory_by_address(0x1C_1000, &vec![0u8; 65_536])
+            .await
+            .expect_err("a 65536-byte payload does not fit a 2-byte length field");
+        assert!(
+            matches!(err, SterngateError::ProtocolError(ref m) if m.contains("exceeds 65535")),
+            "{err:?}"
+        );
+
+        // 65535 bytes still fits the length field, so that one does reach the
+        // (closed) interface and fails for a different reason.
+        let err = uds
+            .write_memory_by_address(0x1C_1000, &vec![0u8; 65_535])
+            .await
+            .expect_err("the interface is not open");
+        assert!(
+            !matches!(err, SterngateError::ProtocolError(ref m) if m.contains("exceeds 65535")),
+            "{err:?}"
+        );
+    }
+
     /// `inspect_compatibility` must not report a package as compatible that
     /// `apply_mod` refuses outright: the three gates below live in `ModRunner`,
     /// not in `SterngateMod::check_compatibility`.
