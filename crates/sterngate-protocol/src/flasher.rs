@@ -59,6 +59,10 @@ pub async fn read_supplier_hw_id(
         )));
     };
     let unpadded = payload.get(..=last).unwrap_or(payload);
+    // Asymmetric on purpose: an ASCII number is compared unpadded, a binary
+    // (e.g. BCD) one is rendered with its padding. A padded BCD reply can
+    // therefore never equal a manifest id, which fails the flash closed --
+    // correct until a real EDC16 BCD F192 reply is captured on the bench.
     if unpadded.iter().all(u8::is_ascii_graphic) {
         Ok(String::from_utf8_lossy(unpadded).to_string())
     } else {

@@ -130,16 +130,21 @@ impl ModRunner {
     ///
     /// Gate order: integrity, flash-write refusals (`SterngateMod::flash_write_refusals`:
     /// map provenance, EraseMemory routine), policy admissibility, voltage floor,
-    /// range overlap, chassis, hardware whitelist, per-action byte preconditions,
-    /// then writes. Only the chassis and hardware-whitelist checks consult `policy`.
+    /// range overlap, chassis, pre-mod garage snapshot, hardware whitelist,
+    /// per-action byte preconditions, then writes. Only the chassis and
+    /// hardware-whitelist checks consult `policy`.
     /// `flash_write_refusals` is the single source of truth shared with
     /// `inspect_compatibility` (via `SterngateMod::check_compatibility`), so every
     /// inspect surface (CLI, MCP, REST) reports the same refusals `apply_mod` enforces.
     ///
-    /// Once the extended session (`10 03`) is entered, an `S3KeepAlive` ticks
+    /// Session timing: the blocking pre-mod garage commit is taken *before* the
+    /// extended session (`10 03`) is opened, so no disk or git work ever sits
+    /// inside the session. Once the session is open, an `S3KeepAlive` ticks
     /// before every subsequent request (the hardware ID read, each precondition
-    /// read, the bitmask read, and each write/routine), so a slow ECU or a long
-    /// garage commit between preconditions and writes never lets S3 expire.
+    /// read, the bitmask read, and each write/routine), so nothing between the
+    /// last precondition read and the first write can leave a gap without a
+    /// `3E 80`, however slow the ECU is. The post-mod garage commit runs after
+    /// the last bus exchange, where an expired S3 timer no longer matters.
     pub async fn apply_mod(
         interface: &mut dyn VehicleInterface,
         modpack: &mut SterngateMod,
@@ -197,6 +202,29 @@ impl ModRunner {
                 modpack.metadata.name, modpack.target.chassis, vin
             )));
         }
+
+        // 3b. Atomic pre-mod Git garage snapshot.
+        //
+        // Deliberately taken *before* the extended session is opened. It shells
+        // out to git and writes to disk, which can take longer than the 5 s S3
+        // timer on a large garage or a slow filesystem; inside `10 03` that
+        // would silently drop the session between the last precondition read
+        // and the first write, with no `3E 80` in the gap to hold it open. It
+        // needs nothing from the ECU (the VIN and the ECU name both come from
+        // the caller and the package), so there is no reason for it to run in
+        // the session at all.
+        let garage = VehicleGarage::new(VehicleGarage::default_path());
+        let pre_note = format!(
+            "Pre-mod baseline snapshot before applying '{}' (ID: {})",
+            modpack.metadata.name, modpack.metadata.mod_id
+        );
+        let _ = garage.save_coding(
+            vin,
+            &modpack.target.ecu_name,
+            "PRE_MOD_SNAPSHOT",
+            None,
+            &pre_note,
+        );
 
         let mut uds = UdsClient::new(interface, modpack.target.tx_id, modpack.target.rx_id);
 
@@ -333,21 +361,7 @@ impl ModRunner {
             }
         }
 
-        // 6. Atomic pre-mod Git garage snapshot
-        let garage = VehicleGarage::new(VehicleGarage::default_path());
-        let pre_note = format!(
-            "Pre-mod baseline snapshot before applying '{}' (ID: {})",
-            modpack.metadata.name, modpack.metadata.mod_id
-        );
-        let _ = garage.save_coding(
-            vin,
-            &modpack.target.ecu_name,
-            "PRE_MOD_SNAPSHOT",
-            None,
-            &pre_note,
-        );
-
-        // 7. Execute actions
+        // 6. Execute actions
         let total_steps = modpack.actions.len();
         let mut steps_completed = 0;
         let mut actions_executed = Vec::new();
@@ -462,7 +476,7 @@ impl ModRunner {
             }
         }
 
-        // 8. Atomic post-mod Git garage snapshot
+        // 7. Atomic post-mod Git garage snapshot
         let post_note = format!(
             "Applied community mod '{}' v{} by {} ({})",
             modpack.metadata.name,

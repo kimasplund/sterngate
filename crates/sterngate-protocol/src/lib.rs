@@ -1241,12 +1241,125 @@ mod tests {
         .await
         .unwrap();
         let frames = log.lock().unwrap().clone();
+        let is_tp = |f: &sterngate_core::CanFrame| {
+            f.data.get(1) == Some(&0x3E) && f.data.get(2) == Some(&0x80)
+        };
+        let writes: Vec<usize> = frames
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.data.get(1) == Some(&0x2E))
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(writes.len(), 2, "both writes must go out: {frames:02X?}");
+        // Not just "a TesterPresent happened somewhere": it has to land in the
+        // gap between the two slow writes, which is where S3 would expire.
         assert!(
             frames
                 .iter()
-                .any(|f| f.data.get(1) == Some(&0x3E) && f.data.get(2) == Some(&0x80)),
-            "a suppressed TesterPresent must be sent between slow writes"
+                .enumerate()
+                .any(|(i, f)| is_tp(f) && i > writes[0] && i < writes[1]),
+            "a suppressed TesterPresent must sit between the two 0x2E writes: {frames:02X?}"
         );
+    }
+
+    /// The gap that actually matters is the one between the last precondition
+    /// read and the first write: nothing else is guaranteed to talk to the ECU
+    /// there, so the keep-alive has to cover it even when the read itself has
+    /// already burned most of the S3 timer.
+    #[tokio::test(start_paused = true)]
+    async fn test_apply_mod_keepalive_covers_precondition_to_write_gap() {
+        use std::time::Duration;
+        let iface = crate::test_support::ScriptedInterface::new()
+            .rule(0x10, &[&[0x06, 0x50, 0x03, 0x00, 0x32, 0x01, 0xF4]])
+            // The precondition read takes 1.6 s (ResponsePending then the reply).
+            .rule_delayed(
+                0x22,
+                Duration::from_millis(1600),
+                &[&[0x04, 0x62, 0x02, 0x01, 0x01]],
+            )
+            .rule(0x2E, &[&[0x03, 0x6E, 0x02, 0x01]]);
+        let log = iface.sent_handle();
+        let mut iface = iface;
+        let action = ModAction::WriteDid {
+            did: 0x0201,
+            data: vec![0x00],
+            bitmask: None,
+            expected_original_data: Some(vec![0x01]),
+            description: "seatbelt chime".into(),
+        };
+        let mut m = runner_mod(vec![action], vec![], 12.0);
+        ModRunner::apply_mod(
+            &mut iface,
+            &mut m,
+            &vin(24),
+            12.8,
+            TargetFingerprintPolicy::Enforce,
+        )
+        .await
+        .unwrap();
+
+        let frames = log.lock().unwrap().clone();
+        let idx = |sid: u8| frames.iter().position(|f| f.data.get(1) == Some(&sid));
+        let read = idx(0x22).expect("precondition read");
+        let write = idx(0x2E).expect("write");
+        assert!(read < write, "{frames:02X?}");
+        assert!(
+            frames.iter().enumerate().any(|(i, f)| i > read
+                && i < write
+                && f.data.get(1) == Some(&0x3E)
+                && f.data.get(2) == Some(&0x80)),
+            "a 3E 80 must sit between the precondition read and the write: {frames:02X?}"
+        );
+    }
+
+    /// The pre-mod garage snapshot shells out to git and writes to disk, which
+    /// can outlast the 5 s S3 timer. It must therefore be taken before the
+    /// extended session is opened -- which is observable: the baseline exists
+    /// even for a mod that is then refused by a precondition.
+    #[tokio::test]
+    async fn test_pre_mod_snapshot_is_taken_before_the_extended_session() {
+        use sterngate_core::VehicleGarage;
+
+        let test_vin = vin(25);
+        let garage = VehicleGarage::new(VehicleGarage::default_path());
+        let vdir = garage.get_vehicle_dir(&test_vin);
+        let _ = std::fs::remove_dir_all(&vdir);
+
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        // DID 0x0201 reads back 0x01 on the virtual ECU, so this precondition
+        // cannot hold and the mod is refused after the session is opened.
+        let action = ModAction::WriteDid {
+            did: 0x0201,
+            data: vec![0x00],
+            bitmask: None,
+            expected_original_data: Some(vec![0xEE]),
+            description: "seatbelt chime".into(),
+        };
+        let mut m = runner_mod(vec![action], vec![], 12.0);
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                &test_vin,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("Precondition check failed"), "{msg}");
+
+        let baseline = vdir.join("coding").join("EDC16.coding.hex");
+        assert!(
+            baseline.exists(),
+            "pre-mod baseline missing at {}; the snapshot still runs inside the session",
+            baseline.display()
+        );
+        assert_eq!(
+            std::fs::read_to_string(&baseline).unwrap(),
+            "PRE_MOD_SNAPSHOT"
+        );
+        let _ = std::fs::remove_dir_all(&vdir);
     }
 
     #[tokio::test]

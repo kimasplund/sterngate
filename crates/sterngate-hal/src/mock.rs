@@ -100,8 +100,11 @@ impl VirtualCanInterface {
         let pci_type = pci >> 4;
 
         if pci_type == 1 {
-            // ISO-TP First Frame: Send Flow Control (0x30: ContinueToSend)
-            let total_len = (((payload[0] as usize) & 0x0F) << 8) | (payload[1] as usize);
+            // ISO-TP First Frame: Send Flow Control (0x30: ContinueToSend).
+            // A truncated FF (`[0x10]` alone) carries no length byte; drop it
+            // rather than index past the end of the frame.
+            let &len_lo = payload.get(1)?;
+            let total_len = (((payload[0] as usize) & 0x0F) << 8) | (len_lo as usize);
             let needed_cfs = if total_len > 6 {
                 (total_len - 6).div_ceil(7)
             } else {
@@ -605,5 +608,25 @@ impl VehicleInterface for VirtualCanInterface {
 
     fn is_connected(&self) -> bool {
         self.is_open
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A truncated First Frame carries no length byte. The virtual ECU must
+    /// drop it, not index past the end of the frame: `sterngate mock` runs the
+    /// same `panic = "abort"` release profile as everything else.
+    #[tokio::test]
+    async fn truncated_first_frame_is_dropped_not_panicked() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        for data in [vec![0x10u8], vec![0x1F]] {
+            iface
+                .send(CanFrame::new_standard(0x7E0, &data))
+                .await
+                .unwrap();
+        }
     }
 }

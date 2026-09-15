@@ -10,6 +10,21 @@ const P2_STAR_MARGIN: Duration = Duration::from_millis(500);
 /// P2* used until a DiagnosticSessionControl reply announces the real value.
 const DEFAULT_P2_STAR: Duration = Duration::from_millis(5000);
 
+/// Consecutive NRC 0x78 (ResponsePending) replies tolerated for a single
+/// request before the exchange is abandoned.
+///
+/// A confused or hostile ECU can answer `7F <sid> 78` forever. Each one
+/// legitimately re-arms the P2* timer, so without a cap `send_request` never
+/// returns, and because the flashing worker holds the interface lock (and the
+/// REST API stays at HTTP 423) for the whole sequence, one such storm would
+/// wedge the whole server until the process is killed. 20 × P2* is already far
+/// beyond any real erase or checksum routine.
+///
+/// This caps one request, deliberately not the whole sequence: a legitimate
+/// flash runs for minutes and an arbitrary deadline that aborts mid-write is
+/// more dangerous than a slow ECU.
+pub const P2_STAR_MAX_PENDING: usize = 20;
+
 /// P2* (enhanced response timing) from a positive DiagnosticSessionControl
 /// reply: bytes 4..6 hold the value in 10 ms units. Widened before multiplying
 /// so 0xFFFF cannot overflow a u16.
@@ -166,6 +181,7 @@ impl<'a> UdsClient<'a> {
 
         channel.send_payload(&req).await?;
 
+        let mut pending_seen = 0usize;
         loop {
             let resp = channel.recv_payload().await?;
             let Some(&sid) = resp.first() else {
@@ -184,6 +200,12 @@ impl<'a> UdsClient<'a> {
 
                 // NRC 0x78: RequestCorrectlyReceived-ResponsePending -> ECU asks for more time
                 if nrc == 0x78 {
+                    pending_seen += 1;
+                    if pending_seen > P2_STAR_MAX_PENDING {
+                        // Give up rather than hold the interface lock (and the
+                        // API lockout) forever on an ECU that never answers.
+                        return Err(SterngateError::IsoTpTimeout);
+                    }
                     channel.set_timeout(p2_star + P2_STAR_MARGIN);
                     continue;
                 }
@@ -233,14 +255,22 @@ impl<'a> UdsClient<'a> {
             ));
         }
 
+        // sendKey is always requestSeed + 1; 0xFF has no successor sub-function,
+        // so it is a bad request rather than a wrapped-around 0x00.
+        let send_key_level = level.checked_add(1).ok_or_else(|| {
+            SterngateError::IsoTpError(
+                "SecurityAccess level 0xFF has no sendKey sub-function".into(),
+            )
+        })?;
+
         let seed = &seed_resp[2..];
         let key = solver.compute_key(level, seed)?;
 
-        let mut send_key_payload = vec![level + 1];
+        let mut send_key_payload = vec![send_key_level];
         send_key_payload.extend_from_slice(&key);
 
         let key_resp = self.send_request(0x27, &send_key_payload).await?;
-        if key_resp.len() < 2 || key_resp[1] != level + 1 {
+        if key_resp.len() < 2 || key_resp[1] != send_key_level {
             return Err(SterngateError::SecurityAccessDenied(
                 "Key verification failed".into(),
             ));
@@ -441,6 +471,55 @@ mod tests {
             "waited only {waited:?}"
         );
         assert!(waited < Duration::from_millis(7000), "waited {waited:?}");
+    }
+
+    /// An ECU that answers `7F <sid> 78` without ever completing re-arms P2* on
+    /// every reply. Unbounded, `send_request` never returns, and the flashing
+    /// worker holds the interface lock (HTTP 423) for as long as it is inside
+    /// one request -- so the cap is what keeps the whole server recoverable.
+    #[tokio::test(start_paused = true)]
+    async fn pending_storm_gives_up() {
+        const PENDING: &[u8] = &[0x03, 0x7F, 0x31, 0x78];
+        // Far more ResponsePending replies than the cap allows, delivered with
+        // no delay: only the counter can end this exchange.
+        let storm = vec![PENDING; P2_STAR_MAX_PENDING * 10];
+        let mut iface = ScriptedInterface::new().raw_frames(&storm);
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+
+        let started = tokio::time::Instant::now();
+        let err = uds.routine_control(0x01, 0xFF00, &[]).await.unwrap_err();
+        assert!(matches!(err, SterngateError::IsoTpTimeout), "{err:?}");
+
+        // Bounded: it gives up on the counter, not by waiting out P2* on the
+        // tail of the storm. Uncapped, this exchange consumes every scripted
+        // reply and only then waits the full P2* + margin (5.5 s).
+        let waited = started.elapsed();
+        assert!(
+            waited < Duration::from_millis(1000),
+            "gave up only after {waited:?}; the ResponsePending cap did not fire"
+        );
+    }
+
+    /// `level + 1` wraps for 0xFF, which would send the sendKey bytes as
+    /// sub-function 0x00 -- a different, possibly privileged request. There is
+    /// no sendKey for 0xFF, so it is refused.
+    #[tokio::test(start_paused = true)]
+    async fn security_access_level_ff_has_no_send_key() {
+        let mut iface =
+            ScriptedInterface::new().rule(0x27, &[&[0x06, 0x67, 0xFF, 0x11, 0x22, 0x33, 0x44]]);
+        let handle = iface.sent_handle();
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        let err = uds
+            .security_access(0xFF, &crate::seedkey::DaimlerSolver)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, SterngateError::IsoTpError(m) if m.contains("0xFF")),
+            "{err:?}"
+        );
+        // Only the requestSeed went out; no wrapped-around sub-function 0x00.
+        let sent = handle.lock().unwrap().clone();
+        assert_eq!(sent.len(), 1, "{sent:02X?}");
     }
 
     #[tokio::test(start_paused = true)]

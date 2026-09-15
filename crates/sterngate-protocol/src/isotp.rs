@@ -56,8 +56,27 @@ impl<'a> IsoTpChannel<'a> {
         self.timeout_duration
     }
 
+    /// The 11-bit arbitration id every frame this channel sends goes out on.
+    ///
+    /// `tx_id` is caller-supplied (a `.sgmod` author controls
+    /// `modpack.target.tx_id`), and this channel only builds standard frames.
+    /// Casting a 29-bit id down to `u16` would silently address a *different*
+    /// ECU, so an out-of-range id is refused instead of truncated.
+    fn tx_can_id(&self) -> Result<u16> {
+        u16::try_from(self.tx_id)
+            .ok()
+            .filter(|id| *id <= 0x7FF)
+            .ok_or_else(|| {
+                SterngateError::IsoTpError(format!(
+                    "tx_id 0x{:X} is not an 11-bit standard CAN identifier (max 0x7FF); refusing to truncate it onto another ECU's address",
+                    self.tx_id
+                ))
+            })
+    }
+
     /// Send an ISO-TP payload (handles Single Frame and First Frame/Consecutive Frames)
     pub async fn send_payload(&mut self, payload: &[u8]) -> Result<()> {
+        let tx_id = self.tx_can_id()?;
         let len = payload.len();
         if len == 0 {
             return Err(SterngateError::IsoTpError(
@@ -72,7 +91,7 @@ impl<'a> IsoTpChannel<'a> {
             while data.len() < 8 {
                 data.push(0xAA); // Padding
             }
-            let frame = CanFrame::new_standard(self.tx_id as u16, &data);
+            let frame = CanFrame::new_standard(tx_id, &data);
             self.interface.send(frame).await?;
             return Ok(());
         }
@@ -90,7 +109,7 @@ impl<'a> IsoTpChannel<'a> {
         let mut ff_data = vec![ff_hi, ff_lo];
         ff_data.extend_from_slice(&payload[..6]);
 
-        let ff_frame = CanFrame::new_standard(self.tx_id as u16, &ff_data);
+        let ff_frame = CanFrame::new_standard(tx_id, &ff_data);
         self.interface.send(ff_frame).await?;
 
         // Wait for Flow Control (FC) frame from ECU
@@ -112,7 +131,7 @@ impl<'a> IsoTpChannel<'a> {
                 cf_data.push(0xAA);
             }
 
-            let cf_frame = CanFrame::new_standard(self.tx_id as u16, &cf_data);
+            let cf_frame = CanFrame::new_standard(tx_id, &cf_data);
             self.interface.send(cf_frame).await?;
 
             offset += chunk_size;
@@ -179,7 +198,7 @@ impl<'a> IsoTpChannel<'a> {
 
                 // Send Flow Control frame: CTS (ContinueToSend = 0), BS = 0, STmin = 5ms
                 let fc_frame = CanFrame::new_standard(
-                    self.tx_id as u16,
+                    self.tx_can_id()?,
                     &[0x30, 0x00, 0x05, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA],
                 );
                 self.interface.send(fc_frame).await?;
@@ -279,6 +298,38 @@ mod tests {
     use super::*;
     use crate::test_support::ScriptedInterface;
     use std::time::Duration;
+
+    /// `tx_id` comes from a `.sgmod` author (`modpack.target.tx_id`) or a
+    /// profile, and this channel only builds 11-bit standard frames. Truncating
+    /// a 29-bit id would send the request to a different ECU's address, so it
+    /// is refused before a single frame goes on the bus.
+    #[tokio::test(start_paused = true)]
+    async fn extended_tx_id_is_refused_not_truncated() {
+        for tx_id in [0x800, 0x1800_07E0, 0xFFFF_FFFF] {
+            let mut iface = ScriptedInterface::new();
+            let handle = iface.sent_handle();
+            let mut ch = IsoTpChannel::new(&mut iface, tx_id, 0x7E8);
+            // Single frame and multi-frame both refuse.
+            for payload in [vec![0x22, 0xF1, 0x90], vec![0xAA; 32]] {
+                let err = ch.send_payload(&payload).await.unwrap_err();
+                assert!(
+                    matches!(&err, SterngateError::IsoTpError(m) if m.contains("11-bit")),
+                    "tx_id 0x{tx_id:X}: {err:?}"
+                );
+            }
+            assert!(
+                handle.lock().unwrap().is_empty(),
+                "tx_id 0x{tx_id:X}: no frame may reach the bus"
+            );
+        }
+
+        // 0x7FF is the last legal standard id and still sends.
+        let mut iface = ScriptedInterface::new();
+        let handle = iface.sent_handle();
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7FF, 0x7E8);
+        ch.send_payload(&[0x22, 0xF1, 0x90]).await.unwrap();
+        assert_eq!(handle.lock().unwrap().len(), 1);
+    }
 
     #[tokio::test(start_paused = true)]
     async fn recv_payload_empty_frame_is_error_not_panic() {
