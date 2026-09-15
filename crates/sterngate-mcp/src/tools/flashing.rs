@@ -80,13 +80,26 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
             let manifest = demo_manifest(target_module, &dummy_rom);
 
             if dry_run {
+                let report = FlashingWorker::new()
+                    .run_preflight_checks(&manifest, &dummy_rom, voltage, &mut mock_iface)
+                    .await
+                    .map_err(|e| format!("Pre-flight evaluation failed: {}", e))?;
+                let status = if report.passed {
+                    "Pre-flight safety interlock checks PASSED. Ready for detached flash execution."
+                } else {
+                    "Pre-flight safety interlock checks FAILED. Flashing is refused; no bytes will be written."
+                };
                 Ok(json!({
-                    "preflight_passed": true,
+                    "preflight_passed": report.passed,
                     "target_module": target_module,
                     "measured_voltage": voltage,
-                    "voltage_threshold_passed": true,
+                    "voltage_threshold_passed": voltage >= report.min_voltage_required,
+                    "hw_id_match": report.hw_id_match,
+                    "checksum_match": report.checksum_match,
+                    "details": report.details,
+                    "simulated": true,
                     "manifest": manifest,
-                    "status": "Pre-flight safety interlock checks PASSED. Ready for detached flash execution."
+                    "status": status
                 }))
             } else {
                 let flasher = FlashingWorker::new();

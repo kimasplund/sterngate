@@ -23,8 +23,15 @@ pub const CHECKSUM_STATUS_OK: u8 = 0x00;
 pub const ISOTP_MAX_PAYLOAD: usize = 4095;
 
 /// Read the system-supplier ECU hardware number (DID 0xF192, the Bosch
-/// `0281…` number). ASCII payloads are returned as text; binary-coded ones are
-/// rendered as hex so they can never accidentally equal an ASCII manifest id.
+/// `0281…` number).
+///
+/// The field is fixed-length, so real ECUs pad it: trailing spaces, NULs or
+/// erased-flash `0xFF` are stripped before the payload is classified. What is
+/// left is returned as text if it is printable, and otherwise rendered as hex
+/// digits. Hex is what keeps the later comparison exact and explicit rather
+/// than encoding-dependent: a binary-coded `02 81 01 22 24` renders as
+/// `0281012224` and so matches a manifest declaring that same number, which is
+/// the intended equivalence.
 pub async fn read_supplier_hw_id(
     interface: &mut dyn VehicleInterface,
     tx_id: u32,
@@ -43,9 +50,20 @@ pub async fn read_supplier_hw_id(
         )));
     }
     let payload = &resp[3..];
-    if payload.iter().all(u8::is_ascii_graphic) {
-        Ok(String::from_utf8_lossy(payload).to_string())
+    let Some(last) = payload
+        .iter()
+        .rposition(|&b| !matches!(b, 0x00 | 0x20 | 0xFF))
+    else {
+        return Err(SterngateError::IsoTpError(format!(
+            "F192 reply carries padding only, no hardware number: {resp:02X?}"
+        )));
+    };
+    let unpadded = payload.get(..=last).unwrap_or(payload);
+    if unpadded.iter().all(u8::is_ascii_graphic) {
+        Ok(String::from_utf8_lossy(unpadded).to_string())
     } else {
+        // Not text: render every byte as received, padding included, so the
+        // number that is compared is the number the ECU reported.
         Ok(payload.iter().map(|b| format!("{b:02X}")).collect())
     }
 }
@@ -1349,6 +1367,56 @@ mod tests {
             read_supplier_hw_id(&mut iface, FLASH_TX_ID, FLASH_RX_ID).await,
             Err(SterngateError::IsoTpError(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn supplier_hw_id_strips_padding() {
+        // F192 is a fixed-length field: a real ECU returns "0281012224" plus
+        // filler. 19 payload bytes (62 F1 92 + 10 digits + 6 pad) => FF + 2 CFs.
+        for pad in [b' ', 0x00] {
+            let mut iface = ScriptedInterface::new().rule(
+                0x22,
+                &[
+                    &[0x10, 0x13, 0x62, 0xF1, 0x92, b'0', b'2', b'8'],
+                    &[0x21, b'1', b'0', b'1', b'2', b'2', b'2', b'4'],
+                    &[0x22, pad, pad, pad, pad, pad, pad, 0xAA],
+                ],
+            );
+            let live = read_supplier_hw_id(&mut iface, FLASH_TX_ID, FLASH_RX_ID)
+                .await
+                .unwrap();
+            assert_eq!(live, "0281012224", "padding byte {pad:#04X}");
+        }
+    }
+
+    #[tokio::test]
+    async fn read_supplier_hw_id_rejects_a_padding_only_reply() {
+        // An erased or unprogrammed field is not an identity.
+        let mut iface = ScriptedInterface::new()
+            .rule(0x22, &[&[0x07, 0x62, 0xF1, 0x92, 0xFF, 0xFF, 0xFF, 0xFF]]);
+        assert!(matches!(
+            read_supplier_hw_id(&mut iface, FLASH_TX_ID, FLASH_RX_ID).await,
+            Err(SterngateError::IsoTpError(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn preflight_accepts_a_space_padded_hw_id() {
+        let mut iface = ScriptedInterface::new().rule(
+            0x22,
+            &[
+                &[0x10, 0x13, 0x62, 0xF1, 0x92, b'0', b'2', b'8'],
+                &[0x21, b'1', b'0', b'1', b'2', b'2', b'2', b'4'],
+                &[0x22, b' ', b' ', b' ', b' ', b' ', b' ', 0xAA],
+            ],
+        );
+        let rom = vec![0x5A; 64];
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&manifest(&rom), &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(report.hw_id_match);
+        assert!(report.passed);
     }
 
     #[test]

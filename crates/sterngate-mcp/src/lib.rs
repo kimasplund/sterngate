@@ -547,6 +547,10 @@ mod tests {
             .unwrap()
             .as_bool()
             .unwrap());
+        // The dry run reports a real pre-flight against the virtual ECU, not a
+        // hardcoded pass: the F192 identity gate is part of what it answers.
+        assert!(flash_dry["hw_id_match"].as_bool().unwrap());
+        assert!(flash_dry["simulated"].as_bool().unwrap());
 
         // 9. sterngate_flash_ecu: full execution
         let flash_full = tools::handle_tool_call(
