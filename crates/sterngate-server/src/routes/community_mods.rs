@@ -37,6 +37,17 @@ async fn mods_inspect(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ModInspectPayload>,
 ) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
     let modpack = match decode_from_armor(&payload.content) {
         Ok(m) => m,
         Err(e) => {

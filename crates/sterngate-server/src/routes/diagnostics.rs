@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
-use sterngate_core::{Dtc, EcuCatalog, Language, VehicleGarage};
+use sterngate_core::{EcuCatalog, Language, VehicleGarage};
 use sterngate_protocol::{BusDiscoverer, UdsClient, VehicleScanner};
 
 use crate::state::AppState;
@@ -29,7 +29,18 @@ struct DtcQuery {
 async fn get_dtcs(
     State(state): State<Arc<AppState>>,
     Query(query): Query<DtcQuery>,
-) -> Json<Vec<Dtc>> {
+) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
     let lang: Language = query
         .lang
         .as_deref()
@@ -47,14 +58,25 @@ async fn get_dtcs(
     for d in &mut dtcs {
         d.localize(lang);
     }
-    Json(dtcs)
+    (StatusCode::OK, Json(dtcs)).into_response()
 }
 
-async fn clear_dtcs(State(state): State<Arc<AppState>>) -> StatusCode {
+async fn clear_dtcs(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
     let mut iface = state.interface.lock().await;
     let mut uds = UdsClient::new(iface.as_mut(), 0x7E0, 0x7E8);
     let _ = uds.clear_diagnostic_information(0xFFFFFF).await;
-    StatusCode::OK
+    StatusCode::OK.into_response()
 }
 
 fn default_lang_en() -> String {
@@ -77,6 +99,17 @@ async fn scan_vehicle_quick_test(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<Option<ScanVehicleRequest>>,
 ) -> impl IntoResponse {
+    if state.flasher.is_locked().await {
+        return (
+            StatusCode::LOCKED,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "System is locked in a flashing routine",
+            })),
+        )
+            .into_response();
+    }
+
     let req = payload.unwrap_or(ScanVehicleRequest {
         lang: "en".into(),
         save_to_garage: true,

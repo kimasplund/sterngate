@@ -53,6 +53,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use serde_json::json;
+    use sha2::Digest;
     use sterngate_core::{TelemetrySnapshot, VehicleProfile};
     use sterngate_hal::{VehicleInterface, VirtualCanInterface};
     use sterngate_protocol::FlashingWorker;
@@ -1377,5 +1378,64 @@ mod tests {
             let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
             assert!(v["error"].as_str().unwrap().contains("VIN"));
         }
+    }
+
+    #[tokio::test]
+    async fn test_interface_routes_return_423_while_flashing() {
+        let mut iface = Box::new(VirtualCanInterface::new());
+        let _ = iface.open().await;
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher.clone()));
+
+        // Start a flash that will hold the lock: the request is spawned and we
+        // observe the lock through the same worker.
+        let rom = vec![0x5A; 100_000];
+        let mut hasher = sha2::Sha256::new();
+        sha2::Digest::update(&mut hasher, &rom);
+        let manifest = sterngate_core::FlashPackageManifest {
+            target_module: "EDC16".into(),
+            expected_hw_id: "0281012224".into(),
+            expected_sw_id: "1037372332".into(),
+            sha256_checksum: format!("{:x}", sha2::Digest::finalize(hasher)),
+            crc32_checksum: crc32fast::hash(&rom),
+            flash_start_address: 0x0004_0000,
+            flash_length: 100_000,
+            block_size: 256,
+        };
+        let f = flasher.clone();
+        let iface_arc = state.interface.clone();
+        let handle =
+            tokio::spawn(async move { f.execute_flash(manifest, rom, 13.5, iface_arc).await });
+        // Wait until the worker reports a locked state.
+        let mut rx = flasher.subscribe();
+        while !flasher.is_locked().await {
+            rx.changed().await.unwrap();
+        }
+
+        for (method, uri, body) in [
+            ("GET", "/api/v1/dtc", None),
+            ("POST", "/api/v1/dtc/clear", None),
+            ("POST", "/api/v1/vehicle/scan", Some(json!({}))),
+            (
+                "POST",
+                "/api/v1/mods/inspect",
+                Some(json!({"content": "{}"})),
+            ),
+        ] {
+            let req = Request::builder().method(method).uri(uri);
+            let req = match body {
+                Some(b) => req
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_vec(&b).unwrap()))
+                    .unwrap(),
+                None => req.body(Body::empty()).unwrap(),
+            };
+            let resp = create_router(state.clone()).oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::LOCKED, "{method} {uri}");
+        }
+        let _ = handle.await;
     }
 }
