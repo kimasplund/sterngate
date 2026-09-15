@@ -6,7 +6,7 @@ use sterngate_core::{
     encode_to_armor, EcuCatalog, FecStatus, ModAction, ModCategory, ModMetadata, ModRiskLevel,
     ModTargetFilter, SterngateMod, VehicleGarage,
 };
-use sterngate_protocol::ModRunner;
+use sterngate_protocol::{ModRunner, TargetFingerprintPolicy};
 
 pub async fn execute(action: ModCommands, cli: &Cli) -> Result<()> {
     match action {
@@ -200,12 +200,18 @@ pub async fn execute(action: ModCommands, cli: &Cli) -> Result<()> {
 
             let battery_voltage = 13.2;
 
+            let policy = if force {
+                TargetFingerprintPolicy::BypassUnsafe
+            } else {
+                TargetFingerprintPolicy::Enforce
+            };
+
             let report = ModRunner::apply_mod(
                 iface.as_mut(),
                 &mut modpack,
                 &target_vin,
                 battery_voltage,
-                force,
+                policy,
             )
             .await?;
 

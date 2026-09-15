@@ -5,10 +5,11 @@
 //! and verifies post-write states over CAN.
 
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::info;
 
 use sterngate_core::{
     ModAction, ModValidationReport, Result, SterngateError, SterngateMod, VehicleGarage,
+    FLASH_WRITE_MIN_VOLTAGE,
 };
 use sterngate_hal::VehicleInterface;
 
@@ -28,9 +29,108 @@ pub struct ModExecutionReport {
     pub message: String,
 }
 
+/// How strictly the vehicle fingerprint (chassis, hardware whitelist) is enforced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetFingerprintPolicy {
+    /// Refuse on any chassis or hardware-whitelist mismatch.
+    Enforce,
+    /// Relax the chassis and hardware-whitelist checks only. Never relaxes the
+    /// voltage floor, map provenance or byte preconditions, and is refused
+    /// outright for packages that write flash memory.
+    BypassUnsafe,
+}
+
 pub struct ModRunner;
 
 impl ModRunner {
+    fn writes_flash(modpack: &SterngateMod) -> bool {
+        modpack
+            .actions
+            .iter()
+            .chain(modpack.rollback_actions.iter())
+            .any(|a| {
+                matches!(
+                    a,
+                    ModAction::PatchFlashMap { .. } | ModAction::DtcMask { .. }
+                )
+            })
+    }
+
+    /// Every flash action must carry `Scanned` provenance. Runs before any bus traffic.
+    fn check_provenance(modpack: &SterngateMod) -> Result<()> {
+        for action in modpack
+            .actions
+            .iter()
+            .chain(modpack.rollback_actions.iter())
+        {
+            let (name, provenance) = match action {
+                ModAction::PatchFlashMap {
+                    map_name,
+                    provenance,
+                    ..
+                } => (map_name.as_str(), *provenance),
+                ModAction::DtcMask {
+                    p_code, provenance, ..
+                } => (p_code.as_str(), *provenance),
+                _ => continue,
+            };
+            if !provenance.is_scanned() {
+                return Err(SterngateError::PreFlightCheckFailed(format!(
+                    "action '{name}' has map provenance {provenance:?}; only maps scanned from the target ECU's own ROM may be flashed"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Flash ranges within one package must not overlap: a later action's
+    /// precondition would otherwise be checked against bytes an earlier action changes.
+    fn check_no_overlap(modpack: &SterngateMod) -> Result<()> {
+        let mut ranges: Vec<(u32, u32, String)> = Vec::new();
+        for action in &modpack.actions {
+            let (start, len, name) = match action {
+                ModAction::PatchFlashMap {
+                    address_offset,
+                    data,
+                    map_name,
+                    ..
+                } => (*address_offset, data.len(), map_name.clone()),
+                ModAction::DtcMask {
+                    address_offset,
+                    p_code,
+                    ..
+                } => (*address_offset, 1, p_code.clone()),
+                _ => continue,
+            };
+            let len = u32::try_from(len).map_err(|_| {
+                SterngateError::PreFlightCheckFailed(format!("action '{name}' is too large"))
+            })?;
+            let end = start.checked_add(len).ok_or_else(|| {
+                SterngateError::PreFlightCheckFailed(format!(
+                    "action '{name}' address range overflows"
+                ))
+            })?;
+            for (s, e, other) in &ranges {
+                if start < *e && *s < end {
+                    return Err(SterngateError::PreFlightCheckFailed(format!(
+                        "flash ranges of '{name}' and '{other}' overlap; refusing the package"
+                    )));
+                }
+            }
+            ranges.push((start, end, name));
+        }
+        Ok(())
+    }
+
+    async fn read_live_hw_id(uds: &mut UdsClient<'_>) -> Option<String> {
+        match uds.read_data_by_identifier(0xF191).await {
+            Ok(resp) if resp.len() >= 4 => {
+                Some(String::from_utf8_lossy(&resp[3..]).trim().to_string())
+            }
+            _ => None,
+        }
+    }
+
     /// Inspect and test compatibility of a mod against live vehicle without executing changes
     pub async fn inspect_compatibility(
         interface: &mut dyn VehicleInterface,
@@ -45,35 +145,39 @@ impl ModRunner {
 
         let mut uds = UdsClient::new(interface, modpack.target.tx_id, modpack.target.rx_id);
 
-        // 1. Check Hardware ID if whitelist exists
-        let live_hw_id = if !modpack.target.compatible_hw_ids.is_empty() {
-            // Extended session
-            let _ = uds.diagnostic_session_control(0x03).await;
-            if let Ok(resp) = uds.read_data_by_identifier(0xF191).await {
-                if resp.len() >= 4 {
-                    Some(String::from_utf8_lossy(&resp[3..]).trim().to_string())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
+        let live_hw_id = if modpack.target.compatible_hw_ids.is_empty() {
             None
+        } else {
+            let _ = uds.diagnostic_session_control(0x03).await;
+            Self::read_live_hw_id(&mut uds).await
         };
 
-        let final_report = modpack.check_compatibility(vin, live_hw_id.as_deref(), battery_voltage);
+        let mut final_report =
+            modpack.check_compatibility(vin, live_hw_id.as_deref(), battery_voltage);
+
+        if !modpack.target.compatible_hw_ids.is_empty() && live_hw_id.is_none() {
+            final_report.matched_vehicle = false;
+            final_report.warning_messages.push(
+                "Mod declares a hardware whitelist but the ECU hardware ID (DID F191) could not be read"
+                    .into(),
+            );
+        }
 
         Ok(final_report)
     }
 
-    /// Safely apply a community mod package to connected vehicle
+    /// Safely apply a community mod package to the connected vehicle.
+    ///
+    /// Gate order: integrity, map provenance, policy admissibility, voltage
+    /// floor, range overlap, chassis, hardware whitelist, per-action byte
+    /// preconditions, then writes. Only the chassis and hardware-whitelist
+    /// checks consult `policy`.
     pub async fn apply_mod(
         interface: &mut dyn VehicleInterface,
         modpack: &mut SterngateMod,
         vin: &str,
         battery_voltage: f64,
-        force_bypass_preconditions: bool,
+        policy: TargetFingerprintPolicy,
     ) -> Result<ModExecutionReport> {
         // 1. Verify and auto-repair Reed-Solomon FEC
         let validation = modpack.verify_and_repair()?;
@@ -84,16 +188,39 @@ impl ModRunner {
             )));
         }
 
-        // 2. Safety Interlock: Voltage Check
-        if battery_voltage < modpack.target.min_battery_voltage && !force_bypass_preconditions {
+        // 1b. Map provenance gate (before any bus traffic)
+        Self::check_provenance(modpack)?;
+
+        // 1c. A fingerprint bypass is never admissible for flash writes
+        let writes_flash = Self::writes_flash(modpack);
+        if writes_flash && policy == TargetFingerprintPolicy::BypassUnsafe {
+            return Err(SterngateError::PreFlightCheckFailed(
+                "--force is not permitted for packages containing flash writes (PatchFlashMap/DtcMask)"
+                    .into(),
+            ));
+        }
+
+        // 2. Safety interlock: voltage (policy-independent)
+        let required = if writes_flash {
+            modpack
+                .target
+                .min_battery_voltage
+                .max(FLASH_WRITE_MIN_VOLTAGE)
+        } else {
+            modpack.target.min_battery_voltage
+        };
+        if battery_voltage.is_nan() || battery_voltage < required {
             return Err(SterngateError::PreFlightCheckFailed(format!(
                 "Battery voltage ({:.1}V) is below required minimum ({:.1}V) for mod '{}'",
-                battery_voltage, modpack.target.min_battery_voltage, modpack.metadata.name
+                battery_voltage, required, modpack.metadata.name
             )));
         }
 
-        // 3. Vehicle Chassis Fingerprint Check
-        if !modpack.target.matches_chassis(vin) && !force_bypass_preconditions {
+        // 2b. Flash ranges must not overlap
+        Self::check_no_overlap(modpack)?;
+
+        // 3. Vehicle chassis fingerprint check
+        if policy == TargetFingerprintPolicy::Enforce && !modpack.target.matches_chassis(vin) {
             return Err(SterngateError::ProtocolError(format!(
                 "Vehicle chassis mismatch: Mod '{}' requires chassis {:?}, but connected VIN is '{}'",
                 modpack.metadata.name, modpack.target.chassis, vin
@@ -105,89 +232,122 @@ impl ModRunner {
         // Enter Extended Diagnostic Session (0x10 03)
         let _ = uds.diagnostic_session_control(0x03).await;
 
-        // 4. ECU Hardware ID Whitelist Check
-        let live_hw_id = if let Ok(resp) = uds.read_data_by_identifier(0xF191).await {
-            if resp.len() >= 4 {
-                Some(String::from_utf8_lossy(&resp[3..]).trim().to_string())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        if let Some(ref hw) = live_hw_id {
-            if !modpack.target.matches_hardware(hw) && !force_bypass_preconditions {
-                return Err(SterngateError::ProtocolError(format!(
-                    "Incompatible ECU Hardware ID '{}'. Mod '{}' only supports: {:?}",
-                    hw, modpack.metadata.name, modpack.target.compatible_hw_ids
-                )));
+        // 4. ECU hardware ID whitelist check (fail closed when a whitelist exists)
+        let live_hw_id = Self::read_live_hw_id(&mut uds).await;
+        if policy == TargetFingerprintPolicy::Enforce
+            && !modpack.target.compatible_hw_ids.is_empty()
+        {
+            match live_hw_id.as_deref() {
+                None => {
+                    return Err(SterngateError::PreFlightCheckFailed(format!(
+                        "mod '{}' declares a hardware whitelist {:?} but the ECU hardware ID could not be read; refusing",
+                        modpack.metadata.name, modpack.target.compatible_hw_ids
+                    )));
+                }
+                Some(hw) if !modpack.target.matches_hardware(hw) => {
+                    return Err(SterngateError::ProtocolError(format!(
+                        "Incompatible ECU Hardware ID '{}'. Mod '{}' only supports: {:?}",
+                        hw, modpack.metadata.name, modpack.target.compatible_hw_ids
+                    )));
+                }
+                Some(_) => {}
             }
         }
 
-        // 5. Preconditions: Check Expected Original Data before writing anything
-        if !force_bypass_preconditions {
-            for action in &modpack.actions {
-                if let ModAction::WriteDid {
+        // 5. Preconditions: prove the live bytes before writing anything (never bypassable)
+        for action in &modpack.actions {
+            match action {
+                ModAction::WriteDid {
                     did,
                     expected_original_data: Some(expected),
                     ..
-                } = action
-                {
-                    match uds.read_data_by_identifier(*did).await {
-                        Ok(resp) => {
-                            let current_data = if resp.len() >= 3 { &resp[3..] } else { &[] };
-                            let check_len = expected.len().min(current_data.len());
-                            if current_data[..check_len] != expected[..check_len] {
-                                return Err(SterngateError::ProtocolError(format!(
-                                    "Precondition check failed for DID 0x{:04X}: expected current bytes {:02X?}, but vehicle returned {:02X?}. Mod execution halted to prevent configuration corruption.",
-                                    did, expected, current_data
-                                )));
-                            }
-                        }
-                        Err(e) => {
-                            warn!("Could not read DID 0x{:04X} for precondition: {}", did, e);
-                        }
+                } => {
+                    let resp = uds.read_data_by_identifier(*did).await.map_err(|e| {
+                        SterngateError::PreFlightCheckFailed(format!(
+                            "DID 0x{did:04X}: could not read current value for precondition ({e}); refusing"
+                        ))
+                    })?;
+                    let current = resp.get(3..).unwrap_or(&[]);
+                    if current.len() < expected.len() || current[..expected.len()] != expected[..] {
+                        return Err(SterngateError::PreFlightCheckFailed(format!(
+                            "Precondition check failed for DID 0x{did:04X}: expected current bytes {expected:02X?}, but vehicle returned {current:02X?}. Mod execution halted to prevent configuration corruption."
+                        )));
                     }
-                } else if let ModAction::PatchFlashMap {
+                }
+                ModAction::PatchFlashMap {
                     map_name,
                     address_offset,
-                    expected_original_data: Some(expected),
+                    data,
+                    expected_original_data,
                     ..
-                } = action
-                {
-                    if let Ok(current_data) = uds
-                        .read_memory_by_address(*address_offset, expected.len() as u16)
-                        .await
-                    {
-                        let check_len = expected.len().min(current_data.len());
-                        if current_data[..check_len] != expected[..check_len] {
-                            return Err(SterngateError::ProtocolError(format!(
-                                "Precondition check failed for map '{}' at 0x{:06X}: expected original bytes {:02X?}, but vehicle returned {:02X?}. Aborting flash patch.",
-                                map_name, address_offset, expected, current_data
-                            )));
-                        }
+                } => {
+                    let Some(expected) =
+                        expected_original_data.as_deref().filter(|e| !e.is_empty())
+                    else {
+                        return Err(SterngateError::PreFlightCheckFailed(format!(
+                            "map '{map_name}' @0x{address_offset:06X}: no expected_original_data; blind flash patches are refused"
+                        )));
+                    };
+                    if expected.len() != data.len() {
+                        return Err(SterngateError::PreFlightCheckFailed(format!(
+                            "map '{map_name}' @0x{address_offset:06X}: a patch must replace exactly the bytes it verified (expected {} bytes, data {} bytes)",
+                            expected.len(),
+                            data.len()
+                        )));
                     }
-                } else if let ModAction::DtcMask {
+                    let len = u16::try_from(expected.len()).map_err(|_| {
+                        SterngateError::PreFlightCheckFailed(format!(
+                            "map '{map_name}': precondition longer than 65535 bytes"
+                        ))
+                    })?;
+                    let current = uds
+                        .read_memory_by_address(*address_offset, len)
+                        .await
+                        .map_err(|e| {
+                            SterngateError::PreFlightCheckFailed(format!(
+                                "map '{map_name}' @0x{address_offset:06X}: could not read original bytes ({e}); refusing to patch unverified memory"
+                            ))
+                        })?;
+                    if current.len() != expected.len() || current[..] != expected[..] {
+                        return Err(SterngateError::PreFlightCheckFailed(format!(
+                            "Precondition check failed for map '{map_name}' at 0x{address_offset:06X}: expected original bytes {expected:02X?}, but vehicle returned {current:02X?}. Aborting flash patch."
+                        )));
+                    }
+                }
+                ModAction::DtcMask {
                     p_code,
                     address_offset,
                     original_mask,
                     ..
-                } = action
-                {
-                    if let Ok(current_data) = uds.read_memory_by_address(*address_offset, 1).await {
-                        if !current_data.is_empty() && current_data[0] != *original_mask {
-                            warn!(
-                                "DTC {} mask at 0x{:06X} was 0x{:02X}, expected 0x{:02X}",
-                                p_code, address_offset, current_data[0], original_mask
-                            );
+                } => {
+                    let current = uds
+                        .read_memory_by_address(*address_offset, 1)
+                        .await
+                        .map_err(|e| {
+                            SterngateError::PreFlightCheckFailed(format!(
+                                "DTC {p_code} mask @0x{address_offset:06X}: could not read current mask ({e}); refusing"
+                            ))
+                        })?;
+                    match current.first() {
+                        Some(b) if current.len() == 1 && *b == *original_mask => {}
+                        Some(b) if current.len() == 1 => {
+                            return Err(SterngateError::PreFlightCheckFailed(format!(
+                                "DTC {p_code} mask @0x{address_offset:06X} is 0x{b:02X}, expected 0x{original_mask:02X}; refusing"
+                            )));
+                        }
+                        _ => {
+                            return Err(SterngateError::PreFlightCheckFailed(format!(
+                                "DTC {p_code} mask @0x{address_offset:06X}: expected 1 byte, got {}",
+                                current.len()
+                            )));
                         }
                     }
                 }
+                ModAction::WriteDid { .. } | ModAction::Routine { .. } => {}
             }
         }
 
-        // 6. Atomic Pre-Mod Git Garage Snapshot
+        // 6. Atomic pre-mod Git garage snapshot
         let garage = VehicleGarage::new(VehicleGarage::default_path());
         let pre_note = format!(
             "Pre-mod baseline snapshot before applying '{}' (ID: {})",
@@ -201,7 +361,7 @@ impl ModRunner {
             &pre_note,
         );
 
-        // 7. Execute Actions
+        // 7. Execute actions
         let total_steps = modpack.actions.len();
         let mut steps_completed = 0;
         let mut actions_executed = Vec::new();
@@ -216,25 +376,31 @@ impl ModRunner {
                     ..
                 } => {
                     let write_payload = if let Some(mask) = bitmask {
-                        // Read current bytes and merge with bitmask
-                        match uds.read_data_by_identifier(*did).await {
-                            Ok(resp) => {
-                                let current_bytes = if resp.len() >= 3 { &resp[3..] } else { &[] };
-                                let mut merged = data.clone();
-                                for (i, m) in mask.iter().enumerate() {
-                                    let cur = current_bytes.get(i).copied().unwrap_or(0);
-                                    let new_val = data.get(i).copied().unwrap_or(0);
-                                    let final_byte = (new_val & m) | (cur & !m);
-                                    if i < merged.len() {
-                                        merged[i] = final_byte;
-                                    } else {
-                                        merged.push(final_byte);
-                                    }
-                                }
-                                merged
-                            }
-                            Err(_) => data.clone(),
+                        let resp = uds.read_data_by_identifier(*did).await.map_err(|e| {
+                            SterngateError::PreFlightCheckFailed(format!(
+                                "DID 0x{did:04X}: bitmask write requires the current value but the read failed ({e}); refusing to clobber unmasked bits"
+                            ))
+                        })?;
+                        let current_bytes = resp.get(3..).unwrap_or(&[]);
+                        if current_bytes.len() < mask.len() {
+                            return Err(SterngateError::PreFlightCheckFailed(format!(
+                                "DID 0x{did:04X}: bitmask covers {} bytes but the ECU returned {}; refusing",
+                                mask.len(),
+                                current_bytes.len()
+                            )));
                         }
+                        let mut merged = data.clone();
+                        for (i, m) in mask.iter().enumerate() {
+                            let cur = current_bytes.get(i).copied().unwrap_or(0);
+                            let new_val = data.get(i).copied().unwrap_or(0);
+                            let final_byte = (new_val & m) | (cur & !m);
+                            if i < merged.len() {
+                                merged[i] = final_byte;
+                            } else {
+                                merged.push(final_byte);
+                            }
+                        }
+                        merged
                     } else {
                         data.clone()
                     };
@@ -298,7 +464,7 @@ impl ModRunner {
             }
         }
 
-        // 8. Atomic Post-Mod Git Garage Snapshot
+        // 8. Atomic post-mod Git garage snapshot
         let post_note = format!(
             "Applied community mod '{}' v{} by {} ({})",
             modpack.metadata.name,

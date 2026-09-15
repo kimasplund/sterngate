@@ -7,6 +7,10 @@ use fec::{FecStatus, ReedSolomonCodec, DEFAULT_DATA_BLOCK_LEN, DEFAULT_PARITY_LE
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// Minimum measured battery voltage for any package that writes flash memory
+/// (`PatchFlashMap`, `DtcMask`). Mirrors the flashing worker's erase interlock.
+pub const FLASH_WRITE_MIN_VOLTAGE: f64 = 12.5;
+
 /// Category classification for community mods
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

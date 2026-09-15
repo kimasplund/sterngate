@@ -11,7 +11,7 @@ use sterngate_core::{
     decode_from_armor, encode_to_armor, ModAction, ModCategory, ModMetadata, ModRiskLevel,
     ModTargetFilter, SterngateMod,
 };
-use sterngate_protocol::ModRunner;
+use sterngate_protocol::{ModRunner, TargetFingerprintPolicy};
 
 use super::common::hex_to_bytes;
 use crate::state::AppState;
@@ -89,8 +89,6 @@ struct ModApplyPayload {
     vin: Option<String>,
     #[serde(default)]
     battery_voltage: Option<f64>,
-    #[serde(default)]
-    force: bool,
 }
 
 async fn mods_apply(
@@ -139,7 +137,15 @@ async fn mods_apply(
     };
 
     let mut iface = state.interface.lock().await;
-    match ModRunner::apply_mod(&mut **iface, &mut modpack, vin, voltage, payload.force).await {
+    match ModRunner::apply_mod(
+        &mut **iface,
+        &mut modpack,
+        vin,
+        voltage,
+        TargetFingerprintPolicy::Enforce,
+    )
+    .await
+    {
         Ok(exec_report) => (
             StatusCode::OK,
             Json(serde_json::json!({

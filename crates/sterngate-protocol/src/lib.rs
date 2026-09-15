@@ -16,7 +16,7 @@ pub use gate::TransactionGate;
 pub use importer::{ImportReport, ProfileImporter};
 pub use isotp::IsoTpChannel;
 pub use kwp2000::KwpClient;
-pub use modrunner::{ModExecutionReport, ModRunner};
+pub use modrunner::{ModExecutionReport, ModRunner, TargetFingerprintPolicy};
 pub use scanner::{ModuleScanResult, VehicleDiagnosticReport, VehicleScanner};
 pub use seedkey::{DaimlerSeedKey, DaimlerSolver, SeedKeySolver};
 pub use service::{ServiceRoutineManager, VinAdaptationManager};
@@ -26,6 +26,10 @@ pub use uds::UdsClient;
 mod tests {
     use super::*;
     use sterngate_core::Language;
+    use sterngate_core::{
+        MapProvenance, ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter,
+        SterngateError, SterngateMod,
+    };
     use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 
     #[test]
@@ -441,10 +445,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_mod_runner_execution_and_safety_checks() {
-        use sterngate_core::{
-            ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, SterngateMod,
-        };
-
         let mut iface = VirtualCanInterface::new();
         iface.open().await.unwrap();
 
@@ -494,8 +494,14 @@ mod tests {
         assert!(report.matched_vehicle);
 
         // 2. Chassis mismatch rejection
-        let chassis_err =
-            ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2040011A999999", 12.6, false).await;
+        let chassis_err = ModRunner::apply_mod(
+            &mut iface,
+            &mut modpack,
+            "WDB2040011A999999",
+            12.6,
+            TargetFingerprintPolicy::Enforce,
+        )
+        .await;
         assert!(chassis_err.is_err());
         assert!(chassis_err
             .unwrap_err()
@@ -503,84 +509,459 @@ mod tests {
             .contains("chassis mismatch"));
 
         // 3. Low voltage rejection
-        let volt_err =
-            ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2112061A123456", 11.5, false).await;
+        let volt_err = ModRunner::apply_mod(
+            &mut iface,
+            &mut modpack,
+            "WDB2112061A123456",
+            11.5,
+            TargetFingerprintPolicy::Enforce,
+        )
+        .await;
         assert!(volt_err.is_err());
         assert!(volt_err.unwrap_err().to_string().contains("voltage"));
 
         // 4. Successful execution
-        let exec = ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2112061A123456", 12.6, false)
-            .await
-            .unwrap();
+        let exec = ModRunner::apply_mod(
+            &mut iface,
+            &mut modpack,
+            "WDB2112061A123456",
+            12.6,
+            TargetFingerprintPolicy::Enforce,
+        )
+        .await
+        .unwrap();
         assert!(exec.success);
         assert_eq!(exec.steps_completed, 1);
         assert!(exec.git_commit_sha.is_some());
     }
 
-    #[tokio::test]
-    async fn test_mod_runner_flash_map_and_dtc_mask() {
-        use sterngate_core::{
-            MapProvenance, ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter,
-            SterngateMod,
-        };
-
-        let mut iface = VirtualCanInterface::new();
-        iface.open().await.unwrap();
-
-        let metadata = ModMetadata {
-            mod_id: "w211-stage1-test".into(),
-            name: "W211 Stage 1 Test".into(),
+    fn runner_metadata() -> ModMetadata {
+        ModMetadata {
+            mod_id: "w211-runner-test".into(),
+            name: "W211 Runner Test".into(),
             version: "1.0.0".into(),
             author: "TunerKim".into(),
-            description: "Stage 1 map patches and DTC mask".into(),
+            description: "runner gate tests".into(),
             category: ModCategory::Performance,
             risk_level: ModRiskLevel::Moderate,
             instructions: None,
-            created_at: "2026-09-14T12:00:00Z".into(),
-        };
+            created_at: "2026-09-15T12:00:00Z".into(),
+        }
+    }
 
-        let target = ModTargetFilter {
+    fn runner_target(compatible_hw_ids: Vec<String>, min_v: f64) -> ModTargetFilter {
+        ModTargetFilter {
             chassis: vec!["W211".into()],
             ecu_name: "EDC16".into(),
             tx_id: 0x7E0,
             rx_id: 0x7E8,
-            compatible_hw_ids: vec![],
+            compatible_hw_ids,
             compatible_sw_ids: vec![],
-            min_battery_voltage: 12.5,
+            min_battery_voltage: min_v,
             requires_engine_off: true,
-        };
+        }
+    }
 
-        let actions = vec![
-            ModAction::PatchFlashMap {
-                map_name: "Torque Limiter".into(),
-                address_offset: 0x1C1000,
-                data: vec![0x0B, 0xB8, 0x10, 0x68],
-                expected_original_data: None,
-                description: "+18% Torque Limiter".into(),
-                provenance: MapProvenance::Synthetic,
-            },
-            ModAction::DtcMask {
-                p_code: "P0401".into(),
-                address_offset: 0x1CE000,
-                original_mask: 0xFF,
-                disable_mask: 0x00,
-                description: "DTC Off: P0401 EGR Flow".into(),
-                provenance: MapProvenance::Synthetic,
-            },
-        ];
+    fn runner_mod(actions: Vec<ModAction>, hw_ids: Vec<String>, min_v: f64) -> SterngateMod {
+        SterngateMod::create(
+            runner_metadata(),
+            runner_target(hw_ids, min_v),
+            actions,
+            vec![],
+        )
+        .unwrap()
+    }
 
-        let mut modpack = SterngateMod::create(metadata, target, actions, vec![]).unwrap();
+    fn patch(address: u32, provenance: MapProvenance, expected: Option<Vec<u8>>) -> ModAction {
+        ModAction::PatchFlashMap {
+            map_name: "Torque Limiter".into(),
+            address_offset: address,
+            data: vec![0x0B, 0xB8, 0x10],
+            expected_original_data: expected,
+            description: "+18% Torque Limiter".into(),
+            provenance,
+        }
+    }
 
-        let exec = ModRunner::apply_mod(&mut iface, &mut modpack, "WDB2112061A777777", 12.8, false)
-            .await
-            .unwrap();
+    fn dtc_mask(original_mask: u8, provenance: MapProvenance) -> ModAction {
+        ModAction::DtcMask {
+            p_code: "P0401".into(),
+            address_offset: 0x1CE000,
+            original_mask,
+            disable_mask: 0x00,
+            description: "DTC Off: P0401".into(),
+            provenance,
+        }
+    }
 
+    /// DID 0x0201 is one the virtual ECU serves (`62 02 01 01`); a bitmask
+    /// write must be able to read the current value first.
+    fn write_did(bitmask: Option<Vec<u8>>) -> ModAction {
+        ModAction::WriteDid {
+            did: 0x0201,
+            data: vec![0x00],
+            bitmask,
+            expected_original_data: None,
+            description: "seatbelt chime".into(),
+        }
+    }
+
+    const VIN_W211: &str = "WDB2112061A777777";
+
+    fn err_text(r: Result<ModExecutionReport, SterngateError>) -> String {
+        match r {
+            Ok(_) => panic!("expected an error"),
+            Err(e) => e.to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_synthetic_provenance_refused_before_bus_traffic() {
+        // Interface deliberately NOT opened: any bus exchange would surface as
+        // a different error, so a provenance message proves the gate fires first.
+        let mut iface = VirtualCanInterface::new();
+        let mut m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Synthetic, Some(vec![0; 3]))],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("provenance"), "{msg}");
+
+        let mut m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Unverified, Some(vec![0; 3]))],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("provenance"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_patch_flash_map_read_failure_refuses() {
+        let mut iface = VirtualCanInterface::with_failing_services(&[0x23]);
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3]))],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("original bytes"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_patch_flash_map_without_expected_bytes_refused() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Scanned, None)],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("expected_original_data"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_patch_flash_map_mismatch_refuses() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        // The mock returns zeros; the package claims the ECU holds 0B B8 10.
+        let mut m = runner_mod(
+            vec![patch(
+                0x1C1000,
+                MapProvenance::Scanned,
+                Some(vec![0x0B, 0xB8, 0x10]),
+            )],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("expected original bytes"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_patch_flash_map_length_mismatch_refused() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 2]))],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("exactly"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_dtc_mask_read_failure_and_mismatch_refuse() {
+        let mut iface = VirtualCanInterface::with_failing_services(&[0x23]);
+        iface.open().await.unwrap();
+        let mut m = runner_mod(vec![dtc_mask(0x00, MapProvenance::Scanned)], vec![], 12.5);
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("current mask"), "{msg}");
+
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(vec![dtc_mask(0xFF, MapProvenance::Scanned)], vec![], 12.5);
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("expected 0xFF"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_mod_runner_flash_map_and_dtc_mask() {
+        // Positive path: scanned provenance, preconditions that match the mock.
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![
+                patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3])),
+                dtc_mask(0x00, MapProvenance::Scanned),
+            ],
+            vec![],
+            12.5,
+        );
+        let exec = ModRunner::apply_mod(
+            &mut iface,
+            &mut m,
+            VIN_W211,
+            12.8,
+            TargetFingerprintPolicy::Enforce,
+        )
+        .await
+        .unwrap();
         assert!(exec.success);
         assert_eq!(exec.steps_completed, 2);
         assert_eq!(exec.total_steps, 2);
         assert!(exec.actions_executed[0].contains("Torque Limiter"));
         assert!(exec.actions_executed[1].contains("P0401"));
         assert!(exec.git_commit_sha.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_hw_whitelist_read_failure_refuses() {
+        let mut iface = VirtualCanInterface::with_failing_services(&[0x22]);
+        iface.open().await.unwrap();
+        let mut m = runner_mod(vec![write_did(None)], vec!["0281012224".into()], 12.0);
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("hardware ID could not be read"), "{msg}");
+
+        let report = ModRunner::inspect_compatibility(&mut iface, &m, Some(VIN_W211), Some(12.8))
+            .await
+            .unwrap();
+        assert!(!report.matched_vehicle);
+    }
+
+    #[tokio::test]
+    async fn test_bitmask_write_read_failure_refuses() {
+        let mut iface = VirtualCanInterface::with_failing_services(&[0x22]);
+        iface.open().await.unwrap();
+        let mut m = runner_mod(vec![write_did(Some(vec![0x02]))], vec![], 12.0);
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("bitmask"), "{msg}");
+
+        // Positive control on a healthy mock.
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(vec![write_did(Some(vec![0x02]))], vec![], 12.0);
+        assert!(ModRunner::apply_mod(
+            &mut iface,
+            &mut m,
+            VIN_W211,
+            12.8,
+            TargetFingerprintPolicy::Enforce
+        )
+        .await
+        .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_overlapping_flash_ranges_refused() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        let mut m = runner_mod(
+            vec![
+                patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3])),
+                patch(0x1C1002, MapProvenance::Scanned, Some(vec![0; 3])),
+            ],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("overlap"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn test_bypass_policy_never_bypasses_voltage_or_flash_packages() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+
+        // Voltage floor is enforced under BypassUnsafe.
+        let mut m = runner_mod(vec![write_did(None)], vec![], 12.0);
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                11.0,
+                TargetFingerprintPolicy::BypassUnsafe,
+            )
+            .await,
+        );
+        assert!(msg.contains("voltage"), "{msg}");
+
+        // BypassUnsafe is refused outright for packages that write flash.
+        let mut m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3]))],
+            vec![],
+            12.5,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.8,
+                TargetFingerprintPolicy::BypassUnsafe,
+            )
+            .await,
+        );
+        assert!(msg.contains("not permitted"), "{msg}");
+
+        // BypassUnsafe still relaxes the chassis check for DID writes.
+        let mut m = runner_mod(vec![write_did(None)], vec![], 12.0);
+        assert!(ModRunner::apply_mod(
+            &mut iface,
+            &mut m,
+            "WDB2040011A999999",
+            12.8,
+            TargetFingerprintPolicy::BypassUnsafe
+        )
+        .await
+        .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_flash_write_floor_overrides_author_declared_minimum() {
+        let mut iface = VirtualCanInterface::new();
+        iface.open().await.unwrap();
+        // Author declares 12.0 V for a flash-writing package; the runner still requires 12.5 V.
+        let mut m = runner_mod(
+            vec![patch(0x1C1000, MapProvenance::Scanned, Some(vec![0; 3]))],
+            vec![],
+            12.0,
+        );
+        let msg = err_text(
+            ModRunner::apply_mod(
+                &mut iface,
+                &mut m,
+                VIN_W211,
+                12.2,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await,
+        );
+        assert!(msg.contains("12.5"), "{msg}");
     }
 
     #[tokio::test]

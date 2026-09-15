@@ -4,7 +4,7 @@ use sterngate_core::{
     ModTargetFilter, SterngateMod,
 };
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
-use sterngate_protocol::ModRunner;
+use sterngate_protocol::{ModRunner, TargetFingerprintPolicy};
 
 use super::helpers::{parse_hex_slice, parse_mod_content};
 
@@ -77,16 +77,17 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
                 .get("battery_voltage")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(13.0);
-            let force = arguments
-                .get("force")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
 
             let mut modpack = parse_mod_content(mod_content)?;
-            let exec_report =
-                ModRunner::apply_mod(&mut mock_iface, &mut modpack, vin, battery_voltage, force)
-                    .await
-                    .map_err(|e| format!("Mod execution failed: {}", e))?;
+            let exec_report = ModRunner::apply_mod(
+                &mut mock_iface,
+                &mut modpack,
+                vin,
+                battery_voltage,
+                TargetFingerprintPolicy::Enforce,
+            )
+            .await
+            .map_err(|e| format!("Mod execution failed: {}", e))?;
 
             Ok(json!({
                 "success": exec_report.success,
