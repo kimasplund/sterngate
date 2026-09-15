@@ -77,6 +77,14 @@ impl ScriptedInterface {
         self
     }
 
+    /// Like `rule_delayed`, but consumed after its first use, so consecutive
+    /// requests for one service can be answered differently (a TransferData
+    /// acknowledgement echoes the block counter it was sent).
+    pub(crate) fn rule_delayed_once(mut self, sid: u8, delay: Duration, replies: &[&[u8]]) -> Self {
+        self.push_rule(sid, replies, delay, true);
+        self
+    }
+
     /// Frames delivered by `recv` before any request is sent (raw ECU traffic).
     pub(crate) fn raw_frames(mut self, frames: &[&[u8]]) -> Self {
         for f in frames {
@@ -139,6 +147,21 @@ impl VehicleInterface for ScriptedInterface {
         };
         if self.rules[idx].once {
             self.rules.remove(idx);
+        }
+        // A tester First Frame gets Flow Control before the reply, as a real ECU
+        // sends it -- otherwise the tester never emits its Consecutive Frames and
+        // every multi-frame request (0x34, a 0x36 block) times out. A script whose
+        // first reply is itself a flow-control frame drives flow control by hand.
+        let is_first_frame = frame.data.first().is_some_and(|b| b >> 4 == 0x1);
+        let script_drives_flow_control = replies
+            .first()
+            .and_then(|r| r.first())
+            .is_some_and(|b| b >> 4 == 0x3);
+        if is_first_frame && !script_drives_flow_control {
+            self.pending.push_back((
+                Duration::ZERO,
+                vec![0x30, 0x00, 0x00, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA],
+            ));
         }
         if !delay.is_zero() {
             // A compliant ECU that needs longer than P2 answers ResponsePending first.
