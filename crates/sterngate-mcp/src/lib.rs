@@ -704,6 +704,13 @@ mod tests {
             .unwrap();
 
         assert!(apply_res["success"].as_bool().unwrap());
+        // No MCP tool is handed a real adapter: the apply ran against the
+        // built-in virtual ECU and must say so.
+        assert_eq!(apply_res["simulated"], true);
+        assert!(apply_res["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("[SIMULATED against the virtual ECU] "));
         assert_eq!(apply_res["steps_completed"].as_u64().unwrap(), 1);
         assert!(apply_res["git_commit_sha"].as_str().is_some());
     }

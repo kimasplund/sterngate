@@ -102,13 +102,16 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
 
             Ok(json!({
                 "success": exec_report.success,
+                // `mock_iface` is a VirtualCanInterface: no MCP tool is handed a
+                // real adapter, so every action above ran against the virtual ECU.
+                "simulated": true,
                 "mod_id": exec_report.mod_id,
                 "mod_name": exec_report.mod_name,
                 "steps_completed": exec_report.steps_completed,
                 "total_steps": exec_report.total_steps,
                 "actions_executed": exec_report.actions_executed,
                 "git_commit_sha": exec_report.git_commit_sha,
-                "message": exec_report.message,
+                "message": format!("[SIMULATED against the virtual ECU] {}", exec_report.message),
             }))
         }
         "sterngate_create_community_mod" => {

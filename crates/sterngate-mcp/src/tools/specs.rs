@@ -543,7 +543,7 @@ pub fn get_tools_list() -> Value {
         },
         {
             "name": "sterngate_apply_community_mod",
-            "description": "Apply a verified community mod or tuning parameter package to the connected vehicle. Enforces map provenance, integrity, chassis, HW ID whitelist, the 12.5 V floor for flash writes and live byte preconditions; creates an atomic Git garage snapshot; applies DID writes with bitmask preservation. No bypass flag exists over MCP.",
+            "description": "SIMULATED: the MCP server runs every action against the built-in virtual ECU; nothing touches a real vehicle. Applies a verified community mod or tuning parameter package. Enforces map provenance, integrity, chassis, HW ID whitelist, the 12.5 V floor for flash writes and live byte preconditions; creates an atomic Git garage snapshot; applies DID writes with bitmask preservation. No bypass flag exists over MCP.",
             "inputSchema": {
                 "type": "object",
                 "required": ["mod_content", "vin", "battery_voltage"],

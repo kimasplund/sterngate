@@ -147,7 +147,7 @@ On the embedded Sterngate Dashboard (`http://localhost:8080`), open **Tab 9 (Map
 
 AI assistants can interact with community mods and calibration tuning using standard JSON-RPC MCP tools:
 - `sterngate_inspect_community_mod`: Cryptographically validates payload, verifies chassis compatibility, and tests Reed-Solomon error correction.
-- `sterngate_apply_community_mod`: Safely executes the mod on the vehicle or simulated ECU with voltage interlock and Git garage logging.
+- `sterngate_apply_community_mod`: **Simulated only.** The MCP server hands every tool a `VirtualCanInterface`, so this executes the mod against the built-in virtual ECU and never against a real vehicle. The gates (provenance, integrity, voltage interlock, byte preconditions) and Git garage logging all run, and the response carries `"simulated": true`. Apply on real hardware with `sterngate mod apply` or the REST API.
 - `sterngate_create_community_mod`: Authors a compliant `.sgmod` package and outputs ASCII armor.
 - `sterngate_scan_rom_maps`: Scans a ROM binary for calibration maps, Bosch IDs, and checksum blocks via `rom_path` or `rom_base64`.
 - `sterngate_generate_stage_tune`: Creates Stage 1 or Stage 2 `.sgmod` tuning packages directly from ROM dumps. Phase 0: refuses on every ROM (`PreFlightCheckFailed`) until the detector rebuild.
