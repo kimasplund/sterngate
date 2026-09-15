@@ -77,8 +77,8 @@ Or when running the compiled release binary:
 | `sterngate_apply_community_mod` | `mod_content`, `vin`, `battery_voltage` (all required) | Applies a package with provenance, integrity, voltage floor and live byte preconditions enforced. No `force` argument exists; sending one is an error. |
 | `sterngate_create_community_mod` | `name`, `author`, `description`, `chassis`, `ecu`, `did`, `data`, `bitmask` (opt) | Authors a compliant `.sgmod` package and outputs ASCII armor with RS $GF(2^8)$ parity. |
 | `sterngate_scan_rom_maps` | `rom_path` (opt), `rom_base64` (opt) | Scans ECU binary ROM dump for calibration maps, Bosch IDs, and MPC5xx checksums. |
-| `sterngate_generate_stage_tune` | `rom_path` (opt), `rom_base64` (opt), `stage` (1 or 2), `chassis`, `ecu_name` | Creates Stage 1 (+18% torque) or Stage 2 (+25% torque + deletes) .sgmod tuning package. |
-| `sterngate_kill_dtc` | `rom_path` (opt), `rom_base64` (opt), `p_codes`, `chassis`, `ecu_name` | Generates standalone DTC suppression .sgmod zeroing error enable switches in ROM. |
+| `sterngate_generate_stage_tune` | `rom_path` (opt), `rom_base64` (opt), `stage` (1 or 2), `chassis`, `ecu_name` | Creates Stage 1 (+18% torque) or Stage 2 (+25% torque + deletes) .sgmod tuning package. Phase 0: refuses on every ROM (`PreFlightCheckFailed`) until the detector rebuild locates real maps. |
+| `sterngate_kill_dtc` | `rom_path` (opt), `rom_base64` (opt), `p_codes`, `chassis`, `ecu_name` | Generates standalone DTC suppression .sgmod zeroing error enable switches in ROM. Phase 0: refuses on every ROM (`PreFlightCheckFailed`) until the detector rebuild locates real maps. |
 | `sterngate_solve_checksum` | `rom_path` (opt), `rom_base64` (opt), `fix` (opt), `output_path` (opt) | Verifies and optionally recalculates Bosch MPC5xx partitioned 32-bit block checksums. |
 | `sterngate_search_workshop_routines` | `query` (opt), `ecu` (opt), `limit` (opt) | Searches 1,523+ OEM workshop actuator and diagnostic service routines (0x31) by keyword, ID, German/English description, or ECU. |
 | `sterngate_execute_service_routine` | `routine_id`, `ecu` (opt), `data_hex` (opt), `tx_id` (opt), `rx_id` (opt) | Executes generic factory workshop service routine (0x31) on target ECU with optional payload bytes. |
@@ -164,7 +164,7 @@ When a user asks:
   2. Inspect the returned `chassis_supported` array (e.g. W204, W212, W221, W164).
 - *"Can you tune my ECU binary for Stage 1 or Stage 2?"*
   1. Call `sterngate_scan_rom_maps` with `rom_path` or `rom_base64` to detect Bosch maps, hardware/software IDs, and MPC5xx checksum status.
-  2. Call `sterngate_generate_stage_tune` specifying `stage: 1` (+18% peak torque, +120 mbar boost, +50 bar rail) or `stage: 2` (+25% peak torque, DPF delete, EGR zeroing).
+  2. Call `sterngate_generate_stage_tune` specifying `stage: 1` (+18% peak torque, +120 mbar boost, +50 bar rail) or `stage: 2` (+25% peak torque, DPF delete, EGR zeroing). Until the detector rebuild this step returns an error naming the first map that is not located in the ROM; nothing is applied.
   3. The tool generates an armored, self-healing `.sgmod` package with Reed-Solomon parity ready for direct flash deployment.
 - *"I replaced my DPF with a downpipe and need to suppress DTC P0401 and P2002:"*
   1. Call `sterngate_kill_dtc` with `{"p_codes": ["P0401", "P2002"], "chassis": "W211", "ecu_name": "EDC16"}`.
