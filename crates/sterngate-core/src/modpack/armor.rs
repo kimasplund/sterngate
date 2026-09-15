@@ -60,7 +60,13 @@ pub fn decode_from_armor(input: &str) -> Result<SterngateMod> {
         let mut modpack: SterngateMod = serde_json::from_str(clean_input).map_err(|e| {
             SterngateError::ProfileError(format!("Invalid JSON mod package: {}", e))
         })?;
-        let _ = modpack.verify_and_repair();
+        let report = modpack.verify_and_repair()?;
+        if !report.is_valid {
+            return Err(SterngateError::ProfileError(format!(
+                "Mod package integrity check failed: {:?}",
+                report.warning_messages
+            )));
+        }
         return Ok(modpack);
     }
 
@@ -206,5 +212,13 @@ mod tests {
 
         let decoded = decode_from_armor(&wrapped_in_markdown).unwrap();
         assert_eq!(decoded.metadata.mod_id, original.metadata.mod_id);
+    }
+
+    #[test]
+    fn decode_from_armor_rejects_corrupt_plain_json() {
+        let mut m = sample_mod();
+        m.integrity.payload_crc32 ^= 1;
+        let json = m.to_json().unwrap();
+        assert!(decode_from_armor(&json).is_err());
     }
 }
