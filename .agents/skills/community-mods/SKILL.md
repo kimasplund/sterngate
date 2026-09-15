@@ -40,18 +40,20 @@ A community mod can be saved as a `.sgmod` JSON file or shared directly as human
 
 ```text
 -----BEGIN STERNGATE COMMUNITY MOD-----
-Mod-ID: amg_needle_sweep_20260914
+Mod-ID: amg_needle_sweep_20260915
 Name: AMG Needle Sweep
 Author: CommunityTuner
 Target-Chassis: W211
 Target-ECU: IC_211 (0x7E0)
-CRC32: 5831E09F
-SHA256: 6e7b5bf2fede5951d756e44ee4fa6e3f677757bae4e5d4ac685c31e8f1b65e95
+CRC32: 995DA3D8
+SHA256: 235c53cf7472c05531a47a9d122e2c24c1d234ebd63cf7b0ab27703eb55e2567
 FEC: ReedSolomon_GF256
 
 <base64-encoded-payload-with-fec-parity-blocks>
 -----END STERNGATE COMMUNITY MOD-----
 ```
+
+This sample is regenerated at `integrity.version` 2 (`profiles/mods/amg_needle_sweep.sgmod`); packages at version 1 are refused everywhere.
 
 Sterngate automatically trims forum whitespace, handles Markdown backticks, and processes DOS/Unix line endings.
 
@@ -70,7 +72,7 @@ cat mod.txt | sterngate mod inspect -
 ```
 
 ### Apply Mod to Vehicle
-Applies the mod safely with live voltage checks and Git garage history:
+Applies the mod safely with live voltage checks and Git garage history. `--vin` is required — applying without the connected vehicle's VIN is refused:
 ```bash
 sterngate mod apply profiles/mods/amg_needle_sweep.sgmod --vin WDB2112061A123456
 ```
@@ -108,6 +110,19 @@ Sterngate extends community mods beyond diagnostic variant coding into **ECU fla
 - `ModAction::ConfigureDid`: UDS Service 0x2E/0x2E with bitmask and precondition validation.
 - `ModAction::PatchFlashMap`: In-place calibration map write (Service 0x3D / `WriteMemoryByAddress`) to ECU calibration sector (`0x1C0000..0x1FFFFF` on EDC16) with address offset, expected stock data, and safety ceiling clamping.
 - `ModAction::DtcMask`: Zeroes DTC fault path enable switches in the calibration sector to suppress specific error codes (e.g. `P0401` EGR, `P2002` DPF).
+
+---
+
+## Safety contract (Phase 0)
+
+- `PatchFlashMap` and `DtcMask` actions carry `"provenance"`; only `"scanned"` (bytes located in the target ECU's own ROM) is executable. Absent or any other value is refused before any bus traffic.
+- Every flash patch must carry `expected_original_data` of exactly the patched length; the runner reads the live bytes and refuses on read failure, short reply or mismatch. `DtcMask` requires the live byte to equal `original_mask`.
+- Packages that write flash require `min_battery_voltage >= 12.5`; `SterngateMod::create` refuses lower values and `ModRunner` enforces `max(min_battery_voltage, 12.5)` regardless of the CLI `--force` flag.
+- `--force` (CLI only) relaxes the chassis and hardware-whitelist checks and nothing else. It is refused for packages containing flash writes. The REST API and MCP have no bypass: sending `force` returns HTTP 422 / an MCP error.
+- `integrity.version` is 2 and covers `target`, `actions` and `rollback_actions`. Packages with any other version are refused everywhere (inspect included); regenerate them with `sterngate mod create`.
+- Applying requires the connected vehicle's VIN (`--vin`, `vin`) and a measured battery voltage. The CLI reads the Tactrix OpenPort Pin-16 ADC and refuses on SocketCAN or mock adapters, which cannot measure.
+- `sterngate tune stage1|stage2|dtc-kill` refuse on every ROM until the detector rebuild locates real maps; this is intended.
+- `Routine` actions with routine id `0xFF00` (UDS EraseMemory) are refused; flash erase only happens through the flashing worker's interlocks.
 
 ### CLI Tuning Suite (`sterngate tune`)
 ```bash

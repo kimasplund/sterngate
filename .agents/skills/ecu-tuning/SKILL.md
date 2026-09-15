@@ -109,3 +109,5 @@ sterngate mod apply --input stage1_om646.sgmod --vin WDB2112061A000001
 3. Review the returned `.sgmod` package and summary metrics.
 4. Call `sterngate_apply_community_mod` with the generated package.
 
+> **Phase 0 state:** `stage1`, `stage2` and `dtc-kill` currently refuse on every ROM: the detector only locates the SVBL by scanning, every other map is a placeholder, and no flash patch may be minted for a map that was not located in the ROM. Generation resumes with the Phase 2 detector rebuild validated against the SDflash reference corpus.
+

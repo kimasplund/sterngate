@@ -342,6 +342,8 @@ sterngate tune dtc-kill --rom stock_edc16.bin --codes P0401,P2002 \
 sterngate tune checksum --rom modified_rom.bin --fix --output fixed_rom.bin
 ```
 
+> **Phase 0 state:** `stage1`, `stage2` and `dtc-kill` currently refuse on every ROM — no flash patch may be minted for a map that was not located by the detector, and only the SVBL is located today. See `.agents/skills/ecu-tuning/SKILL.md` for the current detector state.
+
 ---
 
 ## 12. Shareable Community Mod Packages (`.sgmod`) & Reed-Solomon Parity (`sterngate mod`)

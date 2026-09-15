@@ -73,8 +73,8 @@ Or when running the compiled release binary:
 | `sterngate_guided_workflow` | `workflow_id`, `step` (opt), `inputs` (opt) | Interactive guided workshop repair procedures with step verification. |
 | `sterngate_vault_scan` | `directory` (opt) | Scans local filesystem for OEM firmware binaries, classifying HW/SW numbers. |
 | `sterngate_import_profiles` | `directory` (opt) | Imports CBF / SMR-D / ODX diagnostic databases into Sterngate JSON profiles. |
-| `sterngate_inspect_community_mod` | `mod_content`, `vin` (opt), `battery_voltage` (opt) | Cryptographically validates payload, verifies chassis compatibility, and tests Reed-Solomon error correction. |
-| `sterngate_apply_community_mod` | `mod_content`, `vin` (opt), `battery_voltage` (opt), `force` (opt) | Safely executes a community mod or calibration patch with Git garage snapshotting. |
+| `sterngate_inspect_community_mod` | `mod_content`, `vin` (opt), `battery_voltage` (opt) | Validates integrity (version 2), chassis compatibility and Reed-Solomon repair. |
+| `sterngate_apply_community_mod` | `mod_content`, `vin`, `battery_voltage` (all required) | Applies a package with provenance, integrity, voltage floor and live byte preconditions enforced. No `force` argument exists; sending one is an error. |
 | `sterngate_create_community_mod` | `name`, `author`, `description`, `chassis`, `ecu`, `did`, `data`, `bitmask` (opt) | Authors a compliant `.sgmod` package and outputs ASCII armor with RS $GF(2^8)$ parity. |
 | `sterngate_scan_rom_maps` | `rom_path` (opt), `rom_base64` (opt) | Scans ECU binary ROM dump for calibration maps, Bosch IDs, and MPC5xx checksums. |
 | `sterngate_generate_stage_tune` | `rom_path` (opt), `rom_base64` (opt), `stage` (1 or 2), `chassis`, `ecu_name` | Creates Stage 1 (+18% torque) or Stage 2 (+25% torque + deletes) .sgmod tuning package. |

@@ -544,6 +544,8 @@ sterngate tune dtc-kill --rom /path/to/stock_edc16.bin --codes P0401,P2002 \
 sterngate tune checksum --rom /path/to/modified_rom.bin --fix --output /path/to/fixed_rom.bin
 ```
 
+> **Phase 0 state:** commands 2–4 (`stage1`, `stage2`, `dtc-kill`) currently refuse on every ROM until the detector rebuild locates real maps; only `scan` and `checksum` are fully functional today. See `.agents/skills/ecu-tuning/SKILL.md`.
+
 ### REST API Endpoints
 ```bash
 # These routes take the ROM in the request body only. They deliberately accept
@@ -584,6 +586,7 @@ Sterngate allows packaging variant coding calibrations, DID patches, and flash m
 sterngate mod inspect --input mods/w211_top_speed_300.sgmod
 
 # 2. Safely apply mod to vehicle with automatic pre-mod Git garage snapshotting
+# --vin is required; voltage is read from the OpenPort ADC (refused on can0/mock)
 sterngate mod apply --input mods/w211_top_speed_300.sgmod --vin WDB2112061A000001
 
 # 3. Create a new community mod package

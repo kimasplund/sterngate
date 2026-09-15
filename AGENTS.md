@@ -59,9 +59,9 @@ crates/
    - `CompressorProtectionGuard` & `SuspensionLeakDetector`: Thermal watchdog (40s auto-cutoff) and pneumatic leak diagnostics.
    - `VehicleGarage` & `DecodedVin`: Local Git-backed per-vehicle configuration tracking and VIN decoder.
    - `DriveBenchmark`: High-frequency drive telemetry sampling and A/B comparative benchmark analysis.
-   - `BoschChecksumSolver` & `BoschMapDetector`: Automotive calibration engine for Bosch EDC16/EDC17 partitioned 32-bit block checksum recalculation and automatic map detection (torque, boost, rail, smoke limiters).
-   - `StageGenerator`: Automated Stage 1 (+18% torque), Stage 2 (+25% torque, DPF/EGR off), and custom DTC suppression (`p_codes`) calibration synthesizer.
-   - `SterngateMod`: Shareable `.sgmod` mod package system with ASCII armor and Reed-Solomon $GF(2^8)$ error-correction parity.
+   - `BoschChecksumSolver` & `BoschMapDetector`: Automotive calibration engine for Bosch EDC16/EDC17 partitioned 32-bit block checksum recalculation and automatic map detection (torque, boost, rail, smoke limiters). Every detected map carries a `MapProvenance` (`scanned`/`fallback`/`synthetic`); only scanned, ROM-backed maps may become flash patches.
+   - `StageGenerator`: Automated Stage 1 (+18% torque), Stage 2 (+25% torque, DPF/EGR off), and custom DTC suppression (`p_codes`) calibration synthesizer. Refuses to emit any flash patch for a map that is not scanned and ROM-backed, and DTC suppression is unsupported until the detector rebuild.
+   - `SterngateMod`: Shareable `.sgmod` mod package system with ASCII armor and Reed-Solomon $GF(2^8)$ error-correction parity. Integrity version 2 covers the target filter; flash-writing packages require ≥ 12.5 V.
 
 2. **`sterngate-hal`**:
    - `VehicleInterface`: The unified asynchronous trait (`send`, `recv`, `open`, `close`, `set_filter`).
@@ -79,7 +79,7 @@ crates/
    - `BusDiscoverer`: CAN ID range probing (`0x700..0x7EF`), identification DID interrogation, and auto profile generation.
    - `ServiceRoutineManager`: Safety-critical workshop service routines (SBC pad mode 0 bar deactivation/reactivation, Common Rail IMA coding, suspension corner actuation).
    - `VinAdaptationManager`: Donor replacement ECU Re-VIN adaptation with SecurityAccess unlock and EEPROM/Flash tracking.
-   - `ModRunner`: Validation, safety preconditions, and execution runner for `.sgmod` community packages.
+   - `ModRunner`: Validation, safety preconditions, and execution runner for `.sgmod` community packages. Fail-closed: provenance gate before bus traffic, exact byte preconditions, hardware-whitelist read failure refuses, `TargetFingerprintPolicy::BypassUnsafe` (CLI `--force`) relaxes only chassis/HW-ID and is refused for flash writes.
 
 4. **`sterngate-p2p`**:
    - Wraps Iroh for P2P QUIC communication between `--bridge` (car-side SBC host) and `--tech` (remote technician client).
