@@ -107,6 +107,22 @@ async fn mods_apply(
             .into_response();
     }
 
+    let Some(vin) = payload
+        .vin
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Refusing to apply: no target VIN supplied. The chassis fingerprint is meaningless without the connected vehicle's VIN.",
+            })),
+        )
+            .into_response();
+    };
+
     let mut modpack = match decode_from_armor(&payload.content) {
         Ok(m) => m,
         Err(e) => {
@@ -120,8 +136,6 @@ async fn mods_apply(
                 .into_response();
         }
     };
-
-    let vin = payload.vin.as_deref().unwrap_or("WDB2112061A000001");
 
     // Every mod declares its own min_battery_voltage. Defaulting here made
     // that interlock unfailable on a vehicle nothing had measured.

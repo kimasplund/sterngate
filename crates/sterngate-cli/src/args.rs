@@ -599,10 +599,11 @@ pub enum ModCommands {
     Apply {
         /// Path to .sgmod file, or '-' for stdin, or raw armored text
         input: String,
-        /// VIN of target vehicle (optional, defaults to vehicle in garage or standard W211)
+        /// VIN of the connected vehicle (required: the chassis fingerprint is checked against it)
         #[arg(long)]
-        vin: Option<String>,
-        /// Relax the chassis and hardware-whitelist fingerprint checks only. Voltage, map provenance and byte preconditions stay enforced; refused for packages that write flash memory.
+        vin: String,
+        /// Relax the chassis and hardware-whitelist fingerprint checks only. Voltage, map
+        /// provenance and byte preconditions stay enforced; refused for packages that write flash.
         #[arg(long)]
         force: bool,
     },
@@ -751,4 +752,28 @@ pub enum TuneCommands {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn mod_apply_requires_vin() {
+        assert!(Cli::try_parse_from(["sterngate", "mod", "apply", "m.sgmod"]).is_err());
+        let cli = Cli::try_parse_from([
+            "sterngate",
+            "mod",
+            "apply",
+            "m.sgmod",
+            "--vin",
+            "WDB2112061A123456",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Mod { action: ModCommands::Apply { ref vin, .. } }) if vin == "WDB2112061A123456"
+        ));
+    }
 }

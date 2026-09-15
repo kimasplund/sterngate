@@ -517,6 +517,16 @@ impl VehicleInterface for OpenPortInterface {
     fn is_connected(&self) -> bool {
         self.is_open.load(Ordering::SeqCst)
     }
+
+    async fn measure_battery_voltage(&mut self) -> Result<Option<f32>> {
+        let is_hardware = matches!(self.backend, Some(OpenPortBackend::Hardware { .. }));
+        if is_hardware {
+            self.read_battery_voltage().await.map(Some)
+        } else {
+            // The simulated constant is a test fixture, not a measurement.
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]

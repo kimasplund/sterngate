@@ -4,7 +4,7 @@ use crate::args::{Cli, ModCommands};
 use crate::commands::common::{load_mod_input, open_interface, parse_hex_bytes};
 use sterngate_core::{
     encode_to_armor, EcuCatalog, FecStatus, ModAction, ModCategory, ModMetadata, ModRiskLevel,
-    ModTargetFilter, SterngateMod, VehicleGarage,
+    ModTargetFilter, SterngateMod,
 };
 use sterngate_protocol::{ModRunner, TargetFingerprintPolicy};
 
@@ -177,43 +177,28 @@ pub async fn execute(action: ModCommands, cli: &Cli) -> Result<()> {
         }
         ModCommands::Apply { input, vin, force } => {
             let mut modpack = load_mod_input(&input)?;
-            let target_vin = vin.unwrap_or_else(|| {
-                let garage = VehicleGarage::new(VehicleGarage::default_path());
-                if let Ok(vehicles) = garage.list_vehicles() {
-                    if let Some(v) = vehicles.first() {
-                        return v.vin.clone();
-                    }
-                }
-                "WDB2110001A000000".to_string()
-            });
-
             let mut iface = open_interface(&cli.can_interface).await;
-            println!("============================================================");
-            println!("  APPLYING COMMUNITY MOD: {}", modpack.metadata.name);
-            println!("============================================================");
-            println!("  Target VIN:     {}", target_vin);
-            println!("  Interface:      {}", cli.can_interface);
-            println!("  Risk Level:     {}", modpack.metadata.risk_level.as_str());
-            if force {
-                println!("  ⚠️  FORCED BYPASS OF CHASSIS / HW-ID FINGERPRINT (voltage, map provenance and byte preconditions remain enforced)");
-            }
-
-            let battery_voltage = 13.2;
-
+            let battery_voltage =
+                voltage_for_apply(iface.measure_battery_voltage().await, &cli.can_interface)?;
             let policy = if force {
                 TargetFingerprintPolicy::BypassUnsafe
             } else {
                 TargetFingerprintPolicy::Enforce
             };
+            println!("============================================================");
+            println!("  APPLYING COMMUNITY MOD: {}", modpack.metadata.name);
+            println!("============================================================");
+            println!("  Target VIN:     {}", vin);
+            println!("  Interface:      {}", cli.can_interface);
+            println!("  Battery:        {:.2} V (measured)", battery_voltage);
+            println!("  Risk Level:     {}", modpack.metadata.risk_level.as_str());
+            if force {
+                println!("  ⚠️  FORCED BYPASS OF CHASSIS / HW-ID FINGERPRINT (voltage, map provenance and byte preconditions remain enforced)");
+            }
 
-            let report = ModRunner::apply_mod(
-                iface.as_mut(),
-                &mut modpack,
-                &target_vin,
-                battery_voltage,
-                policy,
-            )
-            .await?;
+            let report =
+                ModRunner::apply_mod(iface.as_mut(), &mut modpack, &vin, battery_voltage, policy)
+                    .await?;
 
             if report.success {
                 println!("\n  ✓ SUCCESS: {}", report.message);
@@ -422,5 +407,37 @@ pub async fn execute(action: ModCommands, cli: &Cli) -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+/// Turn an adapter voltage reading into the value `apply_mod` requires, or
+/// refuse. Only a real measurement may clear the interlock.
+pub(crate) fn voltage_for_apply(
+    reading: sterngate_core::Result<Option<f32>>,
+    iface_name: &str,
+) -> Result<f64> {
+    match reading {
+        Ok(Some(v)) => Ok(f64::from(v)),
+        Ok(None) => anyhow::bail!(
+            "Refusing to apply: interface `{iface_name}` cannot measure battery voltage (Tactrix OpenPort Pin 16 ADC required)"
+        ),
+        Err(e) => anyhow::bail!("Refusing to apply: battery voltage read failed: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::voltage_for_apply;
+    use sterngate_core::SterngateError;
+
+    #[test]
+    fn voltage_for_apply_refuses_when_unmeasurable() {
+        let err = voltage_for_apply(Ok(None), "can0").unwrap_err();
+        assert!(err.to_string().contains("cannot measure"));
+        let err =
+            voltage_for_apply(Err(SterngateError::HalError("usb".into())), "openport").unwrap_err();
+        assert!(err.to_string().contains("usb"));
+        let v = voltage_for_apply(Ok(Some(12.7)), "openport").unwrap();
+        assert!((v - 12.7).abs() < 1e-6);
     }
 }

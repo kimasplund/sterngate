@@ -2061,6 +2061,11 @@ async function applyCommunityMod() {
   const content = document.getElementById('mod-import-textarea').value.trim();
   if (!content) return;
 
+  if (!activeVehicleVin) {
+    alert('Scan the connected vehicle first: applying a mod requires its VIN.');
+    return;
+  }
+
   if (!confirm(`Apply community mod '${currentInspectedMod ? currentInspectedMod.metadata.name : 'Selected Mod'}' to connected vehicle?\n\nAn atomic snapshot will be recorded to vehicle Git history before writing.`)) {
     return;
   }
@@ -2075,8 +2080,11 @@ async function applyCommunityMod() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         content: content,
-        vin: 'WDB2112061A000001',
-        battery_voltage: 12.8
+        vin: activeVehicleVin,
+        // Sent only when actually measured; the server refuses otherwise.
+        battery_voltage: (lastTelemetrySnap && lastTelemetrySnap.battery_voltage !== null && lastTelemetrySnap.battery_voltage !== undefined)
+          ? lastTelemetrySnap.battery_voltage
+          : null
       })
     });
 

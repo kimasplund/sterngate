@@ -152,4 +152,18 @@ mod tests {
         let resp = recv_diag(&mut sim).await;
         assert_eq!(&resp.data[..4], &[0x03, 0x7F, 0x23, 0x31]);
     }
+
+    #[tokio::test]
+    async fn test_virtual_can_cannot_measure_voltage() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+        assert_eq!(sim.measure_battery_voltage().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn test_simulated_openport_is_not_a_measurement() {
+        let (mut op, _feed) = OpenPortInterface::new_simulated(12.65);
+        op.open().await.unwrap();
+        assert_eq!(op.measure_battery_voltage().await.unwrap(), None);
+    }
 }

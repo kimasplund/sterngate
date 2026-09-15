@@ -737,6 +737,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_mcp_apply_mod_requires_vin_and_voltage() {
+        let no_vin = tools::handle_tool_call(
+            "sterngate_apply_community_mod",
+            &json!({ "mod_content": "{}", "battery_voltage": 12.8 }),
+        )
+        .await
+        .unwrap_err();
+        assert!(no_vin.contains("vin"), "{no_vin}");
+
+        let no_volts = tools::handle_tool_call(
+            "sterngate_apply_community_mod",
+            &json!({ "mod_content": "{}", "vin": "WDB2112061A123456" }),
+        )
+        .await
+        .unwrap_err();
+        assert!(no_volts.contains("battery voltage"), "{no_volts}");
+
+        let apply = tools::get_tools_list();
+        let spec = apply
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "sterngate_apply_community_mod")
+            .unwrap();
+        let required: Vec<&str> = spec["inputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert!(required.contains(&"vin") && required.contains(&"battery_voltage"));
+    }
+
+    #[tokio::test]
     async fn test_mcp_tuning_suite() {
         use base64::Engine;
 

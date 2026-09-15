@@ -79,11 +79,15 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
             let vin = arguments
                 .get("vin")
                 .and_then(|v| v.as_str())
-                .unwrap_or("WDB2110001A000000");
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .ok_or("Missing required 'vin': the chassis fingerprint needs the connected vehicle's VIN")?;
             let battery_voltage = arguments
                 .get("battery_voltage")
                 .and_then(|v| v.as_f64())
-                .unwrap_or(13.0);
+                .ok_or(
+                    "Refusing to apply: no measured battery voltage supplied ('battery_voltage')",
+                )?;
 
             let mut modpack = parse_mod_content(mod_content)?;
             let exec_report = ModRunner::apply_mod(
