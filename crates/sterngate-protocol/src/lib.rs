@@ -14,7 +14,10 @@ pub mod uds;
 pub(crate) mod test_support;
 
 pub use discoverer::BusDiscoverer;
-pub use flasher::FlashingWorker;
+pub use flasher::{
+    hw_id_matches, read_supplier_hw_id, FlashingWorker, CHECKSUM_ROUTINE_ID, ERASE_ROUTINE_ID,
+    FLASH_RX_ID, FLASH_TX_ID,
+};
 pub use gate::TransactionGate;
 pub use importer::{ImportReport, ProfileImporter};
 pub use isotp::IsoTpChannel;

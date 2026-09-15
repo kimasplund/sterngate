@@ -4,25 +4,55 @@ use sterngate_core::{FirmwareVault, FlashPackageManifest};
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 use sterngate_protocol::FlashingWorker;
 
+/// Manifest for the demonstration ROM these tools flash into the built-in
+/// virtual ECU. The identifiers are the ones that ECU reports for F192/F194, so
+/// the real hardware-identity gate in pre-flight resolves to a match.
+fn demo_manifest(target_module: &str, rom: &[u8]) -> FlashPackageManifest {
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(rom);
+    FlashPackageManifest {
+        target_module: target_module.to_string(),
+        expected_hw_id: "0281012224".into(),
+        expected_sw_id: "1037372332".into(),
+        sha256_checksum: format!("{:x}", hasher.finalize()),
+        crc32_checksum: crc32fast::hash(rom),
+        flash_start_address: 0x0004_0000,
+        flash_length: u32::try_from(rom.len()).unwrap_or(0),
+        block_size: 512,
+    }
+}
+
 pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
     let mut mock_iface = VirtualCanInterface::new();
     let _ = mock_iface.open().await;
 
     match name {
         "sterngate_verify_flash_staging" => {
+            let target_module = arguments
+                .get("target_module")
+                .and_then(|v| v.as_str())
+                .unwrap_or("EDC16");
             let voltage = 13.8;
+            let dummy_rom = vec![0xEA; 4096];
+            let manifest = demo_manifest(target_module, &dummy_rom);
+            let report = FlashingWorker::new()
+                .run_preflight_checks(&manifest, &dummy_rom, voltage, &mut mock_iface)
+                .await
+                .map_err(|e| format!("Pre-flight evaluation failed: {}", e))?;
+            let advice = if report.passed {
+                "Pre-flight gates PASSED against the built-in virtual ECU. Decoupled worker ready."
+            } else {
+                "Pre-flight gates FAILED: flashing is refused until every gate passes."
+            };
             Ok(json!({
-                "passed": true,
+                "passed": report.passed,
                 "battery_voltage": voltage,
-                "min_voltage_required": 12.5,
-                "checks": [
-                    "Battery voltage 13.8V >= 12.5V (Safety Gate: PASSED)",
-                    "SHA256 checksum matched manifest (Safety Gate: PASSED)",
-                    "Bosch CRC32 checksum matched manifest (Safety Gate: PASSED)",
-                    "ECU Hardware ID 0281012224 matched target (Safety Gate: PASSED)"
-                ],
-                "lockout_ready": true,
-                "advice": "System is safe to flash. Decoupled worker ready."
+                "min_voltage_required": report.min_voltage_required,
+                "hw_id_match": report.hw_id_match,
+                "checksum_match": report.checksum_match,
+                "details": report.details,
+                "simulated": true,
+                "advice": advice
             }))
         }
         "sterngate_flash_ecu" => {
@@ -47,21 +77,7 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
             }
 
             let dummy_rom = vec![0xEA; 4096];
-            let crc = crc32fast::hash(&dummy_rom);
-            let mut hasher = sha2::Sha256::new();
-            hasher.update(&dummy_rom);
-            let sha = format!("{:x}", hasher.finalize());
-
-            let manifest = FlashPackageManifest {
-                target_module: target_module.to_string(),
-                expected_hw_id: "0281012234".into(),
-                expected_sw_id: "1037372120".into(),
-                sha256_checksum: sha,
-                crc32_checksum: crc,
-                flash_start_address: 0x00040000,
-                flash_length: dummy_rom.len() as u32,
-                block_size: 512,
-            };
+            let manifest = demo_manifest(target_module, &dummy_rom);
 
             if dry_run {
                 Ok(json!({

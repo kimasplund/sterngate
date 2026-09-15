@@ -915,4 +915,20 @@ mod tests {
         assert_eq!(revin_res["new_vin"].as_str().unwrap(), "WDB2112061A888777");
         assert!(revin_res["verified_by_readback"].as_bool().unwrap());
     }
+
+    #[tokio::test]
+    async fn test_mcp_verify_flash_staging_runs_real_preflight() {
+        let verify = tools::handle_tool_call("sterngate_verify_flash_staging", &json!({}))
+            .await
+            .unwrap();
+        assert!(verify["passed"].as_bool().unwrap());
+        assert!(verify["hw_id_match"].as_bool().unwrap());
+        assert!(verify["checksum_match"].as_bool().unwrap());
+        assert!(verify["simulated"].as_bool().unwrap());
+        assert!(verify["details"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d.as_str().unwrap().contains("0281012224")));
+    }
 }

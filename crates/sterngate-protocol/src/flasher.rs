@@ -22,6 +22,42 @@ pub const CHECKSUM_STATUS_OK: u8 = 0x00;
 /// ISO 15765-2 caps one segmented message at 4095 bytes.
 pub const ISOTP_MAX_PAYLOAD: usize = 4095;
 
+/// Read the system-supplier ECU hardware number (DID 0xF192, the Bosch
+/// `0281…` number). ASCII payloads are returned as text; binary-coded ones are
+/// rendered as hex so they can never accidentally equal an ASCII manifest id.
+pub async fn read_supplier_hw_id(
+    interface: &mut dyn VehicleInterface,
+    tx_id: u32,
+    rx_id: u32,
+) -> Result<String> {
+    if !interface.is_connected() {
+        return Err(SterngateError::DeviceNotFound(
+            "interface not connected".into(),
+        ));
+    }
+    let mut uds = UdsClient::new(interface, tx_id, rx_id);
+    let resp = uds.read_data_by_identifier(0xF192).await?;
+    if resp.len() <= 3 || resp.get(1..3) != Some(&[0xF1, 0x92]) {
+        return Err(SterngateError::IsoTpError(format!(
+            "F192 reply malformed: {resp:02X?}"
+        )));
+    }
+    let payload = &resp[3..];
+    if payload.iter().all(u8::is_ascii_graphic) {
+        Ok(String::from_utf8_lossy(payload).to_string())
+    } else {
+        Ok(payload.iter().map(|b| format!("{b:02X}")).collect())
+    }
+}
+
+/// Exact hardware-number comparison. Bosch numbers differ in their last digits
+/// between hardware variants, so a prefix rule would accept a sibling ECU.
+pub fn hw_id_matches(expected: &str, live: &str) -> bool {
+    let e = expected.trim().to_ascii_uppercase();
+    let l = live.trim().to_ascii_uppercase();
+    e.len() >= 8 && l.len() >= 8 && e == l
+}
+
 /// Where the sequence is, for the failure message and the progress feed.
 #[derive(Default)]
 struct SequenceProgress {
@@ -114,26 +150,29 @@ impl FlashingWorker {
             ));
         }
 
-        // 4. Hardware ID check via UDS Service 0x22 DID 0xF191
-        let hw_match = if interface.is_connected() {
-            let mut uds = UdsClient::new(interface, FLASH_TX_ID, FLASH_RX_ID);
-            match uds.read_data_by_identifier(0xF191).await {
-                Ok(resp) => {
-                    let hex_id = resp
-                        .iter()
-                        .map(|b| format!("{:02X}", b))
-                        .collect::<Vec<_>>()
-                        .join("");
-                    details.push(format!("ECU Hardware ID response: {}", hex_id));
-                    true
+        // 4. Hardware identity: the ECU's supplier number must equal the manifest's.
+        let hw_match = if manifest.expected_hw_id.trim().is_empty() {
+            details.push(
+                "Hardware ID check FAILED (fail-closed): manifest declares no expected_hw_id"
+                    .into(),
+            );
+            false
+        } else {
+            match read_supplier_hw_id(interface, FLASH_TX_ID, FLASH_RX_ID).await {
+                Ok(live) => {
+                    let ok = hw_id_matches(&manifest.expected_hw_id, &live);
+                    details.push(format!(
+                        "ECU F192 supplier HW '{live}' vs manifest '{}' -> {}",
+                        manifest.expected_hw_id,
+                        if ok { "MATCH" } else { "MISMATCH" }
+                    ));
+                    ok
                 }
                 Err(e) => {
-                    details.push(format!("Hardware ID check skipped/simulated: {}", e));
-                    true
+                    details.push(format!("Hardware ID check FAILED (fail-closed): {e}"));
+                    false
                 }
             }
-        } else {
-            true
         };
 
         // 5. The download request is built from the manifest, so its declared
@@ -201,28 +240,12 @@ impl FlashingWorker {
 
         // Read Live ECU identification DIDs if connected
         let (ecu_hw_id, ecu_sw_id, ecu_oem_num) = if interface.is_connected() {
-            let mut uds = UdsClient::new(interface, tx_id, rx_id);
+            // The supplier hardware number (F192) is the identity this report
+            // stands on; F191 is the OEM's own number in a different namespace
+            // and is never a substitute for it.
+            let hw = read_supplier_hw_id(interface, tx_id, rx_id).await.ok();
 
-            // Read HW Number (DID 0xF192 or fallback 0xF191)
-            let hw = match uds.read_data_by_identifier(0xF192).await {
-                Ok(resp) if resp.len() >= 4 => {
-                    let raw = &resp[3..];
-                    if raw.iter().all(|b| b.is_ascii_graphic()) {
-                        String::from_utf8(raw.to_vec()).ok()
-                    } else {
-                        Some(raw.iter().map(|b| format!("{:02X}", b)).collect::<String>())
-                    }
-                }
-                _ => match uds.read_data_by_identifier(0xF191).await {
-                    Ok(resp) if resp.len() >= 4 => Some(
-                        resp[3..]
-                            .iter()
-                            .map(|b| format!("{:02X}", b))
-                            .collect::<String>(),
-                    ),
-                    _ => None,
-                },
-            };
+            let mut uds = UdsClient::new(interface, tx_id, rx_id);
 
             // Read SW Number (DID 0xF194 or fallback 0xF189)
             let sw = match uds.read_data_by_identifier(0xF194).await {
@@ -257,13 +280,13 @@ impl FlashingWorker {
 
         // Determine compatibility verdict
         let mut verdict = RomCompatibilityVerdict::Unknown;
-        let mut can_flash = true;
+        // Fail closed: nothing is flashable until a live F192 read has confirmed
+        // the ROM was built for the hardware that is actually installed.
+        let mut can_flash = false;
         let explanation;
 
         if let (Some(sig_hw), Some(live_hw)) = (&signatures.bosch_hw_id, &ecu_hw_id) {
-            let check_len = sig_hw.len().min(live_hw.len());
-            let hw_matches =
-                check_len >= 8 && sig_hw[..check_len].eq_ignore_ascii_case(&live_hw[..check_len]);
+            let hw_matches = hw_id_matches(sig_hw, live_hw);
             if !hw_matches {
                 verdict = RomCompatibilityVerdict::HardwareMismatch;
                 can_flash = false;
@@ -277,12 +300,14 @@ impl FlashingWorker {
                     && sig_sw[..sw_check_len].eq_ignore_ascii_case(&live_sw[..sw_check_len])
                 {
                     verdict = RomCompatibilityVerdict::Match;
+                    can_flash = true;
                     explanation = format!(
                         "EXACT MATCH: Firmware matches installed hardware ('{}') and identical calibration version ('{}'). Safe to flash.",
                         sig_hw, sig_sw
                     );
                 } else {
                     verdict = RomCompatibilityVerdict::CalibrationUpdate;
+                    can_flash = true;
                     explanation = format!(
                         "CALIBRATION UPDATE: Hardware matches ('{}'). Firmware contains updated calibration ('{}' vs vehicle '{}'). Compatible for upgrade.",
                         sig_hw, sig_sw, live_sw
@@ -290,18 +315,25 @@ impl FlashingWorker {
                 }
             } else {
                 verdict = RomCompatibilityVerdict::Match;
+                can_flash = true;
                 explanation = format!(
                     "HARDWARE MATCH: Hardware revision verified ('{}'). Safe to stage.",
                     sig_hw
                 );
             }
         } else if let Some(sig_hw) = &signatures.bosch_hw_id {
-            verdict = RomCompatibilityVerdict::Match;
-            explanation = format!(
-                "Firmware signature detected: Bosch HW {}, SW {}. (ECU offline/unconnected).",
-                sig_hw,
-                signatures.bosch_sw_id.as_deref().unwrap_or("Unknown")
-            );
+            if interface.is_connected() {
+                verdict = RomCompatibilityVerdict::Unknown;
+                explanation = format!(
+                    "ECU connected but did not return a supplier hardware number (F192); cannot confirm firmware '{sig_hw}' matches the installed hardware."
+                );
+            } else {
+                verdict = RomCompatibilityVerdict::Unknown;
+                explanation = format!(
+                    "Firmware signature detected: Bosch HW {sig_hw}, SW {}. ECU offline: identity not verified, not flashable.",
+                    signatures.bosch_sw_id.as_deref().unwrap_or("Unknown")
+                );
+            }
         } else {
             explanation = "Raw binary without recognized Bosch/OEM markers. Flashing requires manual verification of target address and memory layout.".to_string();
         }
@@ -1211,5 +1243,145 @@ mod tests {
         flasher.execute_flash(m, rom, 13.5, shared).await.unwrap();
         assert_eq!(flasher.current_state().await, FlashState::Completed);
         assert_eq!(flasher.subscribe().borrow().bytes_written, 1000);
+    }
+
+    #[tokio::test]
+    async fn preflight_hw_mismatch_fails_closed() {
+        let mut iface = ScriptedInterface::new().rule(
+            0x22,
+            &[
+                &[0x10, 0x0D, 0x62, 0xF1, 0x92, b'0', b'2', b'8'],
+                &[0x21, b'1', b'0', b'1', b'3', b'3', b'4', b'5'],
+            ],
+        );
+        let rom = vec![0x5A; 64];
+        let m = manifest(&rom); // expects 0281012224
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&m, &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.hw_id_match);
+        assert!(!report.passed);
+        assert!(report.details.iter().any(|d| d.contains("MISMATCH")));
+    }
+
+    #[tokio::test]
+    async fn preflight_hw_read_error_fails_closed() {
+        let mut iface = ScriptedInterface::new().rule(0x22, &[&[0x03, 0x7F, 0x22, 0x31]]);
+        let rom = vec![0x5A; 64];
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&manifest(&rom), &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.hw_id_match);
+    }
+
+    #[tokio::test]
+    async fn preflight_not_connected_fails_closed() {
+        let mut iface = ScriptedInterface::new().disconnected();
+        let rom = vec![0x5A; 64];
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&manifest(&rom), &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.passed);
+        assert!(iface.sent_frames().is_empty());
+    }
+
+    #[tokio::test]
+    async fn preflight_empty_manifest_hw_id_fails_closed() {
+        // POST /api/v1/flash/stage deserialises the manifest from the request
+        // body, so a package with no declared hardware id is reachable from
+        // outside. It is unverifiable, not permissive: refuse without asking.
+        let mut iface = ScriptedInterface::new().rule(0x22, &[F192_FF, F192_CF]);
+        let rom = vec![0x5A; 64];
+        let mut m = manifest(&rom);
+        m.expected_hw_id = "  ".into();
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&m, &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.hw_id_match);
+        assert!(!report.passed);
+        assert!(
+            iface.sent_frames().is_empty(),
+            "an unusable manifest must not put a request on the bus"
+        );
+    }
+
+    #[tokio::test]
+    async fn preflight_sibling_variant_is_not_a_match() {
+        // 0281012224 vs 0281012238: only the last digits differ; a prefix rule would accept it.
+        let mut iface = ScriptedInterface::new().rule(
+            0x22,
+            &[
+                &[0x10, 0x0D, 0x62, 0xF1, 0x92, b'0', b'2', b'8'],
+                &[0x21, b'1', b'0', b'1', b'2', b'2', b'3', b'8'],
+            ],
+        );
+        let rom = vec![0x5A; 64];
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&manifest(&rom), &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.hw_id_match);
+    }
+
+    #[tokio::test]
+    async fn read_supplier_hw_id_renders_a_non_ascii_reply_as_hex() {
+        // A binary-coded F192 must be rendered as its digits, not passed on as
+        // the control characters those bytes spell in ASCII.
+        let mut iface = ScriptedInterface::new()
+            .rule(0x22, &[&[0x07, 0x62, 0xF1, 0x92, 0x02, 0x81, 0x01, 0x22]]);
+        let live = read_supplier_hw_id(&mut iface, FLASH_TX_ID, FLASH_RX_ID)
+            .await
+            .unwrap();
+        assert_eq!(live, "02810122");
+    }
+
+    #[tokio::test]
+    async fn read_supplier_hw_id_rejects_a_reply_for_another_did() {
+        // An ECU that answers F194 (the software number) to an F192 request must
+        // not have its calibration id mistaken for a hardware id.
+        let mut iface = ScriptedInterface::new()
+            .rule(0x22, &[&[0x07, 0x62, 0xF1, 0x94, b'1', b'0', b'3', b'7']]);
+        assert!(matches!(
+            read_supplier_hw_id(&mut iface, FLASH_TX_ID, FLASH_RX_ID).await,
+            Err(SterngateError::IsoTpError(_))
+        ));
+    }
+
+    #[test]
+    fn hw_id_matches_is_exact() {
+        assert!(hw_id_matches("0281012224", " 0281012224 "));
+        assert!(!hw_id_matches("0281012224", "02810122"));
+        assert!(!hw_id_matches("0281012224", "0281012238"));
+        assert!(!hw_id_matches("", ""));
+        assert!(!hw_id_matches("0281012224", ""));
+    }
+
+    #[tokio::test]
+    async fn inspect_rom_connected_but_silent_is_not_flashable() {
+        let mut iface = ScriptedInterface::new().rule(0x22, &[&[0x03, 0x7F, 0x22, 0x31]]);
+        let mut rom = vec![0xEA; 4096];
+        rom[64..74].copy_from_slice(b"0281012224");
+        let report = FlashingWorker::new()
+            .inspect_rom(&mut iface, 0x7E0, 0x7E8, &rom)
+            .await
+            .unwrap();
+        assert!(!report.can_flash);
+        assert_eq!(report.verdict, RomCompatibilityVerdict::Unknown);
+    }
+
+    // Paused time: nothing is scripted, so all three identification reads wait
+    // out the full ISO-TP timeout; virtual time keeps that off the clock.
+    #[tokio::test(start_paused = true)]
+    async fn inspect_rom_without_markers_is_not_flashable() {
+        let mut iface = ScriptedInterface::new();
+        let report = FlashingWorker::new()
+            .inspect_rom(&mut iface, 0x7E0, 0x7E8, &vec![0xEA; 4096])
+            .await
+            .unwrap();
+        assert!(!report.can_flash);
     }
 }
