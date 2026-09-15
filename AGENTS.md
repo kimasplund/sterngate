@@ -59,7 +59,7 @@ crates/
    - `CompressorProtectionGuard` & `SuspensionLeakDetector`: Thermal watchdog (40s auto-cutoff) and pneumatic leak diagnostics.
    - `VehicleGarage` & `DecodedVin`: Local Git-backed per-vehicle configuration tracking and VIN decoder.
    - `DriveBenchmark`: High-frequency drive telemetry sampling and A/B comparative benchmark analysis.
-   - `BoschChecksumSolver` & `BoschMapDetector`: Automotive calibration engine for Bosch EDC16/EDC17 partitioned 32-bit block checksum recalculation and automatic map detection (torque, boost, rail, smoke limiters). Every detected map carries a `MapProvenance` (`scanned`/`fallback`/`synthetic`); only scanned, ROM-backed maps may become flash patches.
+   - `BoschChecksumSolver` & `BoschMapDetector`: Automotive calibration engine for Bosch EDC16/EDC17 partitioned 32-bit block checksum recalculation and automatic map detection (torque, boost, rail, smoke limiters). Every detected map carries a `MapProvenance` (`scanned`/`fallback`/`synthetic`/`unverified`, the serde default for legacy packages and never executable); only scanned, ROM-backed maps may become flash patches.
    - `StageGenerator`: Automated Stage 1 (+18% torque), Stage 2 (+25% torque, DPF/EGR off), and custom DTC suppression (`p_codes`) calibration synthesizer. Refuses to emit any flash patch for a map that is not scanned and ROM-backed, and DTC suppression is unsupported until the detector rebuild.
    - `SterngateMod`: Shareable `.sgmod` mod package system with ASCII armor and Reed-Solomon $GF(2^8)$ error-correction parity. Integrity version 2 covers the target filter; flash-writing packages require ≥ 12.5 V.
 

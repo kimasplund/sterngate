@@ -26,6 +26,8 @@ Sterngate includes a built-in reverse-engineered calibration engine capable of d
 
 ## 2. Bosch Map Detection Engine
 
+> **Phase 0 state:** only the SVBL is located by scanning today; every other row in this table is a placeholder the detector fabricates at a fixed offset, labelled `provenance: synthetic` or `fallback`. Real detection arrives with the Phase 2 rebuild.
+
 Sterngate's `BoschMapDetector` scans raw binary ROM dumps to locate characteristic 2D and 3D calibration maps using Bosch header identifiers and axis dimension headers:
 
 | Map Type | Typical Dimensions | Description & Units | Safe Scaling Factor |
@@ -41,6 +43,8 @@ Sterngate's `BoschMapDetector` scans raw binary ROM dumps to locate characterist
 ---
 
 ## 3. Automated Stage Calibration Profiles
+
+> **Phase 0 state:** `stage1`/`stage2` refuse on every ROM (`PreFlightCheckFailed` naming the first map not located in the ROM) until the detector rebuild.
 
 ### Stage 1 (Safe OEM Hardware Tolerance)
 - **Peak Torque**: $+18\%$ over stock curve.
@@ -61,6 +65,8 @@ Sterngate's `BoschMapDetector` scans raw binary ROM dumps to locate characterist
 ---
 
 ## 4. DTC Suppression (Error Switch Table Zeroing)
+
+> **Phase 0 state:** DTC suppression is unsupported; `tune dtc-kill`, `POST /api/v1/tuning/dtc/kill` and `sterngate_kill_dtc` return an error and emit nothing.
 
 Instead of brutally disabling entire diagnostic subsystems or clearing fault codes every key cycle, Sterngate uses precision **DTC Error Switch Zeroing**:
 1. Locates the Bosch DTC master table in Flash ROM.

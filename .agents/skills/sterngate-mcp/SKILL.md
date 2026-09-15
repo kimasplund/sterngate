@@ -165,10 +165,10 @@ When a user asks:
 - *"Can you tune my ECU binary for Stage 1 or Stage 2?"*
   1. Call `sterngate_scan_rom_maps` with `rom_path` or `rom_base64` to detect Bosch maps, hardware/software IDs, and MPC5xx checksum status.
   2. Call `sterngate_generate_stage_tune` specifying `stage: 1` (+18% peak torque, +120 mbar boost, +50 bar rail) or `stage: 2` (+25% peak torque, DPF delete, EGR zeroing). Until the detector rebuild this step returns an error naming the first map that is not located in the ROM; nothing is applied.
-  3. The tool generates an armored, self-healing `.sgmod` package with Reed-Solomon parity ready for direct flash deployment.
+  3. The tool generates an armored, self-healing `.sgmod` package with Reed-Solomon parity ready for direct flash deployment. Phase 0: unreached — step 2 already refuses.
 - *"I replaced my DPF with a downpipe and need to suppress DTC P0401 and P2002:"*
-  1. Call `sterngate_kill_dtc` with `{"p_codes": ["P0401", "P2002"], "chassis": "W211", "ecu_name": "EDC16"}`.
-  2. The tool zeros the exact 8-bit/16-bit error enable masks in the binary ROM table and packages it into an armored `.sgmod`.
+  1. Call `sterngate_kill_dtc` with `{"p_codes": ["P0401", "P2002"], "chassis": "W211", "ecu_name": "EDC16"}`. Until the detector rebuild this step returns an error; DTC suppression is unsupported and nothing is packaged.
+  2. The tool zeros the exact 8-bit/16-bit error enable masks in the binary ROM table and packages it into an armored `.sgmod`. Phase 0: unreached — step 1 already refuses.
 - *"Verify and fix Bosch MPC5xx block checksums after editing a ROM:"*
   1. Call `sterngate_solve_checksum` with `{"rom_path": "/path/to/rom.bin", "fix": true, "output_path": "/path/to/rom_fixed.bin"}`.
   2. The solver computes 32-bit sums across all defined blocks and patches the MPC5xx checksum vectors.

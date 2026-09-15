@@ -111,19 +111,6 @@ Sterngate extends community mods beyond diagnostic variant coding into **ECU fla
 - `ModAction::PatchFlashMap`: In-place calibration map write (Service 0x3D / `WriteMemoryByAddress`) to ECU calibration sector (`0x1C0000..0x1FFFFF` on EDC16) with address offset, expected stock data, and safety ceiling clamping.
 - `ModAction::DtcMask`: Zeroes DTC fault path enable switches in the calibration sector to suppress specific error codes (e.g. `P0401` EGR, `P2002` DPF).
 
----
-
-## Safety contract (Phase 0)
-
-- `PatchFlashMap` and `DtcMask` actions carry `"provenance"`; only `"scanned"` (bytes located in the target ECU's own ROM) is executable. Absent or any other value is refused before any bus traffic.
-- Every flash patch must carry `expected_original_data` of exactly the patched length; the runner reads the live bytes and refuses on read failure, short reply or mismatch. `DtcMask` requires the live byte to equal `original_mask`.
-- Packages that write flash require `min_battery_voltage >= 12.5`; `SterngateMod::create` refuses lower values and `ModRunner` enforces `max(min_battery_voltage, 12.5)` regardless of the CLI `--force` flag.
-- `--force` (CLI only) relaxes the chassis and hardware-whitelist checks and nothing else. It is refused for packages containing flash writes. The REST API and MCP have no bypass: sending `force` returns HTTP 422 / an MCP error.
-- `integrity.version` is 2 and covers `target`, `actions` and `rollback_actions`. Packages with any other version are refused everywhere (inspect included); regenerate them with `sterngate mod create`.
-- Applying requires the connected vehicle's VIN (`--vin`, `vin`) and a measured battery voltage. The CLI reads the Tactrix OpenPort Pin-16 ADC and refuses on SocketCAN or mock adapters, which cannot measure.
-- `sterngate tune stage1|stage2|dtc-kill` refuse on every ROM until the detector rebuild locates real maps; this is intended.
-- `Routine` actions with routine id `0xFF00` (UDS EraseMemory) are refused; flash erase only happens through the flashing worker's interlocks.
-
 ### CLI Tuning Suite (`sterngate tune`)
 ```bash
 # Heuristic map scan, Bosch HW/SW detection, and MPC5xx checksum verification
@@ -163,7 +150,20 @@ AI assistants can interact with community mods and calibration tuning using stan
 - `sterngate_apply_community_mod`: Safely executes the mod on the vehicle or simulated ECU with voltage interlock and Git garage logging.
 - `sterngate_create_community_mod`: Authors a compliant `.sgmod` package and outputs ASCII armor.
 - `sterngate_scan_rom_maps`: Scans a ROM binary for calibration maps, Bosch IDs, and checksum blocks via `rom_path` or `rom_base64`.
-- `sterngate_generate_stage_tune`: Creates Stage 1 or Stage 2 `.sgmod` tuning packages directly from ROM dumps.
-- `sterngate_kill_dtc`: Generates a standalone `.sgmod` suppressing specific DTC error codes.
+- `sterngate_generate_stage_tune`: Creates Stage 1 or Stage 2 `.sgmod` tuning packages directly from ROM dumps. Phase 0: refuses on every ROM (`PreFlightCheckFailed`) until the detector rebuild.
+- `sterngate_kill_dtc`: Generates a standalone `.sgmod` suppressing specific DTC error codes. Phase 0: refuses on every ROM (`PreFlightCheckFailed`) until the detector rebuild.
 - `sterngate_solve_checksum`: Verifies and optionally recalculates Bosch MPC5xx partitioned checksums.
+
+---
+
+## 7. Safety contract (Phase 0)
+
+- `PatchFlashMap` and `DtcMask` actions carry `"provenance"`; only `"scanned"` (bytes located in the target ECU's own ROM) is executable. Absent or any other value is refused before any bus traffic.
+- Every flash patch must carry `expected_original_data` of exactly the patched length; the runner reads the live bytes and refuses on read failure, short reply or mismatch. `DtcMask` requires the live byte to equal `original_mask`.
+- Packages that write flash require `min_battery_voltage >= 12.5`; `SterngateMod::create` refuses lower values and `ModRunner` enforces `max(min_battery_voltage, 12.5)` regardless of the CLI `--force` flag.
+- `--force` (CLI only) relaxes the chassis and hardware-whitelist checks and nothing else. It is refused for packages containing flash writes. The REST API and MCP have no bypass: sending `force` returns HTTP 422 / an MCP error.
+- `integrity.version` is 2 and covers `target`, `actions` and `rollback_actions`. Packages with any other version are refused everywhere (inspect included); regenerate them with `sterngate mod create`.
+- Applying requires the connected vehicle's VIN (`--vin`, `vin`) and a measured battery voltage. The CLI reads the Tactrix OpenPort Pin-16 ADC and refuses on SocketCAN or mock adapters, which cannot measure.
+- `sterngate tune stage1|stage2|dtc-kill` refuse on every ROM until the detector rebuild locates real maps; this is intended.
+- `Routine` actions with routine id `0xFF00` (UDS EraseMemory) are refused; flash erase only happens through the flashing worker's interlocks.
 
