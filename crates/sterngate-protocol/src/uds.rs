@@ -1,5 +1,6 @@
 use crate::isotp::IsoTpChannel;
 use crate::seedkey::SeedKeySolver;
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 use sterngate_core::{Dtc, Result, SterngateError};
 use sterngate_hal::VehicleInterface;
@@ -17,6 +18,43 @@ pub(crate) fn p2_star_from(resp: &[u8]) -> Option<Duration> {
     Some(Duration::from_millis(u64::from(raw) * 10))
 }
 
+/// Restores a channel's original timeout when dropped, including when the
+/// enclosing future is cancelled mid-await (a caller wrapping the request in
+/// `tokio::time::timeout`/`select!`, or dropped on client disconnect) while
+/// NRC 0x78 has raised the timeout to P2* + margin. An explicit post-await
+/// `set_timeout(saved)` only runs on normal completion; Drop also covers
+/// cancellation.
+struct TimeoutRestore<'chan, 'iface> {
+    channel: &'chan mut IsoTpChannel<'iface>,
+    saved: Duration,
+}
+
+impl<'chan, 'iface> TimeoutRestore<'chan, 'iface> {
+    fn new(channel: &'chan mut IsoTpChannel<'iface>) -> Self {
+        let saved = channel.timeout();
+        Self { channel, saved }
+    }
+}
+
+impl<'iface> Deref for TimeoutRestore<'_, 'iface> {
+    type Target = IsoTpChannel<'iface>;
+    fn deref(&self) -> &Self::Target {
+        self.channel
+    }
+}
+
+impl<'iface> DerefMut for TimeoutRestore<'_, 'iface> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.channel
+    }
+}
+
+impl Drop for TimeoutRestore<'_, '_> {
+    fn drop(&mut self) {
+        self.channel.set_timeout(self.saved);
+    }
+}
+
 pub struct UdsClient<'a> {
     channel: IsoTpChannel<'a>,
     p2_star: Duration,
@@ -31,23 +69,27 @@ impl<'a> UdsClient<'a> {
     }
 
     /// Send a raw UDS request and handle NRCs (including NRC 0x78 ResponsePending).
-    /// Restores the channel timeout on every exit path, even when NRC 0x78
-    /// changed it mid-flight.
+    /// Restores the channel timeout on every exit path -- including cancellation
+    /// of the returned future -- via the `TimeoutRestore` guard's `Drop` impl,
+    /// even when NRC 0x78 changed it mid-flight.
     pub async fn send_request(&mut self, service: u8, payload: &[u8]) -> Result<Vec<u8>> {
-        let saved = self.channel.timeout();
-        let result = self.send_request_inner(service, payload).await;
-        self.channel.set_timeout(saved);
-        result
+        let mut guard = TimeoutRestore::new(&mut self.channel);
+        Self::send_request_inner(&mut guard, self.p2_star, service, payload).await
     }
 
-    async fn send_request_inner(&mut self, service: u8, payload: &[u8]) -> Result<Vec<u8>> {
+    async fn send_request_inner(
+        channel: &mut IsoTpChannel<'_>,
+        p2_star: Duration,
+        service: u8,
+        payload: &[u8],
+    ) -> Result<Vec<u8>> {
         let mut req = vec![service];
         req.extend_from_slice(payload);
 
-        self.channel.send_payload(&req).await?;
+        channel.send_payload(&req).await?;
 
         loop {
-            let resp = self.channel.recv_payload().await?;
+            let resp = channel.recv_payload().await?;
             let Some(&sid) = resp.first() else {
                 return Err(SterngateError::IsoTpError(
                     "Empty UDS response received".into(),
@@ -64,7 +106,7 @@ impl<'a> UdsClient<'a> {
 
                 // NRC 0x78: RequestCorrectlyReceived-ResponsePending -> ECU asks for more time
                 if nrc == 0x78 {
-                    self.channel.set_timeout(self.p2_star + P2_STAR_MARGIN);
+                    channel.set_timeout(p2_star + P2_STAR_MARGIN);
                     continue;
                 }
 
@@ -323,6 +365,31 @@ mod tests {
         uds.diagnostic_session_control(0x03).await.unwrap();
         uds.routine_control(0x01, 0xFF00, &[]).await.unwrap();
         // A later request that never gets an answer times out at the normal 1500 ms.
+        let started = tokio::time::Instant::now();
+        assert!(matches!(
+            uds.read_data_by_identifier(0x0100).await,
+            Err(SterngateError::IsoTpTimeout)
+        ));
+        assert!(started.elapsed() < Duration::from_millis(2000));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelling_request_restores_timeout() {
+        let mut iface = ScriptedInterface::new()
+            .rule(0x10, &[SESSION_OK])
+            .rule(0x31, &[&[0x03, 0x7F, 0x31, 0x78]]);
+        let mut uds = UdsClient::new(&mut iface, 0x7E0, 0x7E8);
+        uds.diagnostic_session_control(0x03).await.unwrap();
+        // The ECU only ever answers ResponsePending, so this request would wait out
+        // the full P2* (5.5 s); wrap it in a shorter outer timeout and drop it early.
+        let outer = tokio::time::timeout(
+            Duration::from_millis(2000),
+            uds.routine_control(0x01, 0xFF00, &[]),
+        )
+        .await;
+        assert!(outer.is_err(), "expected the outer timeout to fire first");
+        // If the P2*-elevated timeout leaked past cancellation, this unrelated
+        // request would also wait ~5.5 s instead of the normal 1500 ms.
         let started = tokio::time::Instant::now();
         assert!(matches!(
             uds.read_data_by_identifier(0x0100).await,
