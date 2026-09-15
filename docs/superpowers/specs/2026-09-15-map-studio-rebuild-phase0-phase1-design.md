@@ -187,6 +187,7 @@ Layer 2, evidence (self-skipping unless `STERNGATE_CFF_CORPUS` is set): parse al
 - **`+ss` signature.** Whether the ECU verifies the 128-byte blob during download is unknown; irrelevant until Phase 3 flashing from corpus images, which this spec does not enable beyond `extract` + the existing vault path.
 - **Checksum routine id/status** (D8) unverified on real EDC16.
 - **Copyright.** No SDflash bytes, and no excerpt longer than 64 bytes, enter the repository; tests carry hashes and offsets only.
+- **Client-supplied voltage.** REST and P2P clients send `battery_voltage`, yet the server holds the interface. Phase 0b should have the server call `measure_battery_voltage` itself where the adapter can measure (shared with flasher preflight) and treat the payload only as a cross-check.
 
 ## 7. Deliverables
 
