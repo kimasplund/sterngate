@@ -38,6 +38,12 @@ fn store_voltage_cache(cache: &VoltageCache, volts: f32) {
     *cache.lock().unwrap_or_else(PoisonError::into_inner) = Some((volts, Instant::now()));
 }
 
+/// Forget any cached battery reading, so a stale value can never satisfy
+/// `measure_battery_voltage` after the interface is reopened.
+fn clear_voltage_cache(cache: &VoltageCache) {
+    *cache.lock().unwrap_or_else(PoisonError::into_inner) = None;
+}
+
 /// Decide whether a cached voltage reading may be reused as-is.
 ///
 /// Pure so the freshness rule can be tested without USB hardware: returns the
@@ -306,6 +312,16 @@ impl OpenPortInterface {
     pub fn last_voltage(&self) -> Option<f32> {
         self.last_voltage_v
     }
+
+    /// Recreate the RX channel if a previous `open()` handed its sender to a
+    /// reader task, so reopening after `close()` gets a live reader again.
+    fn ensure_rx_channel(&mut self) {
+        if self.rx_sender.is_none() {
+            let (tx, rx) = mpsc::channel(256);
+            self.rx_sender = Some(tx);
+            self.rx_channel = Some(rx);
+        }
+    }
 }
 
 impl Default for OpenPortInterface {
@@ -327,6 +343,10 @@ impl VehicleInterface for OpenPortInterface {
             tracing::info!("OpenPort simulated interface active");
             return Ok(());
         }
+
+        // A previous open() may have handed rx_sender to the background
+        // reader task; rebuild the channel so a reopen gets a live reader.
+        self.ensure_rx_channel();
 
         let (handle, endpoint_in, endpoint_out, interface_num) = Self::find_and_open_device()?;
 
@@ -537,29 +557,36 @@ impl VehicleInterface for OpenPortInterface {
         }
 
         self.is_open.store(false, Ordering::SeqCst);
+        clear_voltage_cache(&self.voltage_cache);
 
-        if let Some(OpenPortBackend::Hardware {
-            handle,
-            endpoint_out,
-            interface_num,
-            ..
-        }) = self.backend.take()
-        {
-            let guard = handle.lock().await;
-            let timeout = Duration::from_millis(500);
+        // Only take the backend for the Hardware variant: `.take()` runs
+        // unconditionally as part of evaluating the match scrutinee, so
+        // gating on the discriminant first keeps a Simulated backend intact
+        // across close() (its rx_tx is still needed by a subsequent open()).
+        if matches!(self.backend, Some(OpenPortBackend::Hardware { .. })) {
+            if let Some(OpenPortBackend::Hardware {
+                handle,
+                endpoint_out,
+                interface_num,
+                ..
+            }) = self.backend.take()
+            {
+                let guard = handle.lock().await;
+                let timeout = Duration::from_millis(500);
 
-            // Close channel: atc5
-            let close_ch = OpenPortCommand::CloseChannel {
-                channel: CHANNEL_CAN,
+                // Close channel: atc5
+                let close_ch = OpenPortCommand::CloseChannel {
+                    channel: CHANNEL_CAN,
+                }
+                .encode();
+                let _ = guard.write_bulk(endpoint_out, &close_ch, timeout);
+
+                // Reset interface: atz
+                let reset_cmd = OpenPortCommand::Reset.encode();
+                let _ = guard.write_bulk(endpoint_out, &reset_cmd, timeout);
+
+                let _ = guard.release_interface(interface_num);
             }
-            .encode();
-            let _ = guard.write_bulk(endpoint_out, &close_ch, timeout);
-
-            // Reset interface: atz
-            let reset_cmd = OpenPortCommand::Reset.encode();
-            let _ = guard.write_bulk(endpoint_out, &reset_cmd, timeout);
-
-            let _ = guard.release_interface(interface_num);
         }
 
         tracing::info!("OpenPort interface closed");
@@ -632,5 +659,37 @@ mod tests {
         assert_eq!(rx_frame.data, vec![0x02, 0x10, 0x03]);
 
         iface.close().await.unwrap();
+    }
+
+    #[test]
+    fn close_clears_the_voltage_cache() {
+        let cache = VoltageCache::default();
+        store_voltage_cache(&cache, 12.7);
+        assert!(read_voltage_cache(&cache).is_some());
+        clear_voltage_cache(&cache);
+        assert!(read_voltage_cache(&cache).is_none());
+    }
+
+    #[tokio::test]
+    async fn simulated_interface_survives_reopen() {
+        let (mut iface, _feed) = OpenPortInterface::new_simulated(12.65);
+        iface.open().await.unwrap();
+        iface.close().await.unwrap();
+        iface.open().await.unwrap();
+        assert!(iface.is_connected());
+        iface
+            .send(CanFrame::new_standard(0x7E0, &[0x02, 0x10, 0x03]))
+            .await
+            .unwrap();
+        assert_eq!(iface.recv().await.unwrap().data, vec![0x02, 0x10, 0x03]);
+    }
+
+    #[test]
+    fn hardware_open_rebuilds_rx_channel_after_take() {
+        let mut iface = OpenPortInterface::new();
+        iface.rx_sender.take();
+        iface.ensure_rx_channel();
+        assert!(iface.rx_sender.is_some());
+        assert!(iface.rx_channel.is_some());
     }
 }
