@@ -40,73 +40,9 @@ pub enum TargetFingerprintPolicy {
     BypassUnsafe,
 }
 
-/// UDS `RoutineControl` routine identifier for `EraseMemory` (ISO 14229-1). This is
-/// the operation the flashing worker's voltage interlock and staged, checksum-verified
-/// state machine exist to guard; `ModRunner` must never invoke it directly.
-const ERASE_MEMORY_ROUTINE: u16 = 0xFF00;
-
 pub struct ModRunner;
 
 impl ModRunner {
-    fn writes_flash(modpack: &SterngateMod) -> bool {
-        modpack
-            .actions
-            .iter()
-            .chain(modpack.rollback_actions.iter())
-            .any(|a| {
-                matches!(
-                    a,
-                    ModAction::PatchFlashMap { .. } | ModAction::DtcMask { .. }
-                )
-            })
-    }
-
-    /// Every flash action must carry `Scanned` provenance. Runs before any bus traffic.
-    fn check_provenance(modpack: &SterngateMod) -> Result<()> {
-        for action in modpack
-            .actions
-            .iter()
-            .chain(modpack.rollback_actions.iter())
-        {
-            let (name, provenance) = match action {
-                ModAction::PatchFlashMap {
-                    map_name,
-                    provenance,
-                    ..
-                } => (map_name.as_str(), *provenance),
-                ModAction::DtcMask {
-                    p_code, provenance, ..
-                } => (p_code.as_str(), *provenance),
-                _ => continue,
-            };
-            if !provenance.is_scanned() {
-                return Err(SterngateError::PreFlightCheckFailed(format!(
-                    "action '{name}' has map provenance {provenance:?}; only maps scanned from the target ECU's own ROM may be flashed"
-                )));
-            }
-        }
-        Ok(())
-    }
-
-    /// Refuse any package (actions or rollback) that invokes UDS `EraseMemory`
-    /// (routine 0xFF00). Runs before any bus traffic, alongside the provenance gate.
-    fn check_no_erase_routine(modpack: &SterngateMod) -> Result<()> {
-        for action in modpack
-            .actions
-            .iter()
-            .chain(modpack.rollback_actions.iter())
-        {
-            if let ModAction::Routine { routine_id, .. } = action {
-                if *routine_id == ERASE_MEMORY_ROUTINE {
-                    return Err(SterngateError::PreFlightCheckFailed(
-                        "action invokes UDS EraseMemory (routine 0xFF00); flash erase is only permitted through the flashing worker's voltage-interlocked, staged state machine".into(),
-                    ));
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Flash ranges within one package must not overlap: a later action's
     /// precondition would otherwise be checked against bytes an earlier action changes.
     fn check_no_overlap(modpack: &SterngateMod) -> Result<()> {
@@ -187,46 +123,18 @@ impl ModRunner {
             );
         }
 
-        // Mirror the gates `apply_mod` enforces. `check_compatibility` only knows
-        // about chassis, hardware ID and `min_battery_voltage`, so without this a
-        // package that apply refuses outright would inspect as compatible.
-        if let Err(e) = Self::check_provenance(modpack) {
-            final_report.matched_vehicle = false;
-            final_report.warning_messages.push(e.to_string());
-        }
-
-        if let Err(e) = Self::check_no_erase_routine(modpack) {
-            final_report.matched_vehicle = false;
-            final_report.warning_messages.push(e.to_string());
-        }
-
-        // A package that writes flash is held to the 12.5 V floor even when it
-        // declares a lower `min_battery_voltage` (a deserialized package never
-        // passed through `SterngateMod::create`, which is where that is checked).
-        if Self::writes_flash(modpack) {
-            if let Some(volts) = battery_voltage {
-                let required = modpack
-                    .target
-                    .min_battery_voltage
-                    .max(FLASH_WRITE_MIN_VOLTAGE);
-                if volts.is_nan() || volts < required {
-                    final_report.matched_vehicle = false;
-                    final_report.warning_messages.push(format!(
-                        "Battery voltage ({volts:.1}V) is below the {required:.1}V required to apply this package, which writes flash (floor {FLASH_WRITE_MIN_VOLTAGE:.1}V)"
-                    ));
-                }
-            }
-        }
-
         Ok(final_report)
     }
 
     /// Safely apply a community mod package to the connected vehicle.
     ///
-    /// Gate order: integrity, map provenance, EraseMemory routine refusal,
-    /// policy admissibility, voltage floor, range overlap, chassis, hardware
-    /// whitelist, per-action byte preconditions, then writes. Only the
-    /// chassis and hardware-whitelist checks consult `policy`.
+    /// Gate order: integrity, flash-write refusals (`SterngateMod::flash_write_refusals`:
+    /// map provenance, EraseMemory routine), policy admissibility, voltage floor,
+    /// range overlap, chassis, hardware whitelist, per-action byte preconditions,
+    /// then writes. Only the chassis and hardware-whitelist checks consult `policy`.
+    /// `flash_write_refusals` is the single source of truth shared with
+    /// `inspect_compatibility` (via `SterngateMod::check_compatibility`), so every
+    /// inspect surface (CLI, MCP, REST) reports the same refusals `apply_mod` enforces.
     pub async fn apply_mod(
         interface: &mut dyn VehicleInterface,
         modpack: &mut SterngateMod,
@@ -243,14 +151,14 @@ impl ModRunner {
             )));
         }
 
-        // 1b. Map provenance gate (before any bus traffic)
-        Self::check_provenance(modpack)?;
-
-        // 1b2. Refuse UDS EraseMemory routines outright (before any bus traffic)
-        Self::check_no_erase_routine(modpack)?;
+        // 1b. Flash-write refusals: map provenance and EraseMemory routines
+        // (before any bus traffic). One source of truth with `inspect_compatibility`.
+        if let Some(refusal) = modpack.flash_write_refusals().into_iter().next() {
+            return Err(SterngateError::PreFlightCheckFailed(refusal));
+        }
 
         // 1c. A fingerprint bypass is never admissible for flash writes
-        let writes_flash = Self::writes_flash(modpack);
+        let writes_flash = modpack.writes_flash();
         if writes_flash && policy == TargetFingerprintPolicy::BypassUnsafe {
             return Err(SterngateError::PreFlightCheckFailed(
                 "--force is not permitted for packages containing flash writes (PatchFlashMap/DtcMask)"

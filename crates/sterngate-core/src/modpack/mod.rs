@@ -11,6 +11,10 @@ use sha2::{Digest, Sha256};
 /// (`PatchFlashMap`, `DtcMask`). Mirrors the flashing worker's erase interlock.
 pub const FLASH_WRITE_MIN_VOLTAGE: f64 = 12.5;
 
+/// UDS RoutineControl id for EraseMemory. A community package may never
+/// trigger it: erase runs only through the flashing worker's interlocks.
+pub const ERASE_MEMORY_ROUTINE: u16 = 0xFF00;
+
 /// Integrity format version. Version 2 covers `target`, `actions` and
 /// `rollback_actions`. Any other value is refused: the target filter of
 /// older packages was never integrity-protected. `metadata` is deliberately
@@ -247,6 +251,40 @@ pub struct ModValidationReport {
 }
 
 impl SterngateMod {
+    /// True when any action or rollback writes flash memory.
+    pub fn writes_flash(&self) -> bool {
+        self.actions
+            .iter()
+            .chain(self.rollback_actions.iter())
+            .any(|a| {
+                matches!(
+                    a,
+                    ModAction::PatchFlashMap { .. } | ModAction::DtcMask { .. }
+                )
+            })
+    }
+
+    /// Every reason this package may not be executed regardless of the vehicle:
+    /// flash actions without `Scanned` provenance and EraseMemory routines.
+    pub fn flash_write_refusals(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for action in self.actions.iter().chain(self.rollback_actions.iter()) {
+            match action {
+                ModAction::PatchFlashMap { map_name, provenance, .. } if !provenance.is_scanned() => out.push(format!(
+                    "action '{map_name}' has map provenance {provenance:?}; only maps scanned from the target ECU's own ROM may be flashed"
+                )),
+                ModAction::DtcMask { p_code, provenance, .. } if !provenance.is_scanned() => out.push(format!(
+                    "action '{p_code}' has map provenance {provenance:?}; only maps scanned from the target ECU's own ROM may be flashed"
+                )),
+                ModAction::Routine { routine_id, description, .. } if *routine_id == ERASE_MEMORY_ROUTINE => out.push(format!(
+                    "routine '{description}' is UDS EraseMemory (0x{routine_id:04X}); flash erase is only permitted through the flashing worker"
+                )),
+                _ => {}
+            }
+        }
+        out
+    }
+
     /// Serialize mod package to formatted JSON string
     pub fn to_json(&self) -> Result<String> {
         serde_json::to_string_pretty(self).map_err(|e| {
@@ -478,6 +516,16 @@ impl SterngateMod {
 
         let mut matched = true;
 
+        for refusal in self.flash_write_refusals() {
+            matched = false;
+            report.warning_messages.push(refusal);
+        }
+        let required_voltage = if self.writes_flash() {
+            self.target.min_battery_voltage.max(FLASH_WRITE_MIN_VOLTAGE)
+        } else {
+            self.target.min_battery_voltage
+        };
+
         if let Some(v) = vin {
             if self.target.matches_chassis(v) {
                 report
@@ -507,16 +555,16 @@ impl SterngateMod {
         }
 
         if let Some(volts) = battery_voltage {
-            if volts >= self.target.min_battery_voltage {
+            if !volts.is_nan() && volts >= required_voltage {
                 report.compatibility_notes.push(format!(
                     "✓ Battery voltage sufficient ({:.1}V >= {:.1}V)",
-                    volts, self.target.min_battery_voltage
+                    volts, required_voltage
                 ));
             } else {
                 matched = false;
                 report.warning_messages.push(format!(
                     "Battery voltage too low: measured {:.1}V, required >= {:.1}V",
-                    volts, self.target.min_battery_voltage
+                    volts, required_voltage
                 ));
             }
         }
@@ -777,5 +825,57 @@ mod tests {
             "{:?}",
             report.warning_messages
         );
+    }
+
+    #[test]
+    fn check_compatibility_reports_flash_refusals() {
+        let m = SterngateMod::create(
+            sample_metadata(),
+            sample_target(12.5),
+            vec![flash_patch(MapProvenance::Synthetic)],
+            vec![],
+        )
+        .unwrap();
+        let report = m.check_compatibility(Some("WDB2112061A000001"), None, Some(12.8));
+        assert!(!report.matched_vehicle);
+        assert!(report
+            .warning_messages
+            .iter()
+            .any(|w| w.contains("provenance")));
+
+        let erase = ModAction::Routine {
+            routine_id: ERASE_MEMORY_ROUTINE,
+            subfunction: 0x01,
+            data: vec![],
+            description: "erase".into(),
+        };
+        let m = SterngateMod::create(sample_metadata(), sample_target(12.0), vec![erase], vec![])
+            .unwrap();
+        let report = m.check_compatibility(None, None, None);
+        assert!(!report.matched_vehicle);
+        assert!(report
+            .warning_messages
+            .iter()
+            .any(|w| w.contains("EraseMemory")));
+    }
+
+    #[test]
+    fn check_compatibility_applies_flash_floor() {
+        let m = SterngateMod::create(
+            sample_metadata(),
+            sample_target(12.5),
+            vec![flash_patch(MapProvenance::Scanned)],
+            vec![],
+        )
+        .unwrap();
+        let low = m.check_compatibility(None, None, Some(12.2));
+        assert!(!low.matched_vehicle);
+        assert!(low.warning_messages.iter().any(|w| w.contains("12.5")));
+        assert!(!low
+            .compatibility_notes
+            .iter()
+            .any(|n| n.contains("sufficient")));
+        let ok = m.check_compatibility(None, None, Some(12.8));
+        assert!(ok.matched_vehicle);
     }
 }

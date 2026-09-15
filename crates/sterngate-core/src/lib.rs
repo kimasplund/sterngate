@@ -52,7 +52,7 @@ pub use modpack::{
     armor::{decode_from_armor, encode_to_armor, ARMOR_FOOTER, ARMOR_HEADER},
     fec::{FecStatus, ReedSolomonCodec},
     ModAction, ModCategory, ModIntegrity, ModMetadata, ModRiskLevel, ModTargetFilter,
-    ModValidationReport, SterngateMod, FLASH_WRITE_MIN_VOLTAGE,
+    ModValidationReport, SterngateMod, ERASE_MEMORY_ROUTINE, FLASH_WRITE_MIN_VOLTAGE,
 };
 pub use parameter::{ParameterValue, TelemetrySnapshot};
 pub use profile::{ModuleDef, ParameterDef, ScalingDef, VehicleProfile};
