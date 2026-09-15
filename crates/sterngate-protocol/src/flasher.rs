@@ -152,7 +152,16 @@ impl FlashingWorker {
             ));
         }
 
-        let passed = voltage_ok && sha256_ok && crc32_ok && hw_match && length_ok;
+        // 6. A zero-length image would erase the ECU and then write nothing,
+        // leaving a bare bootloader. Every other check passes trivially on an
+        // empty ROM (its own hash and CRC32 match a manifest derived from it),
+        // so the emptiness has to be rejected on its own.
+        let non_empty = !rom_data.is_empty();
+        if !non_empty {
+            details.push("ROM image is empty (0 bytes); refusing to flash".into());
+        }
+
+        let passed = voltage_ok && sha256_ok && crc32_ok && hw_match && length_ok && non_empty;
         Ok(PreFlightReport {
             passed,
             battery_voltage,
@@ -308,48 +317,49 @@ impl FlashingWorker {
         drop(state_lock);
 
         let total_bytes = rom_data.len();
-        let mut iface_guard = interface.lock().await;
-
-        // Pre-flight check
-        let report = self
-            .run_preflight_checks(&manifest, &rom_data, battery_voltage, iface_guard.as_mut())
-            .await?;
-        if !report.passed {
-            let err_msg = format!("Pre-flight check failed: {:?}", report.details);
-            self.update_progress(
-                FlashState::Failed,
-                0,
-                0,
-                0,
-                0,
-                total_bytes,
-                &err_msg,
-                Some(err_msg.clone()),
-            );
-            *self.current_state.lock().await = FlashState::Failed;
-            return Err(SterngateError::PreFlightCheckFailed(err_msg));
-        }
-        self.update_progress(
-            FlashState::Locked,
-            5,
-            0,
-            0,
-            0,
-            total_bytes,
-            "Pre-flight checks passed. API Lockout engaged.",
-            None,
-        );
-
         let mut ka = S3KeepAlive::new();
         let mut progress = SequenceProgress::default();
+
+        // Pre-flight and the sequence share one lock and one failure path: an
+        // error raised before the erase must never escape past the state
+        // assignment below, or the API lockout would stay engaged forever.
         let result = {
-            // The interface stays locked for the whole sequence: nothing else may
-            // put a frame on the bus between the session request and the reset.
-            let mut uds = UdsClient::new(iface_guard.as_mut(), FLASH_TX_ID, FLASH_RX_ID);
-            self.run_programming_sequence(&manifest, &rom_data, &mut uds, &mut ka, &mut progress)
-                .await
+            let mut iface_guard = interface.lock().await;
+            let preflight = self
+                .run_preflight_checks(&manifest, &rom_data, battery_voltage, iface_guard.as_mut())
+                .await;
+            match preflight {
+                Err(e) => Err(e),
+                Ok(report) if !report.passed => Err(SterngateError::PreFlightCheckFailed(format!(
+                    "{:?}",
+                    report.details
+                ))),
+                Ok(_) => {
+                    self.update_progress(
+                        FlashState::Locked,
+                        5,
+                        0,
+                        0,
+                        0,
+                        total_bytes,
+                        "Pre-flight checks passed. API Lockout engaged.",
+                        None,
+                    );
+                    // The interface stays locked for the whole sequence: nothing
+                    // else may put a frame on the bus between the session request
+                    // and the reset.
+                    let mut uds = UdsClient::new(iface_guard.as_mut(), FLASH_TX_ID, FLASH_RX_ID);
+                    self.run_programming_sequence(
+                        &manifest,
+                        &rom_data,
+                        &mut uds,
+                        &mut ka,
+                        &mut progress,
+                    )
+                    .await
+                }
+            }
         };
-        drop(iface_guard);
 
         match result {
             Ok(()) => {
@@ -1013,6 +1023,76 @@ mod tests {
             .unwrap();
         assert!(!report.passed);
         assert!(report.details.iter().any(|d| d.contains("flash_length")));
+    }
+
+    #[tokio::test]
+    async fn preflight_rejects_empty_rom() {
+        // Every other check passes on an empty ROM: it hashes to a manifest
+        // derived from itself, and flash_length 0 matches its length.
+        let mut iface = happy_ecu();
+        let rom = Vec::new();
+        let m = manifest(&rom);
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&m, &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.passed);
+        assert!(report
+            .details
+            .iter()
+            .any(|d| d == "ROM image is empty (0 bytes); refusing to flash"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn empty_rom_never_reaches_the_erase() {
+        let iface = happy_ecu();
+        let log = iface.sent_handle();
+        let (flasher, res, _) = run(iface, Vec::new()).await;
+        assert!(matches!(res, Err(SterngateError::PreFlightCheckFailed(_))));
+        assert_eq!(flasher.current_state().await, FlashState::Failed);
+        assert!(!flasher.is_locked().await);
+        let prog = flasher.subscribe().borrow().clone();
+        assert!(prog
+            .error_message
+            .as_deref()
+            .unwrap()
+            .starts_with("Flash aborted before erase; ECU untouched."));
+        let sids: Vec<u8> = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|f| crate::test_support::request_sid(&f.data))
+            .collect();
+        assert!(
+            !sids.contains(&0x31),
+            "an empty ROM must never erase the ECU"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn error_before_erase_releases_the_lockout() {
+        // A disconnected interface fails on the first frame of the sequence.
+        // Whatever raises it, an error before the erase must leave the worker
+        // Failed and unlocked, never stranded in Locked.
+        let iface = happy_ecu().disconnected();
+        let log = iface.sent_handle();
+        let (flasher, res, _) = run(iface, vec![0x5A; 300]).await;
+        assert!(res.is_err());
+        assert_eq!(flasher.current_state().await, FlashState::Failed);
+        assert!(!flasher.is_locked().await);
+        let prog = flasher.subscribe().borrow().clone();
+        assert!(prog
+            .error_message
+            .as_deref()
+            .unwrap()
+            .starts_with("Flash aborted before erase; ECU untouched."));
+        let sids: Vec<u8> = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|f| crate::test_support::request_sid(&f.data))
+            .collect();
+        assert!(!sids.contains(&0x31));
     }
 
     #[tokio::test]
