@@ -166,13 +166,36 @@ async fn stage_flash(
         }
     };
 
+    // The ROM is never substituted or invented. An absent or undecodable
+    // `rom_base64` is a refusal, not a reason to synthesise bytes: staging
+    // fabricated firmware against a manifest carrying the ECU's real hardware
+    // id would erase the ECU and write the fabrication.
     use base64::Engine as _;
-    let rom_data = match payload.rom_base64.as_deref() {
-        Some("dummy_rom_data") | None => vec![0xAA; 4096],
-        Some(b64) => base64::engine::general_purpose::STANDARD
-            .decode(b64)
-            .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(b64))
-            .unwrap_or_else(|_| vec![0xAA; 4096]),
+    let bad_request = |message: String| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(GenericResponse {
+                success: false,
+                message,
+            }),
+        )
+    };
+
+    let Some(rom_b64) = payload.rom_base64.as_deref() else {
+        return bad_request(
+            "Refusing to stage: 'rom_base64' is required; the server never substitutes firmware bytes.".into(),
+        );
+    };
+    let rom_data = match base64::engine::general_purpose::STANDARD
+        .decode(rom_b64)
+        .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(rom_b64))
+    {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return bad_request(format!(
+                "Refusing to stage: 'rom_base64' is not valid base64 ({e}); the server never substitutes firmware bytes."
+            ));
+        }
     };
 
     if sterngate_core::cff::sniff(&rom_data) {
@@ -185,12 +208,36 @@ async fn stage_flash(
         );
     }
 
-    let mut manifest = payload.manifest;
-    manifest.crc32_checksum = crc32fast::hash(&rom_data);
+    // The manifest is the operator's declaration of what this image is; it is
+    // verified against the bytes, never rewritten from them. Overwriting it
+    // would make pre-flight checks 2/3/5 compare the ROM against itself.
+    let manifest = payload.manifest;
+
+    let actual_crc = crc32fast::hash(&rom_data);
+    if actual_crc != manifest.crc32_checksum {
+        return bad_request(format!(
+            "Refusing to stage: crc32_checksum disagrees with the ROM (manifest 0x{:08X}, image 0x{actual_crc:08X}).",
+            manifest.crc32_checksum
+        ));
+    }
+
     let mut hasher = sha2::Sha256::new();
     sha2::Digest::update(&mut hasher, &rom_data);
-    manifest.sha256_checksum = format!("{:x}", sha2::Digest::finalize(hasher));
-    manifest.flash_length = rom_data.len() as u32;
+    let actual_sha = format!("{:x}", sha2::Digest::finalize(hasher));
+    if !actual_sha.eq_ignore_ascii_case(manifest.sha256_checksum.trim()) {
+        return bad_request(format!(
+            "Refusing to stage: sha256_checksum disagrees with the ROM (manifest '{}', image '{actual_sha}').",
+            manifest.sha256_checksum
+        ));
+    }
+
+    if usize::try_from(manifest.flash_length) != Ok(rom_data.len()) {
+        return bad_request(format!(
+            "Refusing to stage: flash_length disagrees with the ROM (manifest {}, image {} bytes).",
+            manifest.flash_length,
+            rom_data.len()
+        ));
+    }
 
     let flasher = state.flasher.clone();
     let iface = state.interface.clone();
@@ -373,14 +420,22 @@ async fn vault_stage(
         .unwrap_or("firmware.bin")
         .to_string();
 
-    let target_hw = sigs
-        .bosch_hw_id
-        .clone()
-        .unwrap_or_else(|| "0281013352".into());
-    let target_sw = sigs
-        .bosch_sw_id
-        .clone()
-        .unwrap_or_else(|| "1037386738".into());
+    // The manifest's target identity must come out of the image itself. A
+    // stand-in hardware number would let pre-flight compare the connected ECU
+    // against a number nobody read, so an unrecognised binary is refused.
+    let Some(target_hw) = sigs.bosch_hw_id.clone() else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Refusing to stage: no Bosch hardware number found in the image; identity cannot be verified",
+            })),
+        )
+            .into_response();
+    };
+    // The software number is informational (pre-flight gates on the hardware
+    // id), so an image without one is still stageable and reports it as unknown.
+    let target_sw = sigs.bosch_sw_id.clone().unwrap_or_else(|| "UNKNOWN".into());
 
     let mut hasher = sha2::Sha256::new();
     hasher.update(&rom_data);
@@ -416,6 +471,14 @@ async fn vault_stage(
             "message": "Firmware staged from local vault. Safe detached flashing sequence initiated.",
             "manifest": manifest,
             "signatures": sigs,
+            // Nothing in a raw image states where it is flashed or in what
+            // block size, so these two are assumptions until a sidecar
+            // manifest exists (Phase 1). Surface them rather than hide them.
+            "assumed": {
+                "flash_start_address": 0x0004_0000u32,
+                "block_size": 4096u32,
+                "note": "flash_start_address and block_size are defaults, not read from the image; verify them against the ECU before flashing.",
+            },
         })),
     )
         .into_response()

@@ -462,7 +462,32 @@ curl -s -X POST http://localhost:8080/api/v1/vault/stage \
   -d '{"file_path": "W211_OM646_Stage1.bin", "measured_voltage": 13.4}' | jq .
 # file_path is resolved inside the vault root, so it is given relative to it
 # (an absolute path is accepted only while it still resolves inside the root).
+#
+# The manifest's expected_hw_id is read out of the image's own bytes. A binary
+# with no Bosch hardware number in it is refused with 400 ("no Bosch hardware
+# number found in the image") — it is never given a stand-in id. The 200 body
+# carries an `assumed` block: flash_start_address (0x00040000) and block_size
+# (4096) are defaults, not read from the image, until the Phase 1 sidecar
+# manifest exists; check them against the ECU before flashing.
 ```
+
+### F2. Staging an uploaded ROM (`POST /api/v1/flash/stage`)
+```bash
+ROM_B64=$(base64 -w0 /path/to/edc16_stage1.bin)
+curl -s -X POST http://localhost:8080/api/v1/flash/stage \
+  -H "Content-Type: application/json" \
+  -d "{\"manifest\": $(cat flash_pkg/edc16_stage1.json), \
+       \"rom_base64\": \"$ROM_B64\", \"measured_voltage\": 13.4}" | jq .
+```
+- `rom_base64` is **required**. A missing field or input that is not valid
+  base64 is `400`; the server never substitutes or invents firmware bytes.
+- The manifest is **verified against the ROM, never rewritten from it**:
+  `crc32_checksum`, `sha256_checksum` (hex, case-insensitive) and
+  `flash_length` must all match the decoded bytes or the request is `400` with
+  a message naming the field that disagrees. Pre-flight re-verifies afterwards.
+- A Caesar flash container (`.cff`/`.smr-f`) is `400`, checked right after the
+  decode and before the checksum comparison.
+- Voltage resolution is identical to `/api/v1/vault/stage`.
 
 ---
 

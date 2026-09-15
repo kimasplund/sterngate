@@ -563,6 +563,17 @@ mod tests {
         .await
         .unwrap();
         assert!(flash_full.get("success").unwrap().as_bool().unwrap());
+        // The executor drives the built-in virtual ECU, so the result must say
+        // so; an agent must never read this as "a vehicle was flashed".
+        assert!(flash_full["simulated"].as_bool().unwrap());
+        assert!(
+            flash_full["message"]
+                .as_str()
+                .unwrap()
+                .contains("virtual ECU"),
+            "{}",
+            flash_full["message"]
+        );
 
         // 10. sterngate_export_report
         let rep_res = tools::handle_tool_call("sterngate_export_report", &json!({"lang": "en"}))

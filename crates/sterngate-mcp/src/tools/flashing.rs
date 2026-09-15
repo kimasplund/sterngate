@@ -185,7 +185,11 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
                             "total_bytes": prog.total_bytes,
                             "percentage": prog.percentage,
                             "log": prog.log,
-                            "message": "Detached flash execution completed successfully under active S3 TesterPresent session."
+                            // This executor always drives the in-process virtual
+                            // ECU, never a connected vehicle; say so, or the
+                            // caller reads a simulation as a real flash.
+                            "simulated": true,
+                            "message": "Flash sequence completed on the built-in virtual ECU (simulation, no vehicle was written) under an active S3 TesterPresent session."
                         }))
                     }
                     Err(e) => Err(format!("Flashing routine execution failed: {}", e)),

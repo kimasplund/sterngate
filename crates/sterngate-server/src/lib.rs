@@ -1031,8 +1031,64 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
+    /// A real ROM plus the manifest that honestly describes it. `/api/v1/flash/stage`
+    /// verifies the manifest against the bytes and never rewrites it, so every
+    /// staging test has to compute the checksums the way an operator would.
+    fn honest_stage_payload(rom: &[u8]) -> serde_json::Value {
+        use base64::Engine as _;
+        let mut hasher = sha2::Sha256::new();
+        sha2::Digest::update(&mut hasher, rom);
+        json!({
+            "manifest": {
+                "target_module": "EDC16",
+                "expected_hw_id": "0281012224",
+                "expected_sw_id": "1037372332",
+                "sha256_checksum": format!("{:x}", sha2::Digest::finalize(hasher)),
+                "crc32_checksum": crc32fast::hash(rom),
+                "flash_start_address": 262144,
+                "flash_length": rom.len(),
+                "block_size": 4096
+            },
+            "rom_base64": base64::engine::general_purpose::STANDARD.encode(rom)
+        })
+    }
+
+    async fn post_stage(state: Arc<AppState>, payload: &serde_json::Value) -> (StatusCode, String) {
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/flash/stage")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        let status = resp.status();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        (
+            status,
+            v["message"].as_str().unwrap_or_default().to_string(),
+        )
+    }
+
+    async fn stage_state() -> Arc<AppState> {
+        let mut sim = Box::new(VirtualCanInterface::new());
+        let _ = sim.open().await;
+        let profile = VehicleProfile::load_from_file(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../profiles/mercedes/w211_om646_edc16.json"),
+        )
+        .unwrap();
+        Arc::new(AppState::new(sim, profile, Arc::new(FlashingWorker::new())))
+    }
+
+    /// A binary whose own bytes do not name a Bosch hardware number cannot be
+    /// staged: the manifest's `expected_hw_id` is what pre-flight compares the
+    /// connected ECU against, so inventing one would flash an unidentified
+    /// image into whatever ECU happens to answer.
     #[tokio::test]
-    async fn test_flash_stage_refuses_without_measured_voltage() {
+    async fn test_vault_stage_refuses_image_without_hardware_number() {
         let mut sim = Box::new(VirtualCanInterface::new());
         let _ = sim.open().await;
         let profile = VehicleProfile::load_from_file(
@@ -1041,44 +1097,120 @@ mod tests {
         )
         .unwrap();
         let flasher = Arc::new(FlashingWorker::new());
-        let state = Arc::new(AppState::new(sim, profile, flasher));
+        let temp_dir =
+            std::env::temp_dir().join(format!("sterngate_vault_anon_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        // No "0281..." marker anywhere in the image.
+        std::fs::write(temp_dir.join("unknown.bin"), vec![0xEAu8; 4096]).unwrap();
+        let state =
+            Arc::new(AppState::new(sim, profile, flasher).with_vault_root(Some(temp_dir.clone())));
 
-        let payload = json!({
-            "manifest": {
-                "target_module": "EDC16",
-                "expected_hw_id": "0281012224",
-                "expected_sw_id": "1037372332",
-                "sha256_checksum": "",
-                "crc32_checksum": 0,
-                "flash_start_address": 262144,
-                "flash_length": 4096,
-                "block_size": 4096
-            },
-            "rom_base64": "dummy_rom_data"
-        });
+        let payload = json!({ "file_path": "unknown.bin", "measured_voltage": 13.4 });
         let req = Request::builder()
             .method("POST")
-            .uri("/api/v1/flash/stage")
+            .uri("/api/v1/vault/stage")
             .header("Content-Type", "application/json")
             .body(Body::from(serde_json::to_vec(&payload).unwrap()))
             .unwrap();
         let resp = create_router(state.clone()).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            v["error"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("no Bosch hardware number"),
+            "{v}"
+        );
+        assert!(
+            !state.flasher.is_locked().await,
+            "no flash may have started"
+        );
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_flash_stage_refuses_without_measured_voltage() {
+        let state = stage_state().await;
+        let rom = vec![0x5Au8; 4096];
+        let payload = honest_stage_payload(&rom);
+
+        let (status, _) = post_stage(state.clone(), &payload).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
 
         // The virtual ECU cannot measure battery voltage, so a client-supplied
         // measured_voltage is accepted as the sole source, same as before.
         let mut payload_with_voltage = payload;
         payload_with_voltage["measured_voltage"] = json!(13.0);
-        let req = Request::builder()
-            .method("POST")
-            .uri("/api/v1/flash/stage")
-            .header("Content-Type", "application/json")
-            .body(Body::from(
-                serde_json::to_vec(&payload_with_voltage).unwrap(),
-            ))
-            .unwrap();
-        let resp = create_router(state).oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+        let (status, _) = post_stage(state, &payload_with_voltage).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    /// The route must never invent firmware bytes, and must never rewrite the
+    /// manifest from the bytes it was handed: doing either makes pre-flight
+    /// checks 2/3/5 compare the image against itself, so a fabricated image
+    /// carrying the ECU's real hardware id would erase and overwrite the ECU.
+    #[tokio::test]
+    async fn test_flash_stage_refuses_fabricated_or_mismatched_images() {
+        let rom = vec![0x5Au8; 4096];
+
+        // (a) rom_base64 missing entirely
+        let mut missing = honest_stage_payload(&rom);
+        missing["measured_voltage"] = json!(13.0);
+        missing.as_object_mut().unwrap().remove("rom_base64");
+        let (status, msg) = post_stage(stage_state().await, &missing).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(msg.contains("rom_base64"), "{msg}");
+
+        // (a2) the old "dummy_rom_data" sentinel is just undecodable input now
+        // (b) undecodable base64
+        for bad in ["dummy_rom_data", "!!!!not base64!!!!"] {
+            let mut undecodable = honest_stage_payload(&rom);
+            undecodable["measured_voltage"] = json!(13.0);
+            undecodable["rom_base64"] = json!(bad);
+            let (status, msg) = post_stage(stage_state().await, &undecodable).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{bad}");
+            assert!(msg.contains("base64"), "{bad}: {msg}");
+        }
+
+        // (c) each manifest field that disagrees with the ROM is named
+        for (field, value, needle) in [
+            ("sha256_checksum", json!("00".repeat(32)), "sha256_checksum"),
+            ("crc32_checksum", json!(1u32), "crc32_checksum"),
+            ("flash_length", json!(4095u32), "flash_length"),
+        ] {
+            let mut wrong = honest_stage_payload(&rom);
+            wrong["measured_voltage"] = json!(13.0);
+            wrong["manifest"][field] = value;
+            let (status, msg) = post_stage(stage_state().await, &wrong).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{field}");
+            assert!(msg.contains(needle), "{field}: {msg}");
+        }
+
+        // (d) an honest manifest for a real ROM stages and spawns the flash
+        let state = stage_state().await;
+        let mut good = honest_stage_payload(&rom);
+        good["measured_voltage"] = json!(13.0);
+        let (status, _) = post_stage(state.clone(), &good).await;
+        assert_eq!(status, StatusCode::OK);
+        // The spawned worker leaves Idle as soon as it starts (and may reach a
+        // terminal state quickly), so wait for "not Idle" rather than the lock.
+        let started = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            let mut rx = state.flasher.subscribe();
+            loop {
+                if state.flasher.current_state().await != sterngate_core::FlashState::Idle {
+                    return true;
+                }
+                if rx.changed().await.is_err() {
+                    return false;
+                }
+            }
+        })
+        .await;
+        assert_eq!(started, Ok(true), "a verified ROM must start the flash");
     }
 
     #[tokio::test]
@@ -1522,11 +1654,24 @@ mod tests {
         let iface_arc = state.interface.clone();
         let handle =
             tokio::spawn(async move { f.execute_flash(manifest, rom, 13.5, iface_arc).await });
-        // Wait until the worker reports a locked state.
+        // Wait until the worker reports a locked state. Bounded: if the flash
+        // finishes (or fails) before we observe the lock there is no further
+        // progress update, and an unbounded wait would hang CI forever.
         let mut rx = flasher.subscribe();
-        while !flasher.is_locked().await {
-            rx.changed().await.unwrap();
-        }
+        let locked = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while !flasher.is_locked().await {
+                if rx.changed().await.is_err() {
+                    return false;
+                }
+            }
+            true
+        })
+        .await;
+        assert_eq!(
+            locked,
+            Ok(true),
+            "flash worker never reported a locked state"
+        );
 
         for (method, uri, body) in [
             ("GET", "/api/v1/dtc", None),

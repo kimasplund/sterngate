@@ -266,16 +266,15 @@ Safely stage and flash ECU calibration binaries from the terminal with strict ha
 #    refused at the pre-flight step below (and by the firmware vault, which
 #    marks containers `stageable: false`). Extract a raw segment first with
 #    `sterngate corpus extract` (Phase 1).
-sterngate flash stage --module EDC16 --file calibration.bin \
-  --hw-id 0281012234 --sw-id 1037372120 --start-address 0x00040000
+sterngate flash stage --manifest flash_pkg/edc16_stage1.json --rom calibration.bin
 
 # 2. Pre-flight verification (battery voltage >= 12.5V, SHA-256, Bosch CRC32,
 #    exact F192 hardware identity, flash_length, non-empty ROM, block_size > 0,
 #    not a Caesar container)
-sterngate flash preflight --manifest /var/run/sterngate/flash_manifest.json
+sterngate flash preflight --manifest flash_pkg/edc16_stage1.json --rom calibration.bin
 
-# 3. Start detached flash sequence (with interactive safety confirmation or --yes)
-sterngate flash start --manifest /var/run/sterngate/flash_manifest.json --yes
+# 3. Start detached flash sequence (interactive safety confirmation, or --force-yes)
+sterngate flash start --manifest flash_pkg/edc16_stage1.json --rom calibration.bin --force-yes
 
 # 4. Monitor live progress of detached flashing worker
 sterngate flash status
