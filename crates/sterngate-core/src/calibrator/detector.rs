@@ -475,33 +475,75 @@ impl BoschMapDetector {
         })
     }
 
-    /// Locate DTC fault table and return address offset for a given P-code
+    /// Locate a raw 2-byte P-code pattern in the calibration region.
+    ///
+    /// This is an inspection heuristic only: it knows nothing about the Bosch
+    /// DTC table structure, so a hit is not evidence of a fault-path entry.
+    /// Returns `None` when the ROM is shorter than the search region, when the
+    /// mask byte would lie past the end of the ROM, or when the pattern occurs
+    /// more than once (ambiguous). Never panics.
     pub fn find_dtc_offset(rom: &[u8], p_code: &str) -> Option<(u32, u8)> {
-        let code_num = p_code
-            .trim()
-            .trim_start_matches('P')
-            .trim_start_matches('p');
+        let code_num = p_code.trim().trim_start_matches(['P', 'p']);
         let hex_val = u16::from_str_radix(code_num, 16).ok()?;
-
         let be_bytes = hex_val.to_be_bytes();
         let le_bytes = hex_val.to_le_bytes();
 
-        let len = rom.len();
-        let cal_start = if len >= 0x200000 { 0x180000 } else { 0x080000 };
+        let cal_start = if rom.len() >= 0x20_0000 {
+            0x18_0000
+        } else {
+            0x08_0000
+        };
+        let region = rom.get(cal_start..)?;
 
-        for (pos, window) in rom[cal_start..].windows(2).enumerate() {
+        let mut hit: Option<usize> = None;
+        for (pos, window) in region.windows(2).enumerate() {
             if window == be_bytes || window == le_bytes {
-                let abs_offset = (cal_start + pos) as u32;
-                // Read corresponding mask byte nearby (typically 0x01 or 0x03)
-                let mask = if (cal_start + pos + 2) < len {
-                    rom[cal_start + pos + 2]
-                } else {
-                    0x01
-                };
-                return Some((abs_offset, mask));
+                if hit.is_some() {
+                    return None; // ambiguous: the pattern is not unique
+                }
+                hit = Some(cal_start + pos);
             }
         }
+        let abs = hit?;
+        let mask = *rom.get(abs + 2)?;
+        Some((u32::try_from(abs).ok()?, mask))
+    }
+}
 
-        None
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn find_dtc_offset_never_panics_on_short_or_empty_rom() {
+        assert!(BoschMapDetector::find_dtc_offset(&[], "P0401").is_none());
+        assert!(BoschMapDetector::find_dtc_offset(&vec![0xFF; 0x7FFFF], "P0401").is_none());
+        assert!(BoschMapDetector::find_dtc_offset(&vec![0xFF; 0x1F_FFFF], "P0401").is_none());
+    }
+
+    #[test]
+    fn find_dtc_offset_returns_none_when_mask_byte_past_eof() {
+        let mut rom = vec![0xFF; 0x80002];
+        rom[0x80000] = 0x04;
+        rom[0x80001] = 0x01;
+        assert!(BoschMapDetector::find_dtc_offset(&rom, "P0401").is_none());
+    }
+
+    #[test]
+    fn find_dtc_offset_returns_unique_hit_with_mask() {
+        let mut rom = vec![0xFF; 0x10_0000];
+        rom[0x90000..0x90003].copy_from_slice(&[0x04, 0x01, 0x03]);
+        assert_eq!(
+            BoschMapDetector::find_dtc_offset(&rom, "P0401"),
+            Some((0x90000, 0x03))
+        );
+    }
+
+    #[test]
+    fn find_dtc_offset_is_none_when_pattern_is_ambiguous() {
+        let mut rom = vec![0xFF; 0x10_0000];
+        rom[0x90000..0x90003].copy_from_slice(&[0x04, 0x01, 0x03]);
+        rom[0xA0000..0xA0003].copy_from_slice(&[0x04, 0x01, 0x03]);
+        assert!(BoschMapDetector::find_dtc_offset(&rom, "P0401").is_none());
     }
 }
