@@ -1,4 +1,5 @@
 use super::detector::BoschMapDetector;
+use super::map::MapProvenance;
 use crate::error::{Result, SterngateError};
 use crate::flash::FirmwareSignatures;
 use crate::modpack::{
@@ -40,6 +41,7 @@ impl StageGenerator {
                         data: map.raw_bytes.clone(),
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 1: +18% Peak Torque (430 Nm ceiling)".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -47,6 +49,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM Torque Limiter".into(),
+                        provenance: map.provenance,
                     });
                 }
                 "Driver's Wish (Fahrpedal)" => {
@@ -58,6 +61,7 @@ impl StageGenerator {
                         data: map.raw_bytes.clone(),
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 1: +12% Sharpened Throttle Linearity".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -65,6 +69,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM Driver's Wish".into(),
+                        provenance: map.provenance,
                     });
                 }
                 "Turbo Boost Target (Ladedruck-Soll)" => {
@@ -77,6 +82,7 @@ impl StageGenerator {
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 1: +120 mbar Turbo Boost Target (2400 mbar peak)"
                             .into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -84,6 +90,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM Boost Target".into(),
+                        provenance: map.provenance,
                     });
                 }
                 "Single Value Boost Limiter (SVBL)" => {
@@ -95,6 +102,7 @@ impl StageGenerator {
                         data: map.raw_bytes.clone(),
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 1: SVBL raised to 2500 mbar".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -102,6 +110,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM SVBL".into(),
+                        provenance: map.provenance,
                     });
                 }
                 "Rail Pressure Target (Raildruck)" => {
@@ -113,6 +122,7 @@ impl StageGenerator {
                         data: map.raw_bytes.clone(),
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 1: +50 bar Common Rail Injection Pressure (1650 bar peak)".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -120,6 +130,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM Rail Pressure".into(),
+                        provenance: map.provenance,
                     });
                 }
                 _ => {}
@@ -189,6 +200,7 @@ impl StageGenerator {
                         data: map.raw_bytes.clone(),
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 2: +25% Peak Torque (460 Nm ceiling)".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -196,6 +208,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM Torque Limiter".into(),
+                        provenance: map.provenance,
                     });
                 }
                 "Turbo Boost Target (Ladedruck-Soll)" => {
@@ -207,6 +220,7 @@ impl StageGenerator {
                         data: map.raw_bytes.clone(),
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 2: +200 mbar Boost Target (2480 mbar peak)".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -214,6 +228,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM Boost Target".into(),
+                        provenance: map.provenance,
                     });
                 }
                 "Single Value Boost Limiter (SVBL)" => {
@@ -224,6 +239,7 @@ impl StageGenerator {
                         data: map.raw_bytes.clone(),
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 2: SVBL raised to 2550 mbar".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -231,6 +247,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM SVBL".into(),
+                        provenance: map.provenance,
                     });
                 }
                 "EGR Hysteresis (Abgasrückführung)" => {
@@ -242,6 +259,7 @@ impl StageGenerator {
                         data: zeroed,
                         expected_original_data: Some(original_bytes.clone()),
                         description: "Stage 2: EGR Valve Deactivation (Hysteresis zeroed)".into(),
+                        provenance: map.provenance,
                     });
                     rollback_actions.push(ModAction::PatchFlashMap {
                         map_name: map.name.clone(),
@@ -249,6 +267,7 @@ impl StageGenerator {
                         data: original_bytes,
                         expected_original_data: None,
                         description: "Stock: Restore OEM EGR Hysteresis".into(),
+                        provenance: map.provenance,
                     });
                 }
                 _ => {}
@@ -263,6 +282,7 @@ impl StageGenerator {
                 original_mask: mask,
                 disable_mask: 0x00,
                 description: "DTC Off: P0401 EGR Flow Insufficient".into(),
+                provenance: MapProvenance::Synthetic,
             });
             rollback_actions.push(ModAction::DtcMask {
                 p_code: "P0401".into(),
@@ -270,6 +290,7 @@ impl StageGenerator {
                 original_mask: 0x00,
                 disable_mask: mask,
                 description: "Restore P0401 DTC enable mask".into(),
+                provenance: MapProvenance::Synthetic,
             });
         }
 
@@ -280,6 +301,7 @@ impl StageGenerator {
                 original_mask: mask,
                 disable_mask: 0x00,
                 description: "DTC Off: P2002 DPF Efficiency Below Threshold".into(),
+                provenance: MapProvenance::Synthetic,
             });
             rollback_actions.push(ModAction::DtcMask {
                 p_code: "P2002".into(),
@@ -287,6 +309,7 @@ impl StageGenerator {
                 original_mask: 0x00,
                 disable_mask: mask,
                 description: "Restore P2002 DTC enable mask".into(),
+                provenance: MapProvenance::Synthetic,
             });
         }
 
@@ -346,6 +369,7 @@ impl StageGenerator {
                     original_mask: mask,
                     disable_mask: 0x00,
                     description: format!("DTC Off: Disable fault path {}", clean),
+                    provenance: MapProvenance::Synthetic,
                 });
                 rollback_actions.push(ModAction::DtcMask {
                     p_code: clean.clone(),
@@ -353,6 +377,7 @@ impl StageGenerator {
                     original_mask: 0x00,
                     disable_mask: mask,
                     description: format!("Restore OEM fault mask for {}", clean),
+                    provenance: MapProvenance::Synthetic,
                 });
             } else {
                 // If not directly found in raw binary, generate standard symbolic offset
@@ -362,6 +387,7 @@ impl StageGenerator {
                     original_mask: 0x01,
                     disable_mask: 0x00,
                     description: format!("DTC Off: Suppress {}", clean),
+                    provenance: MapProvenance::Synthetic,
                 });
             }
         }

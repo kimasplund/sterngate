@@ -88,6 +88,7 @@ pub async fn execute(action: ModCommands, cli: &Cli) -> Result<()> {
                         data,
                         expected_original_data,
                         description,
+                        ..
                     } => {
                         println!(
                             "    {}. Flash Map Patch '{}' @ 0x{:06X}: {} ({} bytes)",
@@ -110,6 +111,7 @@ pub async fn execute(action: ModCommands, cli: &Cli) -> Result<()> {
                         original_mask,
                         disable_mask,
                         description,
+                        ..
                     } => {
                         println!(
                             "    {}. DTC Mask '{}' @ 0x{:06X}: {} (0x{:02X} -> 0x{:02X})",

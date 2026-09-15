@@ -520,7 +520,8 @@ mod tests {
     #[tokio::test]
     async fn test_mod_runner_flash_map_and_dtc_mask() {
         use sterngate_core::{
-            ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter, SterngateMod,
+            MapProvenance, ModAction, ModCategory, ModMetadata, ModRiskLevel, ModTargetFilter,
+            SterngateMod,
         };
 
         let mut iface = VirtualCanInterface::new();
@@ -556,6 +557,7 @@ mod tests {
                 data: vec![0x0B, 0xB8, 0x10, 0x68],
                 expected_original_data: None,
                 description: "+18% Torque Limiter".into(),
+                provenance: MapProvenance::Synthetic,
             },
             ModAction::DtcMask {
                 p_code: "P0401".into(),
@@ -563,6 +565,7 @@ mod tests {
                 original_mask: 0xFF,
                 disable_mask: 0x00,
                 description: "DTC Off: P0401 EGR Flow".into(),
+                provenance: MapProvenance::Synthetic,
             },
         ];
 

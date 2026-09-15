@@ -16,7 +16,7 @@ pub mod service;
 
 pub use calibrator::{
     BoschChecksumSolver, BoschMapDetector, ChecksumBlock, ChecksumReport, EcuMap, MapAxis,
-    MapCategory, StageGenerator,
+    MapCategory, MapProvenance, StageGenerator,
 };
 
 pub use cascades::{
@@ -736,6 +736,7 @@ mod tests {
         let mut map = EcuMap {
             name: "Test Torque Limiter".into(),
             category: MapCategory::Torque,
+            provenance: MapProvenance::Scanned,
             address: 0x1C1000,
             rows: 1,
             cols: 3,

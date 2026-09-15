@@ -1,6 +1,7 @@
 pub mod armor;
 pub mod fec;
 
+use crate::calibrator::map::MapProvenance;
 use crate::error::{Result, SterngateError};
 use fec::{FecStatus, ReedSolomonCodec, DEFAULT_DATA_BLOCK_LEN, DEFAULT_PARITY_LEN};
 use serde::{Deserialize, Serialize};
@@ -163,6 +164,10 @@ pub enum ModAction {
         /// Optional expected original bytes at offset (precondition check)
         expected_original_data: Option<Vec<u8>>,
         description: String,
+        /// Origin of `address_offset`/`data`. Absent in legacy packages, which
+        /// deserialize to `Unverified` and are refused by the runner.
+        #[serde(default, skip_serializing_if = "MapProvenance::is_unverified")]
+        provenance: MapProvenance,
     },
     /// Suppress or disable a specific Diagnostic Trouble Code in ECU flash memory
     DtcMask {
@@ -171,6 +176,9 @@ pub enum ModAction {
         original_mask: u8,
         disable_mask: u8,
         description: String,
+        /// Origin of `address_offset`. Same rules as `PatchFlashMap`.
+        #[serde(default, skip_serializing_if = "MapProvenance::is_unverified")]
+        provenance: MapProvenance,
     },
 }
 
@@ -416,5 +424,91 @@ impl SterngateMod {
 
         report.matched_vehicle = matched;
         report
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::calibrator::map::MapProvenance;
+
+    pub(crate) fn sample_metadata() -> ModMetadata {
+        ModMetadata {
+            mod_id: "w211-test".into(),
+            name: "W211 Test".into(),
+            version: "1.0.0".into(),
+            author: "TunerKim".into(),
+            description: "test package".into(),
+            category: ModCategory::Performance,
+            risk_level: ModRiskLevel::Moderate,
+            instructions: None,
+            created_at: "2026-09-15T12:00:00Z".into(),
+        }
+    }
+
+    pub(crate) fn sample_target(min_battery_voltage: f64) -> ModTargetFilter {
+        ModTargetFilter {
+            chassis: vec!["W211".into()],
+            ecu_name: "EDC16".into(),
+            tx_id: 0x7E0,
+            rx_id: 0x7E8,
+            compatible_hw_ids: vec![],
+            compatible_sw_ids: vec![],
+            min_battery_voltage,
+            requires_engine_off: true,
+        }
+    }
+
+    pub(crate) fn flash_patch(provenance: MapProvenance) -> ModAction {
+        ModAction::PatchFlashMap {
+            map_name: "Torque Limiter".into(),
+            address_offset: 0x1C1000,
+            data: vec![0x0B, 0xB8, 0x10],
+            expected_original_data: Some(vec![0x00, 0x00, 0x00]),
+            description: "test patch".into(),
+            provenance,
+        }
+    }
+
+    #[test]
+    fn provenance_defaults_to_unverified_and_keeps_legacy_integrity() {
+        // A package whose actions carry the default provenance serializes
+        // exactly like a package written before the field existed.
+        let m = SterngateMod::create(
+            sample_metadata(),
+            sample_target(12.5),
+            vec![flash_patch(MapProvenance::Unverified)],
+            vec![],
+        )
+        .unwrap();
+        let json = m.to_json().unwrap();
+        assert!(!json.contains("provenance"));
+
+        let mut parsed = SterngateMod::from_json(&json).unwrap();
+        match &parsed.actions[0] {
+            ModAction::PatchFlashMap { provenance, .. } => {
+                assert_eq!(*provenance, MapProvenance::Unverified);
+            }
+            other => panic!("unexpected action {other:?}"),
+        }
+        assert!(parsed.verify_and_repair().unwrap().is_valid);
+
+        // A labelled package round-trips its label.
+        let m2 = SterngateMod::create(
+            sample_metadata(),
+            sample_target(12.5),
+            vec![flash_patch(MapProvenance::Synthetic)],
+            vec![],
+        )
+        .unwrap();
+        let json2 = m2.to_json().unwrap();
+        assert!(json2.contains("\"provenance\": \"synthetic\""));
+        assert!(
+            SterngateMod::from_json(&json2)
+                .unwrap()
+                .verify_and_repair()
+                .unwrap()
+                .is_valid
+        );
     }
 }

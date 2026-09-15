@@ -1,4 +1,4 @@
-use super::map::{EcuMap, MapAxis, MapCategory};
+use super::map::{EcuMap, MapAxis, MapCategory, MapProvenance};
 
 /// Heuristic pattern matcher for Bosch EDC16 / EDC17 calibration ROMs
 pub struct BoschMapDetector;
@@ -52,6 +52,7 @@ impl BoschMapDetector {
                     maps.push(EcuMap {
                         name: "Single Value Boost Limiter (SVBL)".into(),
                         category: MapCategory::Boost,
+                        provenance: MapProvenance::Scanned,
                         address: i as u32,
                         rows: 1,
                         cols: 1,
@@ -77,6 +78,7 @@ impl BoschMapDetector {
             maps.push(EcuMap {
                 name: "Single Value Boost Limiter (SVBL)".into(),
                 category: MapCategory::Boost,
+                provenance: MapProvenance::Fallback,
                 address: (cal_start + 0x200) as u32,
                 rows: 1,
                 cols: 1,
@@ -173,6 +175,7 @@ impl BoschMapDetector {
                     return Some(EcuMap {
                         name: "Torque Limiter".into(),
                         category: MapCategory::Torque,
+                        provenance: MapProvenance::Scanned,
                         address: (i + 32) as u32,
                         rows: 1,
                         cols: 16,
@@ -213,6 +216,7 @@ impl BoschMapDetector {
         Some(EcuMap {
             name: "Torque Limiter".into(),
             category: MapCategory::Torque,
+            provenance: MapProvenance::Fallback,
             address: (start + 0x400) as u32,
             rows: 1,
             cols: 16,
@@ -259,6 +263,7 @@ impl BoschMapDetector {
         Some(EcuMap {
             name: "Driver's Wish (Fahrpedal)".into(),
             category: MapCategory::Torque,
+            provenance: MapProvenance::Synthetic,
             address: (start + 0x800) as u32,
             rows: tps.len(),
             cols: rpm.len(),
@@ -317,6 +322,7 @@ impl BoschMapDetector {
         Some(EcuMap {
             name: "Turbo Boost Target (Ladedruck-Soll)".into(),
             category: MapCategory::Boost,
+            provenance: MapProvenance::Synthetic,
             address: (start + 0x1200) as u32,
             rows: 16,
             cols: 16,
@@ -369,6 +375,7 @@ impl BoschMapDetector {
         Some(EcuMap {
             name: "Smoke Limiter (Lambda)".into(),
             category: MapCategory::Fueling,
+            provenance: MapProvenance::Synthetic,
             address: (start + 0x1800) as u32,
             rows: 16,
             cols: 16,
@@ -427,6 +434,7 @@ impl BoschMapDetector {
         Some(EcuMap {
             name: "Rail Pressure Target (Raildruck)".into(),
             category: MapCategory::Fueling,
+            provenance: MapProvenance::Synthetic,
             address: (start + 0x2200) as u32,
             rows: 16,
             cols: 16,
@@ -460,6 +468,7 @@ impl BoschMapDetector {
         Some(EcuMap {
             name: "EGR Hysteresis (Abgasrückführung)".into(),
             category: MapCategory::Emissions,
+            provenance: MapProvenance::Synthetic,
             address: (start + 0x2800) as u32,
             rows: 1,
             cols: 25,
@@ -545,5 +554,47 @@ mod tests {
         rom[0x90000..0x90003].copy_from_slice(&[0x04, 0x01, 0x03]);
         rom[0xA0000..0xA0003].copy_from_slice(&[0x04, 0x01, 0x03]);
         assert!(BoschMapDetector::find_dtc_offset(&rom, "P0401").is_none());
+    }
+
+    fn test_rom_with_svbl() -> Vec<u8> {
+        let mut rom = vec![0xFF; 0x20_0000];
+        let svbl = 2350u16.to_be_bytes();
+        rom[0x1C2000] = svbl[0];
+        rom[0x1C2001] = svbl[1];
+        rom[0x1C1FFE] = 0x00;
+        rom[0x1C1FFF] = 0x00;
+        rom[0x1C2002] = 0x00;
+        rom[0x1C2003] = 0x00;
+        rom
+    }
+
+    #[test]
+    fn scan_rom_labels_provenance_honestly() {
+        let rom = test_rom_with_svbl();
+        let maps = BoschMapDetector::scan_rom(&rom);
+        let svbl = maps.iter().find(|m| m.name.contains("SVBL")).unwrap();
+        assert_eq!(svbl.provenance, MapProvenance::Scanned);
+        assert!(svbl.is_rom_backed(&rom));
+
+        let torque = maps.iter().find(|m| m.name == "Torque Limiter").unwrap();
+        assert_eq!(torque.provenance, MapProvenance::Fallback);
+
+        for m in maps
+            .iter()
+            .filter(|m| !m.name.contains("SVBL") && m.name != "Torque Limiter")
+        {
+            assert_eq!(m.provenance, MapProvenance::Synthetic, "{}", m.name);
+            assert!(!m.is_rom_backed(&rom), "{}", m.name);
+        }
+        assert_eq!(maps.iter().filter(|m| m.provenance.is_scanned()).count(), 1);
+    }
+
+    #[test]
+    fn small_rom_yields_no_scanned_maps() {
+        let rom = vec![0xFF; 0x80000];
+        let maps = BoschMapDetector::scan_rom(&rom);
+        assert!(!maps.is_empty());
+        assert!(maps.iter().all(|m| !m.provenance.is_scanned()));
+        assert!(maps.iter().all(|m| !m.is_rom_backed(&rom)));
     }
 }
