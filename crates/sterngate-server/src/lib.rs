@@ -1159,8 +1159,7 @@ mod tests {
         let apply_payload = json!({
             "content": armored_text,
             "vin": "WDB2112061A000001",
-            "battery_voltage": 12.8,
-            "force": false
+            "battery_voltage": 12.8
         });
         let req = Request::builder()
             .method("POST")
@@ -1184,6 +1183,33 @@ mod tests {
             .unwrap();
         let resp = create_router(state).oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_mods_apply_rejects_force_field() {
+        let mut iface = Box::new(VirtualCanInterface::new());
+        let _ = iface.open().await;
+        let profile =
+            VehicleProfile::load_from_file("../../profiles/mercedes/w211_om646_edc16.json")
+                .unwrap();
+        let flasher = Arc::new(FlashingWorker::new());
+        let state = Arc::new(AppState::new(iface, profile, flasher));
+
+        let payload = json!({
+            "content": "{}",
+            "vin": "WDB2112061A000001",
+            "battery_voltage": 12.8,
+            "force": true
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/v1/mods/apply")
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+            .unwrap();
+        let resp = create_router(state).oneshot(req).await.unwrap();
+        // axum maps serde data errors (unknown field) to 422.
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[tokio::test]

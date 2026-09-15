@@ -65,6 +65,13 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
             }))
         }
         "sterngate_apply_community_mod" => {
+            if arguments.get("force").is_some() {
+                return Err(
+                    "'force' is not accepted over MCP: fingerprint bypass is CLI-only (--force) and never applies to flash writes"
+                        .into(),
+                );
+            }
+
             let mod_content = arguments
                 .get("mod_content")
                 .and_then(|v| v.as_str())

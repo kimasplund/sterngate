@@ -83,6 +83,7 @@ async fn mods_inspect(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ModApplyPayload {
     content: String,
     #[serde(default)]

@@ -543,7 +543,7 @@ pub fn get_tools_list() -> Value {
         },
         {
             "name": "sterngate_apply_community_mod",
-            "description": "Apply a verified community mod or tuning parameter package to the connected vehicle. Automatically checks safety gates (voltage, chassis, HW ID whitelist), creates an atomic Git garage snapshot, applies DID writes with bitmask preservation, and verifies the write over CAN.",
+            "description": "Apply a verified community mod or tuning parameter package to the connected vehicle. Enforces map provenance, integrity, chassis, HW ID whitelist, the 12.5 V floor for flash writes and live byte preconditions; creates an atomic Git garage snapshot; applies DID writes with bitmask preservation. No bypass flag exists over MCP.",
             "inputSchema": {
                 "type": "object",
                 "required": ["mod_content"],
@@ -559,11 +559,6 @@ pub fn get_tools_list() -> Value {
                     "battery_voltage": {
                         "type": "number",
                         "description": "Live battery voltage reading (defaults to 13.0V if not provided)"
-                    },
-                    "force": {
-                        "type": "boolean",
-                        "description": "Bypass strict safety preconditions (DANGEROUS: use only on bench/test bench)",
-                        "default": false
                     }
                 }
             }

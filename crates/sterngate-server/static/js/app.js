@@ -2076,8 +2076,7 @@ async function applyCommunityMod() {
       body: JSON.stringify({
         content: content,
         vin: 'WDB2112061A000001',
-        battery_voltage: 12.8,
-        force: false
+        battery_voltage: 12.8
       })
     });
 
@@ -2498,8 +2497,7 @@ async function applyGeneratedMod() {
             // than assuming a voltage that clears the mod's own interlock.
             battery_voltage: (lastTelemetrySnap && lastTelemetrySnap.battery_voltage !== null && lastTelemetrySnap.battery_voltage !== undefined)
               ? lastTelemetrySnap.battery_voltage
-              : null,
-            force: false
+              : null
           })
         });
         const data = await res.json();

@@ -696,8 +696,7 @@ mod tests {
         let apply_args = json!({
             "mod_content": armor,
             "vin": "WDB2110061A123456",
-            "battery_voltage": 12.8,
-            "force": false
+            "battery_voltage": 12.8
         });
 
         let apply_res = tools::handle_tool_call("sterngate_apply_community_mod", &apply_args)
@@ -707,6 +706,34 @@ mod tests {
         assert!(apply_res["success"].as_bool().unwrap());
         assert_eq!(apply_res["steps_completed"].as_u64().unwrap(), 1);
         assert!(apply_res["git_commit_sha"].as_str().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_mcp_apply_mod_rejects_force_argument() {
+        let res = tools::handle_tool_call(
+            "sterngate_apply_community_mod",
+            &json!({
+                "mod_content": "{}",
+                "vin": "WDB2112061A123456",
+                "battery_voltage": 12.8,
+                "force": true
+            }),
+        )
+        .await;
+        let err = res.unwrap_err();
+        assert!(err.contains("force"), "{err}");
+    }
+
+    #[test]
+    fn test_mcp_apply_mod_spec_has_no_force_property() {
+        let tools = tools::get_tools_list();
+        let apply = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "sterngate_apply_community_mod")
+            .unwrap();
+        assert!(apply["inputSchema"]["properties"].get("force").is_none());
     }
 
     #[tokio::test]

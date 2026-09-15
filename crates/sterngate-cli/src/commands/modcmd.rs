@@ -195,7 +195,7 @@ pub async fn execute(action: ModCommands, cli: &Cli) -> Result<()> {
             println!("  Interface:      {}", cli.can_interface);
             println!("  Risk Level:     {}", modpack.metadata.risk_level.as_str());
             if force {
-                println!("  ⚠️  FORCED BYPASS OF PRECONDITIONS ENABLED");
+                println!("  ⚠️  FORCED BYPASS OF CHASSIS / HW-ID FINGERPRINT (voltage, map provenance and byte preconditions remain enforced)");
             }
 
             let battery_voltage = 13.2;

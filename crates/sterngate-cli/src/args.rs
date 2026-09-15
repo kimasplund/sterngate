@@ -602,7 +602,7 @@ pub enum ModCommands {
         /// VIN of target vehicle (optional, defaults to vehicle in garage or standard W211)
         #[arg(long)]
         vin: Option<String>,
-        /// Bypass strict vehicle targeting compatibility checks (DANGEROUS)
+        /// Relax the chassis and hardware-whitelist fingerprint checks only. Voltage, map provenance and byte preconditions stay enforced; refused for packages that write flash memory.
         #[arg(long)]
         force: bool,
     },
