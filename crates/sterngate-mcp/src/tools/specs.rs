@@ -105,15 +105,29 @@ pub fn get_tools_list() -> Value {
         },
         {
             "name": "sterngate_verify_flash_staging",
-            "description": "Evaluate an ECU firmware flashing package against strict automotive pre-flight safety gates (battery voltage >= 12.5V, SHA256 checksum, Bosch CRC32, HW/SW calibration match).",
+            "description": "Run the real ECU flashing pre-flight safety gates (battery voltage >= 12.5V, SHA256, Bosch CRC32, exact F192 supplier hardware identity, declared flash length) against the built-in virtual ECU and a 4096-byte simulated ROM. The supplied expected_hw_id is compared to the identity the ECU actually reports; checksums default to the simulated ROM's own when not supplied.",
             "inputSchema": {
                 "type": "object",
-                "required": ["target_module", "expected_hw_id", "sha256", "crc32"],
+                "required": ["target_module", "expected_hw_id"],
                 "properties": {
                     "target_module": { "type": "string" },
-                    "expected_hw_id": { "type": "string" },
-                    "sha256": { "type": "string" },
-                    "crc32": { "type": "integer" }
+                    "expected_hw_id": {
+                        "type": "string",
+                        "description": "Bosch system-supplier hardware number the package is built for (DID 0xF192), e.g. '0281012224'. Compared exactly: a sibling variant fails."
+                    },
+                    "expected_sw_id": {
+                        "type": "string",
+                        "description": "System-supplier software number the package expects (DID 0xF194)",
+                        "default": "1037372332"
+                    },
+                    "sha256": {
+                        "type": "string",
+                        "description": "SHA-256 of the firmware image. Defaults to the simulated ROM's own digest."
+                    },
+                    "crc32": {
+                        "type": "integer",
+                        "description": "Bosch CRC32 of the firmware image. Defaults to the simulated ROM's own checksum."
+                    }
                 }
             }
         },

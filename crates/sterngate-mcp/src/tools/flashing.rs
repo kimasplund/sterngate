@@ -4,22 +4,47 @@ use sterngate_core::{FirmwareVault, FlashPackageManifest};
 use sterngate_hal::{VehicleInterface, VirtualCanInterface};
 use sterngate_protocol::FlashingWorker;
 
-/// Manifest for the demonstration ROM these tools flash into the built-in
-/// virtual ECU. The identifiers are the ones that ECU reports for F192/F194, so
-/// the real hardware-identity gate in pre-flight resolves to a match.
-fn demo_manifest(target_module: &str, rom: &[u8]) -> FlashPackageManifest {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(rom);
+/// Identifiers the built-in virtual ECU reports for F192/F194, used when a
+/// caller does not name one of its own.
+const DEMO_HW_ID: &str = "0281012224";
+const DEMO_SW_ID: &str = "1037372332";
+
+/// Manifest for the simulated ROM these tools evaluate against the built-in
+/// virtual ECU.
+///
+/// The identifiers are the caller's, so the pre-flight identity gate compares
+/// the hardware the caller actually asked about. The checksums are the caller's
+/// when supplied and the simulated ROM's own otherwise, so a caller who only
+/// wants the identity gate still gets a meaningful checksum verdict instead of
+/// an unrelated failure.
+fn simulated_manifest(
+    target_module: &str,
+    expected_hw_id: &str,
+    expected_sw_id: &str,
+    rom: &[u8],
+    sha256_override: Option<&str>,
+    crc32_override: Option<u32>,
+) -> FlashPackageManifest {
+    let sha256_checksum = sha256_override.map(str::to_string).unwrap_or_else(|| {
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(rom);
+        format!("{:x}", hasher.finalize())
+    });
     FlashPackageManifest {
         target_module: target_module.to_string(),
-        expected_hw_id: "0281012224".into(),
-        expected_sw_id: "1037372332".into(),
-        sha256_checksum: format!("{:x}", hasher.finalize()),
-        crc32_checksum: crc32fast::hash(rom),
+        expected_hw_id: expected_hw_id.to_string(),
+        expected_sw_id: expected_sw_id.to_string(),
+        sha256_checksum,
+        crc32_checksum: crc32_override.unwrap_or_else(|| crc32fast::hash(rom)),
         flash_start_address: 0x0004_0000,
         flash_length: u32::try_from(rom.len()).unwrap_or(0),
         block_size: 512,
     }
+}
+
+/// The 4096-byte stand-in image both flashing tools evaluate.
+fn simulated_rom() -> Vec<u8> {
+    vec![0xEA; 4096]
 }
 
 pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
@@ -32,11 +57,43 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
                 .get("target_module")
                 .and_then(|v| v.as_str())
                 .unwrap_or("EDC16");
+            // An absent hardware id is not substituted with the one that would
+            // pass: pre-flight refuses an empty expected_hw_id on its own.
+            let expected_hw_id = arguments
+                .get("expected_hw_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let expected_sw_id = arguments
+                .get("expected_sw_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or(DEMO_SW_ID);
+            // A checksum the caller did supply is never silently dropped: an
+            // unusable value is an error, not a pass.
+            let sha256_override = match arguments.get("sha256") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(s)) => Some(s.as_str()),
+                Some(_) => return Err("sha256 must be a hex string".into()),
+            };
+            let crc32_override = match arguments.get("crc32") {
+                None | Some(Value::Null) => None,
+                Some(v) => match v.as_u64().and_then(|n| u32::try_from(n).ok()) {
+                    Some(crc) => Some(crc),
+                    None => return Err("crc32 must be a 32-bit unsigned integer".into()),
+                },
+            };
+
             let voltage = 13.8;
-            let dummy_rom = vec![0xEA; 4096];
-            let manifest = demo_manifest(target_module, &dummy_rom);
+            let rom = simulated_rom();
+            let manifest = simulated_manifest(
+                target_module,
+                expected_hw_id,
+                expected_sw_id,
+                &rom,
+                sha256_override,
+                crc32_override,
+            );
             let report = FlashingWorker::new()
-                .run_preflight_checks(&manifest, &dummy_rom, voltage, &mut mock_iface)
+                .run_preflight_checks(&manifest, &rom, voltage, &mut mock_iface)
                 .await
                 .map_err(|e| format!("Pre-flight evaluation failed: {}", e))?;
             let advice = if report.passed {
@@ -52,6 +109,7 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
                 "checksum_match": report.checksum_match,
                 "details": report.details,
                 "simulated": true,
+                "manifest": manifest,
                 "advice": advice
             }))
         }
@@ -76,8 +134,15 @@ pub async fn handle(name: &str, arguments: &Value) -> Result<Value, String> {
                 ));
             }
 
-            let dummy_rom = vec![0xEA; 4096];
-            let manifest = demo_manifest(target_module, &dummy_rom);
+            let dummy_rom = simulated_rom();
+            let manifest = simulated_manifest(
+                target_module,
+                DEMO_HW_ID,
+                DEMO_SW_ID,
+                &dummy_rom,
+                None,
+                None,
+            );
 
             if dry_run {
                 let report = FlashingWorker::new()

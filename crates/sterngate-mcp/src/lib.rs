@@ -922,17 +922,64 @@ mod tests {
 
     #[tokio::test]
     async fn test_mcp_verify_flash_staging_runs_real_preflight() {
-        let verify = tools::handle_tool_call("sterngate_verify_flash_staging", &json!({}))
-            .await
-            .unwrap();
+        // 1. The identity the virtual ECU reports: every gate passes.
+        let verify = tools::handle_tool_call(
+            "sterngate_verify_flash_staging",
+            &json!({"target_module": "EDC16", "expected_hw_id": "0281012224"}),
+        )
+        .await
+        .unwrap();
         assert!(verify["passed"].as_bool().unwrap());
         assert!(verify["hw_id_match"].as_bool().unwrap());
         assert!(verify["checksum_match"].as_bool().unwrap());
         assert!(verify["simulated"].as_bool().unwrap());
+        assert_eq!(
+            verify["manifest"]["expected_hw_id"].as_str().unwrap(),
+            "0281012224"
+        );
         assert!(verify["details"]
             .as_array()
             .unwrap()
             .iter()
             .any(|d| d.as_str().unwrap().contains("0281012224")));
+
+        // 2. A sibling variant: the caller's id is really compared, not discarded.
+        let sibling = tools::handle_tool_call(
+            "sterngate_verify_flash_staging",
+            &json!({"target_module": "EDC16", "expected_hw_id": "0281012238"}),
+        )
+        .await
+        .unwrap();
+        assert!(!sibling["passed"].as_bool().unwrap());
+        assert!(!sibling["hw_id_match"].as_bool().unwrap());
+        assert!(sibling["details"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d.as_str().unwrap().contains("MISMATCH")));
+
+        // 3. Checksums for another image: the caller's checksums are compared too.
+        let wrong_checksums = tools::handle_tool_call(
+            "sterngate_verify_flash_staging",
+            &json!({
+                "target_module": "EDC16",
+                "expected_hw_id": "0281012224",
+                "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                "crc32": 1
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(!wrong_checksums["checksum_match"].as_bool().unwrap());
+        assert!(!wrong_checksums["passed"].as_bool().unwrap());
+        assert!(wrong_checksums["hw_id_match"].as_bool().unwrap());
+
+        // 4. No id at all: the schema requires one, and the answer must not
+        // fall back to the identity that happens to pass.
+        let no_id = tools::handle_tool_call("sterngate_verify_flash_staging", &json!({}))
+            .await
+            .unwrap();
+        assert!(!no_id["passed"].as_bool().unwrap());
+        assert!(!no_id["hw_id_match"].as_bool().unwrap());
     }
 }
