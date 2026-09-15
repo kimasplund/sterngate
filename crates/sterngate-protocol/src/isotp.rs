@@ -11,6 +11,20 @@ fn pci_byte(frame: &CanFrame) -> Result<u8> {
         .ok_or_else(|| SterngateError::IsoTpError("Empty CAN frame on ISO-TP channel".into()))
 }
 
+/// Maximum number of consecutive Flow Control WAIT frames tolerated (N_WFTmax).
+const N_WFT_MAX: usize = 8;
+
+/// Map an ISO-TP Flow Control STmin byte to a millisecond delay per ISO 15765-2:
+/// 0x00-0x7F are 0-127 ms, 0xF1-0xF9 are 100-900 us (rounded up to 1 ms), and
+/// every other value is reserved and falls back to a conservative default.
+fn st_min_to_ms(st: u8) -> u64 {
+    match st {
+        st if st <= 127 => u64::from(st),
+        st if (0xF1..=0xF9).contains(&st) => 1,
+        _ => 10,
+    }
+}
+
 pub struct IsoTpChannel<'a> {
     interface: &'a mut dyn VehicleInterface,
     tx_id: u32,
@@ -80,17 +94,14 @@ impl<'a> IsoTpChannel<'a> {
         self.interface.send(ff_frame).await?;
 
         // Wait for Flow Control (FC) frame from ECU
-        let fc = self.wait_for_flow_control().await?;
-        let _block_size = fc[1];
-        let st_min_ms = match fc[2] {
-            st if st <= 127 => st as u64,
-            st if (0xF1..=0xF9).contains(&st) => 1,
-            _ => 10,
-        };
+        let (mut block_size, mut st_min) = self.wait_for_flow_control().await?;
+        let mut st_min_ms = st_min_to_ms(st_min);
 
-        // Send Consecutive Frames (CF)
+        // Send Consecutive Frames (CF), honouring the Flow Control BlockSize:
+        // when BS != 0, wait for a fresh Flow Control after every BS frames.
         let mut offset = 6;
         let mut seq_num = 1u8;
+        let mut sent_in_block = 0u8;
 
         while offset < len {
             let chunk_size = (len - offset).min(7);
@@ -106,6 +117,17 @@ impl<'a> IsoTpChannel<'a> {
 
             offset += chunk_size;
             seq_num = (seq_num + 1) % 16;
+
+            if block_size != 0 && offset < len {
+                sent_in_block += 1;
+                if sent_in_block == block_size {
+                    let (bs, st) = self.wait_for_flow_control().await?;
+                    block_size = bs;
+                    st_min = st;
+                    st_min_ms = st_min_to_ms(st_min);
+                    sent_in_block = 0;
+                }
+            }
 
             if st_min_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(st_min_ms)).await;
@@ -207,34 +229,48 @@ impl<'a> IsoTpChannel<'a> {
         }
     }
 
-    async fn wait_for_flow_control(&mut self) -> Result<Vec<u8>> {
-        let frame = timeout(self.timeout_duration, async {
-            loop {
-                let f = self.interface.recv().await?;
-                if f.id == self.rx_id && f.data.first().is_some_and(|b| (b >> 4) == 0x03) {
-                    return Ok(f);
+    /// Wait for one Flow Control frame and return `(block_size, st_min)`.
+    ///
+    /// Tolerates up to `N_WFT_MAX` consecutive WAIT (FS=1) frames, re-awaiting a
+    /// fresh Flow Control each time; errors on OVFLW (FS=2) or any other status.
+    async fn wait_for_flow_control(&mut self) -> Result<(u8, u8)> {
+        for _ in 0..=N_WFT_MAX {
+            let frame = timeout(self.timeout_duration, async {
+                loop {
+                    let f = self.interface.recv().await?;
+                    if f.id == self.rx_id && f.data.first().is_some_and(|b| (b >> 4) == 0x03) {
+                        return Ok::<CanFrame, SterngateError>(f);
+                    }
+                }
+            })
+            .await
+            .map_err(|_| SterngateError::IsoTpTimeout)??;
+
+            if frame.data.len() < 3 {
+                return Err(SterngateError::IsoTpError(format!(
+                    "Flow Control frame too short: {} bytes",
+                    frame.data.len()
+                )));
+            }
+
+            match frame.data[0] & 0x0F {
+                0 => return Ok((frame.data[1], frame.data[2])),
+                1 => continue, // WAIT: the receiver asks for another Flow Control
+                2 => {
+                    return Err(SterngateError::IsoTpError(
+                        "Flow Control: receiver overflow".into(),
+                    ))
+                }
+                fs => {
+                    return Err(SterngateError::IsoTpError(format!(
+                        "Flow Control status not CTS: {fs}"
+                    )))
                 }
             }
-        })
-        .await
-        .map_err(|_| SterngateError::IsoTpTimeout)??;
-
-        if frame.data.len() < 3 {
-            return Err(SterngateError::IsoTpError(format!(
-                "Flow Control frame too short: {} bytes",
-                frame.data.len()
-            )));
         }
-
-        let flow_status = frame.data[0] & 0x0F;
-        if flow_status != 0 {
-            return Err(SterngateError::IsoTpError(format!(
-                "Flow Control status not CTS: {}",
-                flow_status
-            )));
-        }
-
-        Ok(frame.data)
+        Err(SterngateError::IsoTpError(format!(
+            "Flow Control WAIT repeated more than {N_WFT_MAX} times"
+        )))
     }
 }
 
@@ -329,6 +365,59 @@ mod tests {
         assert!(matches!(
             ch.recv_payload().await,
             Err(SterngateError::IsoTpTimeout)
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sender_waits_for_fc_after_block_size() {
+        // 20-byte payload = FF + 2 CFs. FC says BS = 1: after one CF the sender must wait for a second FC.
+        let mut iface = ScriptedInterface::new().rule(0x2E, &[&[0x30, 0x01, 0x00]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        ch.set_timeout(Duration::from_millis(200));
+        let payload = vec![0x2E; 20];
+        // No second FC is scripted, so the sender must time out after exactly one CF.
+        assert!(matches!(
+            ch.send_payload(&payload).await,
+            Err(SterngateError::IsoTpTimeout)
+        ));
+        let cfs = iface
+            .sent_frames()
+            .iter()
+            .filter(|f| f.data.first().map(|b| b >> 4) == Some(2))
+            .count();
+        assert_eq!(cfs, 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn flow_status_wait_is_honoured() {
+        let mut iface =
+            ScriptedInterface::new().rule(0x2E, &[&[0x31, 0x00, 0x00], &[0x30, 0x00, 0x00]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        ch.send_payload(&[0x2E; 20]).await.unwrap();
+        let cfs = iface
+            .sent_frames()
+            .iter()
+            .filter(|f| f.data.first().map(|b| b >> 4) == Some(2))
+            .count();
+        assert_eq!(cfs, 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn flow_status_overflow_is_error() {
+        let mut iface = ScriptedInterface::new().rule(0x2E, &[&[0x32, 0x00, 0x00]]);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        let err = ch.send_payload(&[0x2E; 20]).await.unwrap_err();
+        assert!(err.to_string().contains("overflow"), "{err}");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn flow_status_wait_gives_up_after_n_wft_max() {
+        let waits: Vec<&[u8]> = vec![&[0x31, 0, 0]; 9];
+        let mut iface = ScriptedInterface::new().rule(0x2E, &waits);
+        let mut ch = IsoTpChannel::new(&mut iface, 0x7E0, 0x7E8);
+        assert!(matches!(
+            ch.send_payload(&[0x2E; 20]).await,
+            Err(SterngateError::IsoTpError(_))
         ));
     }
 }
