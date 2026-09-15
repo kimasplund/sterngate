@@ -73,4 +73,83 @@ mod tests {
         assert_eq!(resp.data[4], 0x01); // routine low byte
         assert_eq!(resp.data[5], 0x00); // routine status ok
     }
+
+    /// Drain background broadcast frames until a diagnostic reply arrives.
+    async fn recv_diag(sim: &mut VirtualCanInterface) -> CanFrame {
+        loop {
+            let f = sim.recv().await.unwrap();
+            if f.id == 0x7E8 {
+                return f;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_read_memory_by_address_returns_requested_length() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+
+        // UDS 0x23 with ALFID 0x24: 8-byte request -> First Frame + one Consecutive Frame.
+        sim.send(CanFrame::new_standard(
+            0x7E0,
+            &[0x10, 0x08, 0x23, 0x24, 0x00, 0x1C, 0x10, 0x00],
+        ))
+        .await
+        .unwrap();
+        let fc = recv_diag(&mut sim).await;
+        assert_eq!(fc.data[0], 0x30, "expected Flow Control");
+
+        // The CF carries the 2-byte length: 3 bytes requested.
+        sim.send(CanFrame::new_standard(0x7E0, &[0x21, 0x00, 0x03]))
+            .await
+            .unwrap();
+        let resp = recv_diag(&mut sim).await;
+        assert_eq!(&resp.data[..5], &[0x04, 0x63, 0x00, 0x00, 0x00]);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_read_memory_by_address_refuses_more_than_six_bytes() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+        sim.send(CanFrame::new_standard(
+            0x7E0,
+            &[0x10, 0x08, 0x23, 0x24, 0x00, 0x1C, 0x10, 0x00],
+        ))
+        .await
+        .unwrap();
+        let _fc = recv_diag(&mut sim).await;
+        sim.send(CanFrame::new_standard(0x7E0, &[0x21, 0x00, 0x07]))
+            .await
+            .unwrap();
+        let resp = recv_diag(&mut sim).await;
+        assert_eq!(&resp.data[..4], &[0x03, 0x7F, 0x23, 0x31]);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_failing_services_answer_nrc() {
+        // Single-frame service in the failing set
+        let mut sim = VirtualCanInterface::with_failing_services(&[0x22]);
+        sim.open().await.unwrap();
+        sim.send(CanFrame::new_standard(0x7E0, &[0x03, 0x22, 0xF1, 0x91]))
+            .await
+            .unwrap();
+        let resp = recv_diag(&mut sim).await;
+        assert_eq!(&resp.data[..4], &[0x03, 0x7F, 0x22, 0x31]);
+
+        // Multi-frame service in the failing set
+        let mut sim = VirtualCanInterface::with_failing_services(&[0x23]);
+        sim.open().await.unwrap();
+        sim.send(CanFrame::new_standard(
+            0x7E0,
+            &[0x10, 0x08, 0x23, 0x24, 0x00, 0x1C, 0x10, 0x00],
+        ))
+        .await
+        .unwrap();
+        let _fc = recv_diag(&mut sim).await;
+        sim.send(CanFrame::new_standard(0x7E0, &[0x21, 0x00, 0x03]))
+            .await
+            .unwrap();
+        let resp = recv_diag(&mut sim).await;
+        assert_eq!(&resp.data[..4], &[0x03, 0x7F, 0x23, 0x31]);
+    }
 }

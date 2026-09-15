@@ -1,5 +1,6 @@
 use crate::interface::VehicleInterface;
 use async_trait::async_trait;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -18,6 +19,9 @@ pub struct VirtualCanInterface {
     last_multi_frame_sid: Arc<AtomicU8>,
     expected_cfs: Arc<AtomicU32>,
     received_cfs: Arc<AtomicU32>,
+    /// UDS service IDs that answer NRC 0x31 instead of their normal reply.
+    /// Test-only fault injection so fail-closed paths can be proven on CI.
+    failing_services: HashSet<u8>,
 }
 
 impl VirtualCanInterface {
@@ -33,7 +37,16 @@ impl VirtualCanInterface {
             last_multi_frame_sid: Arc::new(AtomicU8::new(0x2E)),
             expected_cfs: Arc::new(AtomicU32::new(1)),
             received_cfs: Arc::new(AtomicU32::new(0)),
+            failing_services: HashSet::new(),
         }
+    }
+
+    /// A virtual ECU that answers every request for the listed UDS service
+    /// IDs with `7F <sid> 31` (RequestOutOfRange).
+    pub fn with_failing_services(sids: &[u8]) -> Self {
+        let mut sim = Self::new();
+        sim.failing_services = sids.iter().copied().collect();
+        sim
     }
 
     fn generate_telemetry_frame(&self, req_id: u32, payload: &[u8]) -> Option<CanFrame> {
@@ -77,12 +90,34 @@ impl VirtualCanInterface {
             if received < expected {
                 return None;
             }
-            // ISO-TP Consecutive Frame: Acknowledge completion once all frames received
+            // ISO-TP Consecutive Frame: acknowledge completion once all frames received
             let sid = self.last_multi_frame_sid.load(Ordering::Relaxed);
-            let resp_bytes = if sid == 0x3D {
-                vec![0x02, 0x7D, 0x24, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA]
-            } else {
-                vec![0x03, 0x6E, 0x20, 0x31, 0xAA, 0xAA, 0xAA, 0xAA]
+            if self.failing_services.contains(&sid) {
+                return Some(CanFrame::new_standard(
+                    resp_id as u16,
+                    &[0x03, 0x7F, sid, 0x31],
+                ));
+            }
+            let resp_bytes = match sid {
+                0x3D => vec![0x02, 0x7D, 0x24, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA],
+                0x23 => {
+                    // An 8-byte 0x23 request puts [SID, ALFID, addr x4] in the
+                    // First Frame; the single CF carries [len_hi, len_lo].
+                    let n = if payload.len() >= 3 {
+                        usize::from(u16::from_be_bytes([payload[1], payload[2]]))
+                    } else {
+                        0
+                    };
+                    if n == 0 || n > 6 {
+                        // Only single-frame replies are emitted by this mock.
+                        vec![0x03, 0x7F, 0x23, 0x31]
+                    } else {
+                        let mut r = vec![u8::try_from(1 + n).unwrap_or(0x07), 0x63];
+                        r.resize(2 + n, 0x00);
+                        r
+                    }
+                }
+                _ => vec![0x03, 0x6E, 0x20, 0x31, 0xAA, 0xAA, 0xAA, 0xAA],
             };
             return Some(CanFrame::new_standard(resp_id as u16, &resp_bytes));
         }
@@ -96,6 +131,13 @@ impl VirtualCanInterface {
         } else {
             payload[0]
         };
+
+        if self.failing_services.contains(&service) {
+            return Some(CanFrame::new_standard(
+                resp_id as u16,
+                &[0x03, 0x7F, service, 0x31],
+            ));
+        }
 
         let elapsed = self.start_time.elapsed().as_secs_f64();
         let rpm_var = (elapsed.sin() * 50.0) as i16;
