@@ -13,7 +13,7 @@ use sterngate_core::{
 };
 use sterngate_hal::VehicleInterface;
 
-use crate::uds::UdsClient;
+use crate::uds::{S3KeepAlive, UdsClient};
 
 /// Report returned after executing a community mod
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -135,6 +135,11 @@ impl ModRunner {
     /// `flash_write_refusals` is the single source of truth shared with
     /// `inspect_compatibility` (via `SterngateMod::check_compatibility`), so every
     /// inspect surface (CLI, MCP, REST) reports the same refusals `apply_mod` enforces.
+    ///
+    /// Once the extended session (`10 03`) is entered, an `S3KeepAlive` ticks
+    /// before every subsequent request (the hardware ID read, each precondition
+    /// read, the bitmask read, and each write/routine), so a slow ECU or a long
+    /// garage commit between preconditions and writes never lets S3 expire.
     pub async fn apply_mod(
         interface: &mut dyn VehicleInterface,
         modpack: &mut SterngateMod,
@@ -198,7 +203,14 @@ impl ModRunner {
         // Enter Extended Diagnostic Session (0x10 03)
         let _ = uds.diagnostic_session_control(0x03).await;
 
+        // S3 (extended session) keep-alive: a slow ECU or a long garage commit
+        // between preconditions and writes must never let the S3 timer expire.
+        // `tick` fires an unconditional, periodic suppressed TesterPresent before
+        // every request; it is never `touch`ed after a reply (Task 5 ruling).
+        let mut ka = S3KeepAlive::new();
+
         // 4. ECU hardware ID whitelist check (fail closed when a whitelist exists)
+        ka.tick(&mut uds).await?;
         let live_hw_id = Self::read_live_hw_id(&mut uds).await;
         if policy == TargetFingerprintPolicy::Enforce
             && !modpack.target.compatible_hw_ids.is_empty()
@@ -233,6 +245,7 @@ impl ModRunner {
                             "DID 0x{did:04X}: expected_original_data is an empty precondition; refusing vacuous precondition"
                         )));
                     }
+                    ka.tick(&mut uds).await?;
                     let resp = uds.read_data_by_identifier(*did).await.map_err(|e| {
                         SterngateError::PreFlightCheckFailed(format!(
                             "DID 0x{did:04X}: could not read current value for precondition ({e}); refusing"
@@ -271,6 +284,7 @@ impl ModRunner {
                             "map '{map_name}': precondition longer than 65535 bytes"
                         ))
                     })?;
+                    ka.tick(&mut uds).await?;
                     let current = uds
                         .read_memory_by_address(*address_offset, len)
                         .await
@@ -291,6 +305,7 @@ impl ModRunner {
                     original_mask,
                     ..
                 } => {
+                    ka.tick(&mut uds).await?;
                     let current = uds
                         .read_memory_by_address(*address_offset, 1)
                         .await
@@ -354,6 +369,7 @@ impl ModRunner {
                                 data.len()
                             )));
                         }
+                        ka.tick(&mut uds).await?;
                         let resp = uds.read_data_by_identifier(*did).await.map_err(|e| {
                             SterngateError::PreFlightCheckFailed(format!(
                                 "DID 0x{did:04X}: bitmask write requires the current value but the read failed ({e}); refusing to clobber unmasked bits"
@@ -388,6 +404,7 @@ impl ModRunner {
                         did,
                         write_payload.len()
                     );
+                    ka.tick(&mut uds).await?;
                     uds.write_data_by_identifier(*did, &write_payload).await?;
                     steps_completed += 1;
                     actions_executed.push(format!("Write DID 0x{:04X}: {}", did, description));
@@ -402,6 +419,7 @@ impl ModRunner {
                         "Applying Mod Routine 0x{:04X} (subfunction: {})...",
                         routine_id, subfunction
                     );
+                    ka.tick(&mut uds).await?;
                     uds.routine_control(*subfunction, *routine_id, data).await?;
                     steps_completed += 1;
                     actions_executed.push(format!("Routine 0x{:04X}: {}", routine_id, description));
@@ -419,6 +437,7 @@ impl ModRunner {
                         address_offset,
                         data.len()
                     );
+                    ka.tick(&mut uds).await?;
                     uds.write_memory_by_address(*address_offset, data).await?;
                     steps_completed += 1;
                     actions_executed.push(format!("Patch Map '{}': {}", map_name, description));
@@ -434,6 +453,7 @@ impl ModRunner {
                         "Applying DTC {} suppression mask (0x{:02X}) at 0x{:06X}...",
                         p_code, disable_mask, address_offset
                     );
+                    ka.tick(&mut uds).await?;
                     uds.write_memory_by_address(*address_offset, &[*disable_mask])
                         .await?;
                     steps_completed += 1;

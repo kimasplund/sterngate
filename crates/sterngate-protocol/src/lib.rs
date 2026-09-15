@@ -1216,6 +1216,39 @@ mod tests {
         assert!(msg.contains("empty precondition"), "{msg}");
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn test_apply_mod_sends_keepalive_when_ecu_is_slow() {
+        use std::time::Duration;
+        // Empty hardware whitelist: no F191 read; no bitmask: no precondition read.
+        // Each write answers 0x78 at once and completes after 1.6 s (P2* path).
+        let iface = crate::test_support::ScriptedInterface::new()
+            .rule(0x10, &[&[0x06, 0x50, 0x03, 0x00, 0x32, 0x01, 0xF4]])
+            .rule_delayed(
+                0x2E,
+                Duration::from_millis(1600),
+                &[&[0x03, 0x6E, 0x02, 0x01]],
+            );
+        let log = iface.sent_handle();
+        let mut iface = iface;
+        let mut m = runner_mod(vec![write_did(None), write_did(None)], vec![], 12.0);
+        ModRunner::apply_mod(
+            &mut iface,
+            &mut m,
+            &vin(23),
+            12.8,
+            TargetFingerprintPolicy::Enforce,
+        )
+        .await
+        .unwrap();
+        let frames = log.lock().unwrap().clone();
+        assert!(
+            frames
+                .iter()
+                .any(|f| f.data.get(1) == Some(&0x3E) && f.data.get(2) == Some(&0x80)),
+            "a suppressed TesterPresent must be sent between slow writes"
+        );
+    }
+
     #[tokio::test]
     async fn test_generic_routine_and_vin_adaptation() {
         let mut iface = VirtualCanInterface::new();
