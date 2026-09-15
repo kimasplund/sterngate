@@ -167,6 +167,113 @@ mod tests {
         assert_eq!(op.measure_battery_voltage().await.unwrap(), None);
     }
 
+    /// Send a multi-frame request: FF, then read the FC, then the CFs.
+    async fn send_multi(sim: &mut VirtualCanInterface, frames: &[&[u8]]) {
+        sim.send(CanFrame::new_standard(0x7E0, frames[0]))
+            .await
+            .unwrap();
+        let fc = recv_diag(sim).await;
+        assert_eq!(fc.data[0] >> 4, 0x3, "expected Flow Control");
+        for cf in &frames[1..] {
+            sim.send(CanFrame::new_standard(0x7E0, cf)).await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_answers_request_download() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+        // 34 00 44 00 04 00 00 00 08 00 00 = 11 bytes -> FF + 1 CF
+        send_multi(
+            &mut sim,
+            &[
+                &[0x10, 0x0B, 0x34, 0x00, 0x44, 0x00, 0x04, 0x00],
+                &[0x21, 0x00, 0x00, 0x08, 0x00, 0x00],
+            ],
+        )
+        .await;
+        let resp = recv_diag(&mut sim).await;
+        assert_eq!(&resp.data[..5], &[0x04, 0x74, 0x20, 0x0F, 0xFF]);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_echoes_transfer_data_counter() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+        // 36 07 + 8 data bytes = 10 bytes -> FF + 1 CF
+        send_multi(
+            &mut sim,
+            &[
+                &[0x10, 0x0A, 0x36, 0x07, 0xAA, 0xBB, 0xCC, 0xDD],
+                &[0x21, 0xEE, 0xFF, 0x11, 0x22],
+            ],
+        )
+        .await;
+        let resp = recv_diag(&mut sim).await;
+        assert_eq!(&resp.data[..3], &[0x02, 0x76, 0x07]);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_answers_transfer_exit_and_bus_control() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+        sim.send(CanFrame::new_standard(0x7E0, &[0x01, 0x37]))
+            .await
+            .unwrap();
+        assert_eq!(&recv_diag(&mut sim).await.data[..2], &[0x01, 0x77]);
+        sim.send(CanFrame::new_standard(0x7E0, &[0x03, 0x28, 0x01, 0x01]))
+            .await
+            .unwrap();
+        assert_eq!(&recv_diag(&mut sim).await.data[..3], &[0x02, 0x68, 0x01]);
+        sim.send(CanFrame::new_standard(0x7E0, &[0x02, 0x85, 0x02]))
+            .await
+            .unwrap();
+        assert_eq!(&recv_diag(&mut sim).await.data[..3], &[0x02, 0xC5, 0x02]);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_suppresses_tester_present_response() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+        sim.send(CanFrame::new_standard(0x7E0, &[0x02, 0x3E, 0x80]))
+            .await
+            .unwrap();
+        // Only background broadcast frames may arrive; no 0x7E8 diagnostic reply.
+        let got =
+            tokio::time::timeout(std::time::Duration::from_millis(150), recv_diag(&mut sim)).await;
+        assert!(
+            got.is_err(),
+            "suppressed TesterPresent must not be answered"
+        );
+        sim.send(CanFrame::new_standard(0x7E0, &[0x02, 0x3E, 0x00]))
+            .await
+            .unwrap();
+        assert_eq!(&recv_diag(&mut sim).await.data[..3], &[0x02, 0x7E, 0x00]);
+    }
+
+    #[tokio::test]
+    async fn test_virtual_can_identification_is_multi_frame_ascii() {
+        let mut sim = VirtualCanInterface::new();
+        sim.open().await.unwrap();
+        sim.send(CanFrame::new_standard(0x7E0, &[0x03, 0x22, 0xF1, 0x92]))
+            .await
+            .unwrap();
+        let ff = recv_diag(&mut sim).await;
+        assert_eq!(&ff.data[..5], &[0x10, 0x0D, 0x62, 0xF1, 0x92]);
+        // Nothing more until the tester sends Flow Control.
+        let early =
+            tokio::time::timeout(std::time::Duration::from_millis(100), recv_diag(&mut sim)).await;
+        assert!(early.is_err());
+        sim.send(CanFrame::new_standard(0x7E0, &[0x30, 0x00, 0x05]))
+            .await
+            .unwrap();
+        let cf = recv_diag(&mut sim).await;
+        assert_eq!(cf.data[0], 0x21);
+        let mut text = ff.data[5..8].to_vec();
+        text.extend_from_slice(&cf.data[1..8]);
+        assert_eq!(text, b"0281012224");
+    }
+
     /// The Pin-16 cache freshness rule, tested without USB hardware.
     #[test]
     fn test_fresh_reading_window() {

@@ -1,7 +1,7 @@
 use crate::interface::VehicleInterface;
 use async_trait::async_trait;
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use sterngate_core::{CanFrame, Result};
@@ -17,8 +17,15 @@ pub struct VirtualCanInterface {
     start_time: Instant,
     dtc_cleared: Arc<AtomicBool>,
     last_multi_frame_sid: Arc<AtomicU8>,
+    /// Block Sequence Counter from the most recent multi-frame `0x36` (TransferData) request.
+    last_multi_frame_bsc: Arc<AtomicU8>,
+    /// DID from the most recent multi-frame `0x2E` (WriteDataByIdentifier) request.
+    last_multi_frame_did: Arc<AtomicU16>,
     expected_cfs: Arc<AtomicU32>,
     received_cfs: Arc<AtomicU32>,
+    /// Consecutive Frames of a queued multi-frame ECU reply (e.g. an identification
+    /// DID), released to `tx_queue` once the tester sends Flow Control.
+    pending_cfs: Arc<Mutex<VecDeque<CanFrame>>>,
     /// UDS service IDs that answer NRC 0x31 instead of their normal reply.
     /// Test-only fault injection so fail-closed paths can be proven on CI.
     failing_services: HashSet<u8>,
@@ -35,8 +42,11 @@ impl VirtualCanInterface {
             start_time: Instant::now(),
             dtc_cleared: Arc::new(AtomicBool::new(false)),
             last_multi_frame_sid: Arc::new(AtomicU8::new(0x2E)),
+            last_multi_frame_bsc: Arc::new(AtomicU8::new(0)),
+            last_multi_frame_did: Arc::new(AtomicU16::new(0)),
             expected_cfs: Arc::new(AtomicU32::new(1)),
             received_cfs: Arc::new(AtomicU32::new(0)),
+            pending_cfs: Arc::new(Mutex::new(VecDeque::new())),
             failing_services: HashSet::new(),
         }
     }
@@ -47,6 +57,32 @@ impl VirtualCanInterface {
         let mut sim = Self::new();
         sim.failing_services = sids.iter().copied().collect();
         sim
+    }
+
+    /// Queue a multi-frame ISO-TP reply: returns the First Frame now and parks
+    /// the Consecutive Frames until the tester's Flow Control arrives.
+    fn multi_frame_reply(&self, resp_id: u16, payload: &[u8]) -> CanFrame {
+        let len = payload.len().min(0x0FFF);
+        let mut ff = vec![
+            0x10 | u8::try_from(len >> 8).unwrap_or(0x0F),
+            u8::try_from(len & 0xFF).unwrap_or(0xFF),
+        ];
+        ff.extend_from_slice(&payload[..len.min(6)]);
+        let mut sn = 1u8;
+        let mut cfs = VecDeque::new();
+        for chunk in payload[len.min(6)..len].chunks(7) {
+            let mut cf = vec![0x20 | (sn & 0x0F)];
+            cf.extend_from_slice(chunk);
+            while cf.len() < 8 {
+                cf.push(0xAA);
+            }
+            cfs.push_back(CanFrame::new_standard(resp_id, &cf));
+            sn = sn.wrapping_add(1) & 0x0F;
+        }
+        if let Ok(mut q) = self.pending_cfs.try_lock() {
+            *q = cfs;
+        }
+        CanFrame::new_standard(resp_id, &ff)
     }
 
     fn generate_telemetry_frame(&self, req_id: u32, payload: &[u8]) -> Option<CanFrame> {
@@ -77,6 +113,16 @@ impl VirtualCanInterface {
             if payload.len() >= 3 {
                 self.last_multi_frame_sid
                     .store(payload[2], Ordering::Relaxed);
+            }
+            if payload.len() >= 5 && payload[2] == 0x2E {
+                self.last_multi_frame_did.store(
+                    u16::from_be_bytes([payload[3], payload[4]]),
+                    Ordering::Relaxed,
+                );
+            }
+            if payload.len() >= 4 && payload[2] == 0x36 {
+                self.last_multi_frame_bsc
+                    .store(payload[3], Ordering::Relaxed);
             }
             return Some(CanFrame::new_standard(
                 resp_id as u16,
@@ -117,7 +163,20 @@ impl VirtualCanInterface {
                         r
                     }
                 }
-                _ => vec![0x03, 0x6E, 0x20, 0x31, 0xAA, 0xAA, 0xAA, 0xAA],
+                0x34 => vec![0x04, 0x74, 0x20, 0x0F, 0xFF],
+                0x36 => vec![
+                    0x02,
+                    0x76,
+                    self.last_multi_frame_bsc.load(Ordering::Relaxed),
+                ],
+                0x2E => {
+                    let did = self
+                        .last_multi_frame_did
+                        .load(Ordering::Relaxed)
+                        .to_be_bytes();
+                    vec![0x03, 0x6E, did[0], did[1]]
+                }
+                _ => vec![0x03, 0x7F, sid, 0x11],
             };
             return Some(CanFrame::new_standard(resp_id as u16, &resp_bytes));
         }
@@ -171,7 +230,30 @@ impl VirtualCanInterface {
                 }
             }
             // TesterPresent
-            0x3E => Some(CanFrame::new_standard(resp_id as u16, &[0x02, 0x7E, 0x80])),
+            0x3E => {
+                if payload.get(2).is_some_and(|sub| sub & 0x80 != 0) {
+                    None
+                } else {
+                    Some(CanFrame::new_standard(resp_id as u16, &[0x02, 0x7E, 0x00]))
+                }
+            }
+            // RequestTransferExit
+            0x37 => Some(CanFrame::new_standard(resp_id as u16, &[0x01, 0x77])),
+            // CommunicationControl
+            0x28 => {
+                let sub = payload.get(2).copied().unwrap_or(0x01);
+                Some(CanFrame::new_standard(resp_id as u16, &[0x02, 0x68, sub]))
+            }
+            // ControlDTCSetting
+            0x85 => {
+                let sub = payload.get(2).copied().unwrap_or(0x02);
+                Some(CanFrame::new_standard(resp_id as u16, &[0x02, 0xC5, sub]))
+            }
+            // RequestDownload (single-frame form)
+            0x34 => Some(CanFrame::new_standard(
+                resp_id as u16,
+                &[0x04, 0x74, 0x20, 0x0F, 0xFF],
+            )),
             // ReadDataByIdentifier
             0x22 => {
                 if payload.len() < 4 {
@@ -291,15 +373,14 @@ impl VirtualCanInterface {
                         &[0x07, 0x62, 0xF1, 0x91, 0x00, 0x01, 0x53, 0x54],
                     )),
                     // System Supplier Hardware Number (0xF192) -> Bosch HW 0281012224
-                    0xF192 => Some(CanFrame::new_standard(
-                        resp_id as u16,
-                        &[0x07, 0x62, 0xF1, 0x92, 0x02, 0x81, 0x01, 0x22],
-                    )),
+                    // (multi-frame ASCII; the flasher's preflight reads this DID)
+                    0xF192 => {
+                        Some(self.multi_frame_reply(resp_id as u16, b"\x62\xF1\x920281012224"))
+                    }
                     // System Supplier Software Number (0xF194) -> Bosch SW 1037372332
-                    0xF194 => Some(CanFrame::new_standard(
-                        resp_id as u16,
-                        &[0x07, 0x62, 0xF1, 0x94, 0x10, 0x37, 0x37, 0x23],
-                    )),
+                    0xF194 => {
+                        Some(self.multi_frame_reply(resp_id as u16, b"\x62\xF1\x941037372332"))
+                    }
                     // System Name (0xF197) -> "CR4 "
                     0xF197 => Some(CanFrame::new_standard(
                         resp_id as u16,
@@ -471,6 +552,16 @@ impl VehicleInterface for VirtualCanInterface {
             return Err(sterngate_core::SterngateError::DeviceNotFound(
                 "Virtual CAN not open".into(),
             ));
+        }
+
+        if frame.data.first().is_some_and(|b| b >> 4 == 0x3) {
+            // Tester Flow Control: release any parked Consecutive Frames from a
+            // queued multi-frame ECU reply instead of generating a new reply.
+            let mut pending = self.pending_cfs.lock().await;
+            while let Some(cf) = pending.pop_front() {
+                let _ = self.tx_queue.send(cf).await;
+            }
+            return Ok(());
         }
 
         if let Some(resp) = self.generate_telemetry_frame(frame.id, &frame.data) {
