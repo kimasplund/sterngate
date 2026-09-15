@@ -11,6 +11,11 @@ use sha2::{Digest, Sha256};
 /// (`PatchFlashMap`, `DtcMask`). Mirrors the flashing worker's erase interlock.
 pub const FLASH_WRITE_MIN_VOLTAGE: f64 = 12.5;
 
+/// Integrity format version. Version 2 covers `target`, `actions` and
+/// `rollback_actions`. Any other value is refused: the target filter of
+/// older packages was never integrity-protected.
+pub const MOD_INTEGRITY_VERSION: u8 = 2;
+
 /// Category classification for community mods
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -189,12 +194,31 @@ pub enum ModAction {
 /// Cryptographic and forward error correction integrity block
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModIntegrity {
+    /// Absent in legacy packages (reads as 0, refused).
+    #[serde(default)]
+    pub version: u8,
     pub payload_crc32: u32,
     pub payload_sha256: String,
     pub fec_scheme: String,
     pub fec_parity_bytes: Vec<u8>,
     pub block_size: usize,
     pub parity_size: usize,
+}
+
+/// Field order is the integrity format: changing it, or any field set of
+/// `ModTargetFilter`/`ModAction`, requires bumping `MOD_INTEGRITY_VERSION`.
+#[derive(Serialize)]
+struct CanonicalPayloadRef<'a> {
+    target: &'a ModTargetFilter,
+    actions: &'a [ModAction],
+    rollback_actions: &'a [ModAction],
+}
+
+#[derive(Deserialize)]
+struct CanonicalPayloadOwned {
+    target: ModTargetFilter,
+    actions: Vec<ModAction>,
+    rollback_actions: Vec<ModAction>,
 }
 
 /// The complete shareable Sterngate Community Mod package
@@ -257,7 +281,8 @@ impl SterngateMod {
             )));
         }
 
-        let canonical_payload = Self::canonical_payload_bytes(&actions, &rollback_actions)?;
+        let canonical_payload =
+            Self::canonical_payload_bytes(&target, &actions, &rollback_actions)?;
 
         let payload_crc32 = crc32fast::hash(&canonical_payload);
 
@@ -269,6 +294,7 @@ impl SterngateMod {
         let fec_parity_bytes = codec.encode(&canonical_payload);
 
         let integrity = ModIntegrity {
+            version: MOD_INTEGRITY_VERSION,
             payload_crc32,
             payload_sha256,
             fec_scheme: "ReedSolomon_GF256".into(),
@@ -286,22 +312,43 @@ impl SterngateMod {
         })
     }
 
-    /// Canonical serialization of actions and rollback steps for reproducible checksumming
+    /// Canonical serialization of the target filter, actions and rollback steps.
     pub fn canonical_payload_bytes(
+        target: &ModTargetFilter,
         actions: &[ModAction],
         rollback_actions: &[ModAction],
     ) -> Result<Vec<u8>> {
-        let pair = (actions, rollback_actions);
-        serde_json::to_vec(&pair).map_err(|e| {
-            SterngateError::ProfileError(format!("Failed serializing mod payload: {}", e))
+        serde_json::to_vec(&CanonicalPayloadRef {
+            target,
+            actions,
+            rollback_actions,
         })
+        .map_err(|e| SterngateError::ProfileError(format!("Failed serializing mod payload: {}", e)))
     }
 
     /// Verify package integrity and repair any corrupted bytes using Reed-Solomon FEC.
     /// If corrupted bytes are repaired, `actions` and `rollback_actions` are updated in-place.
     pub fn verify_and_repair(&mut self) -> Result<ModValidationReport> {
+        if self.integrity.version != MOD_INTEGRITY_VERSION {
+            let reason = format!(
+                "unsupported .sgmod integrity version {} (expected {}); the target filter is not integrity-protected, regenerate the package",
+                self.integrity.version, MOD_INTEGRITY_VERSION
+            );
+            return Ok(ModValidationReport {
+                is_valid: false,
+                fec_status: FecStatus::Unrecoverable {
+                    reason: reason.clone(),
+                },
+                crc32_verified: false,
+                sha256_verified: false,
+                matched_vehicle: false,
+                compatibility_notes: vec![],
+                warning_messages: vec![reason],
+            });
+        }
+
         let mut payload_bytes =
-            Self::canonical_payload_bytes(&self.actions, &self.rollback_actions)?;
+            Self::canonical_payload_bytes(&self.target, &self.actions, &self.rollback_actions)?;
 
         let codec = ReedSolomonCodec::new(self.integrity.block_size, self.integrity.parity_size);
         let fec_status =
@@ -320,16 +367,17 @@ impl SterngateMod {
                 });
             }
             FecStatus::Repaired { .. } => {
-                // Deserialize repaired actions back into struct
-                let (repaired_actions, repaired_rollback): (Vec<ModAction>, Vec<ModAction>) =
-                    serde_json::from_slice(&payload_bytes).map_err(|e| {
+                // Deserialize repaired target, actions and rollback back into struct
+                let repaired: CanonicalPayloadOwned = serde_json::from_slice(&payload_bytes)
+                    .map_err(|e| {
                         SterngateError::ProfileError(format!(
                             "Failed parsing repaired mod payload: {}",
                             e
                         ))
                     })?;
-                self.actions = repaired_actions;
-                self.rollback_actions = repaired_rollback;
+                self.target = repaired.target;
+                self.actions = repaired.actions;
+                self.rollback_actions = repaired.rollback_actions;
             }
             FecStatus::Intact => {}
         }
@@ -575,5 +623,69 @@ mod tests {
             SterngateMod::create(sample_metadata(), sample_target(12.0), vec![action], vec![])
                 .is_ok()
         );
+    }
+
+    fn created_flash_mod() -> SterngateMod {
+        SterngateMod::create(
+            sample_metadata(),
+            sample_target(12.5),
+            vec![flash_patch(MapProvenance::Scanned)],
+            vec![],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn integrity_covers_target_filter() {
+        for mutate in [
+            (|m: &mut SterngateMod| m.target.tx_id = 0x7E1) as fn(&mut SterngateMod),
+            |m| m.target.chassis.clear(),
+            |m| m.target.min_battery_voltage = 9.0,
+            |m| m.target.compatible_hw_ids.push("0281099999".into()),
+        ] {
+            let mut m = created_flash_mod();
+            mutate(&mut m);
+            // Corrupt enough bytes that FEC cannot silently repair the lie.
+            m.integrity.fec_parity_bytes.clear();
+            assert!(!m.verify_and_repair().unwrap().is_valid);
+        }
+    }
+
+    #[test]
+    fn fec_repairs_single_symbol_target_corruption() {
+        let mut m = created_flash_mod();
+        m.target.tx_id = 0x7E1; // canonical text "2016" -> "2017": one symbol
+        let report = m.verify_and_repair().unwrap();
+        assert!(report.is_valid);
+        assert!(matches!(
+            report.fec_status,
+            FecStatus::Repaired {
+                corrected_byte_count: 1,
+                ..
+            }
+        ));
+        assert_eq!(m.target.tx_id, 0x7E0);
+    }
+
+    #[test]
+    fn legacy_integrity_version_is_refused() {
+        let legacy = r#"{
+  "metadata": {"mod_id": "amg_needle_sweep_20260914", "name": "AMG Needle Sweep", "version": "1.0.0", "author": "CommunityTuner", "description": "Enables needle sweep on ignition", "category": "retrofit", "risk_level": "low", "instructions": null, "created_at": "2026-09-14T12:33:40Z"},
+  "target": {"chassis": ["W211"], "ecu_name": "IC_211", "tx_id": 2016, "rx_id": 2024, "compatible_hw_ids": [], "compatible_sw_ids": [], "min_battery_voltage": 12.0, "requires_engine_off": true},
+  "actions": [{"type": "write_did", "did": 432, "data": [2], "bitmask": null, "expected_original_data": null, "description": "Configure DID 0x01B0 on IC_211"}],
+  "rollback_actions": [],
+  "integrity": {"payload_crc32": 1479663775, "payload_sha256": "6e7b5bf2fede5951d756e44ee4fa6e3f677757bae4e5d4ac685c31e8f1b65e95", "fec_scheme": "ReedSolomon_GF256", "fec_parity_bytes": [180,64,66,164,58,116,220,2,143,192,75,73,227,68,30,27], "block_size": 239, "parity_size": 16}
+}"#;
+        let mut m = SterngateMod::from_json(legacy).unwrap();
+        assert_eq!(m.integrity.version, 0);
+        let report = m.verify_and_repair().unwrap();
+        assert!(!report.is_valid);
+        assert!(report.warning_messages[0].contains("integrity version 0"));
+    }
+
+    #[test]
+    fn created_packages_carry_version_2() {
+        assert_eq!(created_flash_mod().integrity.version, MOD_INTEGRITY_VERSION);
+        assert_eq!(MOD_INTEGRITY_VERSION, 2);
     }
 }

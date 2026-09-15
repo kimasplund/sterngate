@@ -583,6 +583,20 @@ mod tests {
         }
     }
 
+    /// Recompute integrity over a mutated package (what a forger must do).
+    fn resign(m: &mut SterngateMod) {
+        use sha2::Digest;
+        let payload =
+            SterngateMod::canonical_payload_bytes(&m.target, &m.actions, &m.rollback_actions)
+                .unwrap();
+        m.integrity.payload_crc32 = crc32fast::hash(&payload);
+        let mut hasher = sha2::Sha256::new();
+        Digest::update(&mut hasher, &payload);
+        m.integrity.payload_sha256 = format!("{:x}", Digest::finalize(hasher));
+        m.integrity.fec_parity_bytes =
+            sterngate_core::ReedSolomonCodec::default_codec().encode(&payload);
+    }
+
     fn dtc_mask(original_mask: u8, provenance: MapProvenance) -> ModAction {
         ModAction::DtcMask {
             p_code: "P0401".into(),
@@ -959,6 +973,7 @@ mod tests {
             12.5,
         );
         m.target.min_battery_voltage = 12.0;
+        resign(&mut m);
         let msg = err_text(
             ModRunner::apply_mod(
                 &mut iface,
