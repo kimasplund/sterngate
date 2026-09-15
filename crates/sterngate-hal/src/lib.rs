@@ -166,4 +166,33 @@ mod tests {
         op.open().await.unwrap();
         assert_eq!(op.measure_battery_voltage().await.unwrap(), None);
     }
+
+    /// The Pin-16 cache freshness rule, tested without USB hardware.
+    #[test]
+    fn test_fresh_reading_window() {
+        use crate::openport::fresh_reading;
+        use std::time::{Duration, Instant};
+
+        let max_age = Duration::from_millis(500);
+        let measured_at = Instant::now();
+
+        // Young reading: reused as-is.
+        let volts = fresh_reading(Some((12.6, measured_at)), measured_at, max_age)
+            .expect("a reading taken now is fresh");
+        assert!((volts - 12.6).abs() < f32::EPSILON);
+
+        // Exactly at the age limit still counts as fresh.
+        assert!(fresh_reading(Some((12.6, measured_at)), measured_at + max_age, max_age).is_some());
+
+        // Stale reading: the caller must issue a new query.
+        assert!(fresh_reading(
+            Some((12.6, measured_at)),
+            measured_at + Duration::from_millis(600),
+            max_age
+        )
+        .is_none());
+
+        // Empty cache: nothing has ever been measured.
+        assert!(fresh_reading(None, measured_at, max_age).is_none());
+    }
 }

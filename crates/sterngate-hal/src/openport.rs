@@ -12,10 +12,49 @@ use crate::openport_codec::{
 };
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, PoisonError};
+use std::time::{Duration, Instant};
 use sterngate_core::{CanFrame, Result, SterngateError};
 use tokio::sync::{mpsc, Mutex};
+
+/// How long the adapter is given to answer an `atr 16` query before the read fails.
+const VOLTAGE_REPLY_TIMEOUT: Duration = Duration::from_millis(500);
+/// How often the cache is polled while waiting for that answer.
+const VOLTAGE_POLL_INTERVAL: Duration = Duration::from_millis(5);
+/// A cached reading this young is reused instead of issuing a fresh query.
+const VOLTAGE_CACHE_MAX_AGE: Duration = Duration::from_millis(500);
+
+/// Latest Pin-16 ADC reading published by the background reader task, with the
+/// instant it was decoded. The background reader is the only writer.
+type VoltageCache = Arc<std::sync::Mutex<Option<(f32, Instant)>>>;
+
+fn read_voltage_cache(cache: &VoltageCache) -> Option<(f32, Instant)> {
+    // A poisoned mutex must not make the voltage permanently unreadable: the
+    // cached value is a plain Copy tuple, so the inner value stays sound.
+    *cache.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn store_voltage_cache(cache: &VoltageCache, volts: f32) {
+    *cache.lock().unwrap_or_else(PoisonError::into_inner) = Some((volts, Instant::now()));
+}
+
+/// Decide whether a cached voltage reading may be reused as-is.
+///
+/// Pure so the freshness rule can be tested without USB hardware: returns the
+/// volts when the reading is at most `max_age` old, and `None` when the cache is
+/// empty or the reading has expired.
+pub fn fresh_reading(
+    cache: Option<(f32, Instant)>,
+    now: Instant,
+    max_age: Duration,
+) -> Option<f32> {
+    let (volts, measured_at) = cache?;
+    if now.saturating_duration_since(measured_at) <= max_age {
+        Some(volts)
+    } else {
+        None
+    }
+}
 
 /// Operational mode for the OpenPort interface.
 enum OpenPortBackend {
@@ -23,7 +62,6 @@ enum OpenPortBackend {
     Hardware {
         handle: Arc<Mutex<rusb::DeviceHandle<rusb::GlobalContext>>>,
         endpoint_out: u8,
-        endpoint_in: u8,
         interface_num: u8,
     },
     /// In-memory simulation for testing and offline environments.
@@ -43,6 +81,7 @@ pub struct OpenPortInterface {
     rx_sender: Option<mpsc::Sender<CanFrame>>,
     device_info: Option<String>,
     last_voltage_v: Option<f32>,
+    voltage_cache: VoltageCache,
 }
 
 impl OpenPortInterface {
@@ -63,6 +102,7 @@ impl OpenPortInterface {
             rx_sender: Some(tx),
             device_info: None,
             last_voltage_v: None,
+            voltage_cache: VoltageCache::default(),
         }
     }
 
@@ -90,6 +130,7 @@ impl OpenPortInterface {
             rx_sender: None,
             device_info: Some("Tactrix OpenPort 2.0 (Sterngate Emulated v1.0)".to_string()),
             last_voltage_v: Some(initial_voltage_v),
+            voltage_cache: VoltageCache::default(),
         };
 
         (iface, sim_feed_tx)
@@ -98,6 +139,15 @@ impl OpenPortInterface {
     /// Read vehicle battery voltage directly from OpenPort Pin 16 ADC in Volts.
     ///
     /// Essential for verifying the safe flashing voltage interlock (>= 12.5V).
+    ///
+    /// On hardware this only *writes* `atr 16` and then waits for the background
+    /// reader task spawned by [`VehicleInterface::open`] to decode the reply into
+    /// the shared cache. The reader owns the bulk-IN endpoint, so a private
+    /// `read_bulk` here would race it and swallow `ReceivedCan` frames that
+    /// happened to share the buffer.
+    ///
+    /// Note: this path has no CI coverage (no OpenPort hardware on CI) and needs
+    /// a bench check against a real adapter before it is trusted in the field.
     pub async fn read_battery_voltage(&mut self) -> Result<f32> {
         if !self.is_connected() {
             return Err(SterngateError::DeviceNotFound(
@@ -105,54 +155,45 @@ impl OpenPortInterface {
             ));
         }
 
+        let cache = self.voltage_cache.clone();
+
         match self.backend.as_ref() {
             Some(OpenPortBackend::Hardware {
                 handle,
                 endpoint_out,
-                endpoint_in,
                 ..
             }) => {
+                let requested_at = Instant::now();
                 let cmd = OpenPortCommand::ReadPinVoltage { pin: 16 }.encode();
-                let handle_guard = handle.lock().await;
 
-                // Send atr 16
-                handle_guard
-                    .write_bulk(*endpoint_out, &cmd, Duration::from_millis(500))
-                    .map_err(|e| {
-                        SterngateError::HalError(format!(
-                            "Failed to write voltage query to OpenPort: {}",
-                            e
-                        ))
-                    })?;
+                // Send atr 16 and release the handle immediately: the reply is
+                // decoded by the background reader, not here.
+                {
+                    let handle_guard = handle.lock().await;
+                    handle_guard
+                        .write_bulk(*endpoint_out, &cmd, VOLTAGE_REPLY_TIMEOUT)
+                        .map_err(|e| {
+                            SterngateError::HalError(format!(
+                                "Failed to write voltage query to OpenPort: {}",
+                                e
+                            ))
+                        })?;
+                }
 
-                // Read arr 16 <mV> response
-                let mut in_buf = vec![0u8; 128];
-                let bytes_read = handle_guard
-                    .read_bulk(*endpoint_in, &mut in_buf, Duration::from_millis(500))
-                    .map_err(|e| {
-                        SterngateError::HalError(format!(
-                            "Failed to read voltage response from OpenPort: {}",
-                            e
-                        ))
-                    })?;
-
-                let mut decoder = OpenPortDecoder::new();
-                decoder.feed(&in_buf[..bytes_read]);
-
-                while let Some(resp) = decoder.next_response() {
-                    if let OpenPortResponse::PinVoltage {
-                        pin: 16,
-                        millivolts,
-                    } = resp
-                    {
-                        let volts = millivolts as f32 / 1000.0;
-                        self.last_voltage_v = Some(volts);
-                        return Ok(volts);
+                // Wait for a reading the reader decoded *after* the query went out.
+                while Instant::now().saturating_duration_since(requested_at) < VOLTAGE_REPLY_TIMEOUT
+                {
+                    tokio::time::sleep(VOLTAGE_POLL_INTERVAL).await;
+                    if let Some((volts, measured_at)) = read_voltage_cache(&cache) {
+                        if measured_at >= requested_at {
+                            self.last_voltage_v = Some(volts);
+                            return Ok(volts);
+                        }
                     }
                 }
 
-                Err(SterngateError::ProtocolError(
-                    "OpenPort returned unexpected response to voltage query".into(),
+                Err(SterngateError::HalError(
+                    "OpenPort did not answer the pin-16 voltage query within 500 ms".into(),
                 ))
             }
             Some(OpenPortBackend::Simulated { sim_voltage_mv, .. }) => {
@@ -365,7 +406,6 @@ impl VehicleInterface for OpenPortInterface {
         self.backend = Some(OpenPortBackend::Hardware {
             handle: handle_arc.clone(),
             endpoint_out,
-            endpoint_in,
             interface_num,
         });
 
@@ -374,6 +414,7 @@ impl VehicleInterface for OpenPortInterface {
         // Spawn background reader thread to receive bulk frames continuously
         if let Some(tx) = self.rx_sender.take() {
             let is_open_flag = self.is_open.clone();
+            let voltage_cache = self.voltage_cache.clone();
             tokio::spawn(async move {
                 let mut decoder = OpenPortDecoder::new();
                 let mut buf = vec![0u8; 1024];
@@ -388,10 +429,25 @@ impl VehicleInterface for OpenPortInterface {
                         Ok(bytes_read) if bytes_read > 0 => {
                             decoder.feed(&buf[..bytes_read]);
                             while let Some(resp) = decoder.next_response() {
-                                if let OpenPortResponse::ReceivedCan { frame, .. } = resp {
-                                    if tx.send(frame).await.is_err() {
-                                        return;
+                                match resp {
+                                    OpenPortResponse::ReceivedCan { frame, .. } => {
+                                        if tx.send(frame).await.is_err() {
+                                            return;
+                                        }
                                     }
+                                    OpenPortResponse::PinVoltage {
+                                        pin: 16,
+                                        millivolts,
+                                    } => {
+                                        // `millivolts` is a u32 straight off the
+                                        // Pin-16 ADC (single-digit thousands), so
+                                        // the widening to f32 is exact here.
+                                        store_voltage_cache(
+                                            &voltage_cache,
+                                            millivolts as f32 / 1000.0,
+                                        );
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -519,13 +575,20 @@ impl VehicleInterface for OpenPortInterface {
     }
 
     async fn measure_battery_voltage(&mut self) -> Result<Option<f32>> {
-        let is_hardware = matches!(self.backend, Some(OpenPortBackend::Hardware { .. }));
-        if is_hardware {
-            self.read_battery_voltage().await.map(Some)
-        } else {
+        if !matches!(self.backend, Some(OpenPortBackend::Hardware { .. })) {
             // The simulated constant is a test fixture, not a measurement.
-            Ok(None)
+            return Ok(None);
         }
+
+        // Telemetry polls this at 10 Hz; a reading the reader published in the
+        // last 500 ms is reused instead of putting another `atr 16` on the wire.
+        let cached = read_voltage_cache(&self.voltage_cache);
+        if let Some(volts) = fresh_reading(cached, Instant::now(), VOLTAGE_CACHE_MAX_AGE) {
+            self.last_voltage_v = Some(volts);
+            return Ok(Some(volts));
+        }
+
+        self.read_battery_voltage().await.map(Some)
     }
 }
 
