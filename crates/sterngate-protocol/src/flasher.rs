@@ -161,7 +161,23 @@ impl FlashingWorker {
             details.push("ROM image is empty (0 bytes); refusing to flash".into());
         }
 
-        let passed = voltage_ok && sha256_ok && crc32_ok && hw_match && length_ok && non_empty;
+        // 7. A zero block size clamps the transfer chunk to nothing. The
+        // sequence catches that too, but only after the erase has run, and this
+        // is fully knowable before the point of no return. Reachable from
+        // outside: POST /api/v1/flash/stage passes the body's block_size
+        // straight through, and the CLI deserialises the manifest unvalidated.
+        let block_size_ok = manifest.block_size > 0;
+        if !block_size_ok {
+            details.push("manifest block_size is 0; refusing to flash".into());
+        }
+
+        let passed = voltage_ok
+            && sha256_ok
+            && crc32_ok
+            && hw_match
+            && length_ok
+            && non_empty
+            && block_size_ok;
         Ok(PreFlightReport {
             passed,
             battery_voltage,
@@ -515,6 +531,8 @@ impl FlashingWorker {
             .block_size
             .min(max_block_len.saturating_sub(2))
             .min(ISOTP_MAX_PAYLOAD - 2);
+        // Defence in depth: pre-flight already refused a zero block_size, so what
+        // is left here is an ECU that answered maxNumberOfBlockLength <= 2.
         if chunk_len == 0 {
             return Err(SterngateError::FlashAborted(
                 "negotiated block size leaves no room for data".into(),
@@ -1093,6 +1111,93 @@ mod tests {
             .filter_map(|f| crate::test_support::request_sid(&f.data))
             .collect();
         assert!(!sids.contains(&0x31));
+    }
+
+    #[tokio::test]
+    async fn preflight_rejects_zero_block_size() {
+        let mut iface = happy_ecu();
+        let rom = vec![0x5A; 100];
+        let mut m = manifest(&rom);
+        m.block_size = 0;
+        let report = FlashingWorker::new()
+            .run_preflight_checks(&m, &rom, 13.5, &mut iface)
+            .await
+            .unwrap();
+        assert!(!report.passed);
+        assert!(report
+            .details
+            .iter()
+            .any(|d| d == "manifest block_size is 0; refusing to flash"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn zero_block_size_never_reaches_the_erase() {
+        // The in-sequence clamp also catches this, but only once the ECU has
+        // already been erased; it has to be refused before the point of no return.
+        let iface = happy_ecu();
+        let log = iface.sent_handle();
+        let rom = vec![0x5A; 300];
+        let mut m = manifest(&rom);
+        m.block_size = 0;
+        let flasher = FlashingWorker::new();
+        let shared: Arc<Mutex<Box<dyn VehicleInterface>>> = Arc::new(Mutex::new(Box::new(iface)));
+        let res = flasher.execute_flash(m, rom, 13.5, shared).await;
+        assert!(matches!(res, Err(SterngateError::PreFlightCheckFailed(_))));
+        assert_eq!(flasher.current_state().await, FlashState::Failed);
+        assert!(!flasher.is_locked().await);
+        let prog = flasher.subscribe().borrow().clone();
+        assert!(prog
+            .error_message
+            .as_deref()
+            .unwrap()
+            .starts_with("Flash aborted before erase; ECU untouched."));
+        let sids: Vec<u8> = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|f| crate::test_support::request_sid(&f.data))
+            .collect();
+        assert!(
+            !sids.contains(&0x31),
+            "a zero block size must never erase the ECU"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn erase_status_nonzero_aborts_after_erase() {
+        // The ECU accepts the erase routine but reports a non-zero status: the
+        // sectors may be half-erased, so nothing may be downloaded on top.
+        let iface = ScriptedInterface::new()
+            .rule(0x22, &[F192_FF, F192_CF])
+            .rule_once(0x10, &[SESSION_EXT])
+            .rule(0x10, &[SESSION_PROG])
+            .rule_once(0x27, &[SEED])
+            .rule(0x27, &[KEY_OK])
+            .rule(0x28, &[COMM_OFF])
+            .rule(0x85, &[DTC_OFF])
+            .rule(0x31, &[&[0x05, 0x71, 0x01, 0xFF, 0x00, 0x01]])
+            .rule(0x34, &[DOWNLOAD_OK]);
+        let log = iface.sent_handle();
+        let (flasher, res, _) = run(iface, vec![0x5A; 300]).await;
+        assert!(matches!(res, Err(SterngateError::FlashAborted(_))));
+        assert_eq!(flasher.current_state().await, FlashState::Failed);
+        let prog = flasher.subscribe().borrow().clone();
+        assert!(prog
+            .error_message
+            .as_deref()
+            .unwrap()
+            .starts_with("FLASH FAILED AFTER ERASE"));
+        let sids: Vec<u8> = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|f| crate::test_support::request_sid(&f.data))
+            .collect();
+        assert!(sids.contains(&0x31), "the erase routine was requested");
+        assert!(
+            !sids.contains(&0x34),
+            "nothing may be downloaded over a failed erase"
+        );
     }
 
     #[tokio::test]
